@@ -22,7 +22,7 @@ Do not use this skill for trivial edits with no workflow impact and no meaningfu
 - README.md
 - logging/progress_log.md
 - logging/commit_log.md
-- .githooks/post-push
+- .githooks/pre-push
 
 ## Deliverables
 
@@ -44,7 +44,7 @@ Do not use this skill for trivial edits with no workflow impact and no meaningfu
 
 - For commit-history automation, load `.github/skills/remote-commit-logging/SKILL.md`.
 - Keep `logging/commit_log.md` as append-only history grouped by branch sections.
-- `post-push` automation should extend commit messages with file-level change detail, not replace commit messages.
+- `pre-push` automation should extend commit messages with file-level change detail, not replace commit messages.
 - If hook behavior changes, update both the automation script and the corresponding skill docs.
 
 ## Required Entry Format
