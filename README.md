@@ -1,4 +1,4 @@
-# PromptCompiler
+# PromptCompiler aka InstaPrompt
 
 > A Grammarly-style browser extension that compiles casual vibe-coding notes into fully structured, machine-readable AI prompts — without ever leaving your text box.
 
