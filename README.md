@@ -55,7 +55,7 @@ promptcompiler/
 │       ├── pages/      # Login, Dashboard, Projects, Billing
 │       └── components/
 │
-└── docs/               # Architecture + planning docs (this folder)
+└── docs/               # Architecture + planning docs
 ```
 
 ---
