@@ -33,3 +33,67 @@ Entries are grouped by branch and extend commit messages with file-level change 
       - A logging/commit_log.md
       - A logging/progress_log.md
 
+
+### 2026-03-29 22:54:41Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/main
+- Range: 1c3930ace3a85728e42d3e64ddec17b886dc0393..e1ed03a4a5fea868dd4222518427c2d7c7963d0e
+- Commits:
+  - e1ed03a monorepo arch
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-03-29T17:54:36-05:00
+    - Purpose: This commit adds 48, modifies 4, deletes 1 across .githooks, .github, backend, extension, logging, web.
+    - Files:
+      - D .githooks/post-push
+      - A .githooks/pre-push
+      - M .github/skills/remote-commit-logging/SKILL.md
+      - M .github/skills/workflow-logging/SKILL.md
+      - A backend/.env.example
+      - A backend/package.json
+      - A backend/src/index.ts
+      - A backend/src/middleware/.gitkeep
+      - A backend/src/middleware/auth.ts
+      - A backend/src/middleware/ratelimit.ts
+      - A backend/src/middleware/tier.ts
+      - A backend/src/routes/.gitkeep
+      - A backend/src/routes/auth.ts
+      - A backend/src/routes/bind.ts
+      - A backend/src/routes/enhance.ts
+      - A backend/src/routes/projects.ts
+      - A backend/src/routes/segment.ts
+      - A backend/src/services/.gitkeep
+      - A backend/src/services/context.ts
+      - A backend/src/services/history.ts
+      - A backend/src/services/llm.ts
+      - A backend/src/services/prompts/action.ts
+      - A backend/src/services/prompts/bind.ts
+      - A backend/src/services/prompts/constraint.ts
+      - A backend/src/services/prompts/context.ts
+      - A backend/src/services/prompts/edge_case.ts
+      - A backend/src/services/prompts/output_format.ts
+      - A backend/src/services/prompts/tech_stack.ts
+      - A backend/tsconfig.json
+      - A extension/manifest.json
+      - A extension/package.json
+      - A extension/src/background/.gitkeep
+      - A extension/src/background/index.ts
+      - A extension/src/content/.gitkeep
+      - A extension/src/content/index.ts
+      - A extension/src/popup/.gitkeep
+      - A extension/src/popup/App.tsx
+      - A extension/src/popup/components/AccountStatus.tsx
+      - A extension/src/popup/components/ModeToggle.tsx
+      - A extension/src/popup/components/ProjectSelector.tsx
+      - A extension/src/popup/components/UpgradeCTA.tsx
+      - A extension/src/popup/hooks/useSettings.ts
+      - A extension/src/popup/index.html
+      - A extension/tsconfig.json
+      - A extension/wxt.config.ts
+      - M logging/commit_log.md
+      - M logging/progress_log.md
+      - A web/package.json
+      - A web/src/components/.gitkeep
+      - A web/src/index.tsx
+      - A web/src/pages/.gitkeep
+      - A web/tsconfig.json
+      - A web/vite.config.ts
