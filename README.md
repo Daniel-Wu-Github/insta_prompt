@@ -108,18 +108,55 @@ promptcompiler/
 
 ## Development
 
+### Prerequisites
+
+- Bun (backend runtime and tests)
+- Node.js with npm (extension/web toolchains)
+
+### Environment Setup
+
 ```bash
-# Extension
-cd extension && bun install && bun run dev
-
-# Backend
-cd backend && bun install && bun run dev
-
-# Web dashboard
-cd web && bun install && bun run dev
+cp backend/.env.example backend/.env
+cp extension/.env.example extension/.env
+cp web/.env.example web/.env
 ```
 
-See individual package READMEs for env vars and setup.
+### Secret Policy
+
+- Never commit real secrets.
+- Commit only example templates.
+- Keep deployment secrets in environment-specific secret stores.
+
+### Startup Order
+
+```bash
+# Backend
+cd backend && npm install && npm run dev
+
+# Extension (new terminal)
+cd extension && npm install && npm run dev
+
+# Web dashboard (new terminal)
+cd web && npm install && npm run dev
+```
+
+### Smoke Checks
+
+```bash
+# Structure and bootstrap checks
+bash scripts/smoke-tests.sh
+
+# Backend tests and typing
+cd backend && bun test && npm run typecheck
+
+# Extension and web type/build checks
+cd ../extension && npm run typecheck && npm run build
+cd ../web && npm run typecheck && npm run build
+```
+
+### Step 0 Behavior Note
+
+Step 0 routes and services intentionally use deterministic placeholders. Production-grade segmentation, LLM routing/orchestration, and persistence are deferred to later implementation steps.
 
 ---
 

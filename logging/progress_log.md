@@ -108,3 +108,103 @@
 	- Fulfillment: Every log entry now carries a quick purpose extension beyond commit subject.
 	- Deviation: None.
 
+## Entry 007 - 2026-04-08 - Step 0 Corrective Pass and Push-Protection Cleanup
+
+- Task: Resolve GitHub push protection block and enforce strict Step 0 scope boundaries without premature business logic.
+- What the agent did: Removed tainted dependency history with git-filter-repo, restored strict Step 0 foundations (shared contracts, validation layer, route stubs, tests, scripts, env templates), added repo guardrails (`.gitignore`, pre-commit scan), and refreshed runbook/planning docs.
+- How the agent did it: Performed web-backed remediation research, executed history rewrite and post-rewrite verification, then rebuilt required Step 0 files in small batches with validation-first patterns and placeholder-only route behavior.
+- Files edited:
+	- .gitignore
+	- .githooks/pre-commit
+	- backend/.env.example
+	- backend/package.json
+	- backend/tsconfig.json
+	- backend/src/index.ts
+	- backend/src/types.ts
+	- backend/src/lib/errors.ts
+	- backend/src/lib/http.ts
+	- backend/src/lib/schemas.ts
+	- backend/src/lib/sse.ts
+	- backend/src/lib/validation.ts
+	- backend/src/middleware/auth.ts
+	- backend/src/middleware/ratelimit.ts
+	- backend/src/middleware/tier.ts
+	- backend/src/routes/auth.ts
+	- backend/src/routes/bind.ts
+	- backend/src/routes/enhance.ts
+	- backend/src/routes/projects.ts
+	- backend/src/routes/segment.ts
+	- backend/src/services/context.ts
+	- backend/src/services/history.ts
+	- backend/src/services/llm.ts
+	- backend/src/services/prompts/action.ts
+	- backend/src/services/prompts/bind.ts
+	- backend/src/services/prompts/constraint.ts
+	- backend/src/services/prompts/context.ts
+	- backend/src/services/prompts/edge_case.ts
+	- backend/src/services/prompts/output_format.ts
+	- backend/src/services/prompts/tech_stack.ts
+	- backend/src/__tests__/routes.validation.test.ts
+	- backend/src/__tests__/stress-tests.test.ts
+	- shared/contracts/domain.ts
+	- shared/contracts/api.ts
+	- shared/contracts/sse.ts
+	- shared/contracts/errors.ts
+	- shared/contracts/index.ts
+	- extension/.env.example
+	- extension/manifest.json
+	- extension/package.json
+	- extension/tsconfig.json
+	- extension/wxt.config.ts
+	- extension/src/background/index.ts
+	- extension/src/content/index.ts
+	- extension/src/popup/index.html
+	- extension/src/popup/main.tsx
+	- extension/src/popup/App.tsx
+	- extension/src/popup/components/AccountStatus.tsx
+	- extension/src/popup/components/ModeToggle.tsx
+	- extension/src/popup/components/ProjectSelector.tsx
+	- extension/src/popup/components/UpgradeCTA.tsx
+	- extension/src/popup/hooks/useSettings.ts
+	- web/.env.example
+	- web/index.html
+	- web/package.json
+	- web/tsconfig.json
+	- web/vite.config.ts
+	- web/src/App.tsx
+	- web/src/index.tsx
+	- scripts/smoke-tests.sh
+	- docs/STEP_0_SUMMARY.md
+	- docs/agent_plans/v1_step_by_step/v1_step_0_planning.md
+	- README.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed `backend/node_modules` path history is removed (`git log --all -- backend/node_modules` has zero matches).
+	- Confirmed blocked commit hash is no longer present locally (`git cat-file -t <old-hash>` fails).
+	- Verified rebuilt Step 0 files exist for contracts, validation, tests, env templates, and smoke script.
+	- Pending final package install/typecheck/test/build execution and push verification.
+- Task alignment:
+	- Fulfillment: Corrective implementation directly addresses push-block root cause and re-establishes strict Step 0 boundaries.
+	- Deviation: Initial `--sensitive-data-removal` mode failed due local Git version capability; path-rewrite mode was used with equivalent path-removal outcome.
+
+## Entry 008 - 2026-04-08 - Fixed WXT Entrypoint Discovery and Completed Verification
+
+- Task: Unblock extension install/build after WXT entrypoint detection failure and finish end-to-end Step 0 verification.
+- What the agent did: Updated WXT config to use the current source layout (`srcDir: "src"`, `entrypointsDir: "."`), reran package installs/typechecks/builds/tests across backend/extension/web, confirmed smoke checks pass, and tightened ignore rules for generated WXT artifacts.
+- How the agent did it: Pulled current WXT project-structure and entrypoint docs, applied a minimal config patch, executed verification commands in each workspace package, validated editor diagnostics, and rechecked git-side push-protection indicators.
+- Files edited:
+	- extension/wxt.config.ts
+	- .gitignore
+	- logging/progress_log.md
+- Verification:
+	- `cd extension && npm install` now succeeds and `wxt prepare` completes.
+	- `cd backend && npm install && npm run typecheck && npm test` passes (10 tests).
+	- `cd extension && npm run typecheck && npm run build` passes.
+	- `cd web && npm install && npm run typecheck && npm run build` passes.
+	- `./scripts/smoke-tests.sh` passes (15/15 checks).
+	- Editor diagnostics scan reports no errors.
+	- `git log --all -- backend/node_modules` remains empty and blocked commit hash `2da7d09f7ec806f4f74ad0f66f89f6ebf2f75553` is absent locally.
+- Task alignment:
+	- Fulfillment: Removes the remaining extension bootstrap blocker and completes the pending verification checklist for the strict Step 0 corrective pass.
+	- Deviation: No push was executed in this pass because no new commit/push request was issued after verification completion.
+

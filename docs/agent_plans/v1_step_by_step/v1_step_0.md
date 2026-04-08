@@ -131,10 +131,10 @@ Do not edit files.
 
 Goal: make Step 0 unambiguous before writing code.
 
-- [ ] Read the architecture, backend API, data model, extension, LLM routing, and UX flow docs.
-- [ ] Extract the exact Step 0 deliverables from the overarching plan.
-- [ ] Decide which files are source-of-truth for contracts, config, and runbooks.
-- [ ] Write down what Step 0 will not do.
+- [x] Read the architecture, backend API, data model, extension, LLM routing, and UX flow docs.
+- [x] Extract the exact Step 0 deliverables from the overarching plan.
+- [x] Decide which files are source-of-truth for contracts, config, and runbooks.
+- [x] Write down what Step 0 will not do.
 
 Copilot session:
 
@@ -162,10 +162,10 @@ Done when:
 
 Goal: make the repo easy to work on repeatedly without rewriting context.
 
-- [ ] Confirm the existing always-on instruction surface is the right place for project-wide rules.
-- [ ] Decide whether any reusable prompt files are needed for recurring Step 0 work.
-- [ ] Make sure the step is aligned with the current repository instructions and architecture guardrails.
-- [ ] Keep the instructions concise enough that Copilot can follow them without noise.
+- [x] Confirm the existing always-on instruction surface is the right place for project-wide rules.
+- [x] Decide whether any reusable prompt files are needed for recurring Step 0 work.
+- [x] Make sure the step is aligned with the current repository instructions and architecture guardrails.
+- [x] Keep the instructions concise enough that Copilot can follow them without noise.
 
 Copilot session:
 
@@ -190,11 +190,11 @@ Done when:
 
 Goal: stop shape drift before any route or UI work starts.
 
-- [ ] Define the core domain types.
-- [ ] Define request and response schemas for backend routes.
-- [ ] Define the SSE event envelope used by streaming endpoints.
-- [ ] Decide whether the shared contracts live in a repo-level `shared/` area or in the first app that owns them.
-- [ ] Add tests that prove the contracts match the docs.
+- [x] Define the core domain types.
+- [x] Define request and response schemas for backend routes.
+- [x] Define the SSE event envelope used by streaming endpoints.
+- [x] Decide whether the shared contracts live in a repo-level `shared/` area or in the first app that owns them.
+- [x] Add tests that prove the contracts match the docs.
 
 Suggested contract set:
 
@@ -240,10 +240,10 @@ Done when:
 
 Goal: make boundary failures boring and predictable.
 
-- [ ] Add validation for all route inputs.
-- [ ] Add a small error format for validation failures.
-- [ ] Standardize the way route handlers report bad requests.
-- [ ] Add tests for invalid payloads and empty payloads.
+- [x] Add validation for all route inputs.
+- [x] Add a small error format for validation failures.
+- [x] Standardize the way route handlers report bad requests.
+- [x] Add tests for invalid payloads and empty payloads.
 
 Copilot session:
 
@@ -271,10 +271,10 @@ Done when:
 
 Goal: make local setup obvious before any real feature work begins.
 
-- [ ] Add `.env.example` files for backend and extension.
-- [ ] Include every required variable with a clear placeholder.
-- [ ] Document which secrets are required locally and which belong to deployment only.
-- [ ] Add a short warning about never committing real secrets.
+- [x] Add `.env.example` files for backend and extension.
+- [x] Include every required variable with a clear placeholder.
+- [x] Document which secrets are required locally and which belong to deployment only.
+- [x] Add a short warning about never committing real secrets.
 
 Suggested backend variables:
 
@@ -316,12 +316,12 @@ Done when:
 
 Goal: make the repo runnable before the product exists.
 
-- [ ] Fill in `backend/package.json`.
-- [ ] Fill in `extension/package.json`.
-- [ ] Fill in `web/package.json`.
-- [ ] Add dev, build, test, and typecheck scripts.
-- [ ] Add the minimum command set needed to run each app locally.
-- [ ] Make sure the scripts are boring and obvious.
+- [x] Fill in `backend/package.json`.
+- [x] Fill in `extension/package.json`.
+- [x] Fill in `web/package.json`.
+- [x] Add dev, build, test, and typecheck scripts.
+- [x] Add the minimum command set needed to run each app locally.
+- [x] Make sure the scripts are boring and obvious.
 
 Because the package manifests are currently empty, this task is not a cleanup pass. It is the first real bootstrap of the repo.
 
@@ -359,10 +359,10 @@ Done when:
 
 Goal: make future debugging cheaper.
 
-- [ ] Write the commands needed to start backend, extension, and web.
-- [ ] Add a smoke-check list for the minimum viable local boot.
-- [ ] Include what to expect when each app is healthy.
-- [ ] Include the first place to look when something fails.
+- [x] Write the commands needed to start backend, extension, and web.
+- [x] Add a smoke-check list for the minimum viable local boot.
+- [x] Include what to expect when each app is healthy.
+- [x] Include the first place to look when something fails.
 
 Suggested smoke test order:
 
@@ -396,11 +396,11 @@ Done when:
 
 Goal: make sure the bootstrap is actually usable before moving to Step 1.
 
-- [ ] Review the diff against the Step 0 acceptance criteria.
-- [ ] Check for missing tests or missing env values.
-- [ ] Confirm the taskboard matches the code and docs.
-- [ ] Archive or close the sessions you no longer need.
-- [ ] Save the best prompt you used if it is worth reusing later.
+- [x] Review the diff against the Step 0 acceptance criteria.
+- [x] Check for missing tests or missing env values.
+- [x] Confirm the taskboard matches the code and docs.
+- [x] Archive or close the sessions you no longer need.
+- [x] Save the best prompt you used if it is worth reusing later.
 
 Copilot session:
 
