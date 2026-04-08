@@ -104,3 +104,458 @@ Entries are grouped by branch and extend commit messages with file-level change 
 - Range: 9061c0562e09dca25aa192d9ab1373ae4b699e7e..122a263f0a617a7f19ba9c45a640bb12f5b13eda
 - Commits:
   - none (pre-push logging range could not be resolved before fallback fix)
+
+### 2026-04-08 19:57:53Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/main
+- Range: 9061c0562e09dca25aa192d9ab1373ae4b699e7e..6527c1a8a3d04cc930deaa200375497352201d1e
+- Range note: remote tip 9061c0562e09dca25aa192d9ab1373ae4b699e7e not found locally; using local history up to 6527c1a8a3d04cc930deaa200375497352201d1e
+- Commits:
+  - 87f1882 Initial commit
+    - Author: Daniel-Wu-Github <132875410+Daniel-Wu-Github@users.noreply.github.com>
+    - Commit date: 2026-03-29T15:19:01-05:00
+    - Purpose: This commit adds 1 across README.md.
+    - Files:
+      - A README.md
+  - b57ca45 README
+    - Author: Daniel-Wu-Github <132875410+Daniel-Wu-Github@users.noreply.github.com>
+    - Commit date: 2026-03-29T15:19:36-05:00
+    - Purpose: Updated project name from 'insta_prompt' to 'PromptCompiler' and added detailed project description, documentation links, tech stack, roadmap, and development instructions.
+    - Files:
+      - M README.md
+  - e9e8170 docs
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-03-29T15:37:21-05:00
+    - Purpose: This commit adds 7, modifies 1 across README.md, docs.
+    - Files:
+      - M README.md
+      - A docs/ARCHITECTURE.md
+      - A docs/BACKEND_API.md
+      - A docs/CLAUSE_PIPELINE.md
+      - A docs/DATA_MODELS.md
+      - A docs/EXTENSION.md
+      - A docs/LLM_ROUTING.md
+      - A docs/UX_FLOW.md
+  - 6780f25 skills
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-03-29T17:03:27-05:00
+    - Purpose: This commit adds 15, modifies 1 across .githooks, .github, README.md, logging.
+    - Files:
+      - A .githooks/post-push
+      - A .github/copilot-instructions.md
+      - A .github/prompts/skills-setup.prompt.md
+      - A .github/skills/SKILL_MAP.md
+      - A .github/skills/detailed-chat-output/SKILL.md
+      - A .github/skills/remote-commit-logging/SKILL.md
+      - A .github/skills/repo-workflow/SKILL.md
+      - A .github/skills/self-improvement-loop/SKILL.md
+      - A .github/skills/skill-improvement-loop/SKILL.md
+      - A .github/skills/skill-improvement-loop/scripts/implicit-skill-smoke-test.sh
+      - A .github/skills/skill-map-governance/SKILL.md
+      - A .github/skills/verification-gate/SKILL.md
+      - A .github/skills/workflow-logging/SKILL.md
+      - M README.md
+      - A logging/commit_log.md
+      - A logging/progress_log.md
+  - ee55d09 monorepo arch
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-03-29T17:54:36-05:00
+    - Purpose: This commit adds 48, modifies 4, deletes 1 across .githooks, .github, backend, extension, logging, web.
+    - Files:
+      - D .githooks/post-push
+      - A .githooks/pre-push
+      - M .github/skills/remote-commit-logging/SKILL.md
+      - M .github/skills/workflow-logging/SKILL.md
+      - A backend/.env.example
+      - A backend/package.json
+      - A backend/src/index.ts
+      - A backend/src/middleware/.gitkeep
+      - A backend/src/middleware/auth.ts
+      - A backend/src/middleware/ratelimit.ts
+      - A backend/src/middleware/tier.ts
+      - A backend/src/routes/.gitkeep
+      - A backend/src/routes/auth.ts
+      - A backend/src/routes/bind.ts
+      - A backend/src/routes/enhance.ts
+      - A backend/src/routes/projects.ts
+      - A backend/src/routes/segment.ts
+      - A backend/src/services/.gitkeep
+      - A backend/src/services/context.ts
+      - A backend/src/services/history.ts
+      - A backend/src/services/llm.ts
+      - A backend/src/services/prompts/action.ts
+      - A backend/src/services/prompts/bind.ts
+      - A backend/src/services/prompts/constraint.ts
+      - A backend/src/services/prompts/context.ts
+      - A backend/src/services/prompts/edge_case.ts
+      - A backend/src/services/prompts/output_format.ts
+      - A backend/src/services/prompts/tech_stack.ts
+      - A backend/tsconfig.json
+      - A extension/manifest.json
+      - A extension/package.json
+      - A extension/src/background/.gitkeep
+      - A extension/src/background/index.ts
+      - A extension/src/content/.gitkeep
+      - A extension/src/content/index.ts
+      - A extension/src/popup/.gitkeep
+      - A extension/src/popup/App.tsx
+      - A extension/src/popup/components/AccountStatus.tsx
+      - A extension/src/popup/components/ModeToggle.tsx
+      - A extension/src/popup/components/ProjectSelector.tsx
+      - A extension/src/popup/components/UpgradeCTA.tsx
+      - A extension/src/popup/hooks/useSettings.ts
+      - A extension/src/popup/index.html
+      - A extension/tsconfig.json
+      - A extension/wxt.config.ts
+      - M logging/commit_log.md
+      - M logging/progress_log.md
+      - A web/package.json
+      - A web/src/components/.gitkeep
+      - A web/src/index.tsx
+      - A web/src/pages/.gitkeep
+      - A web/tsconfig.json
+      - A web/vite.config.ts
+  - 962c46b step 0 plan
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-07T17:15:05-05:00
+    - Purpose: This commit adds 2, modifies 1 across docs, logging.
+    - Files:
+      - A docs/agent_plans/v1_overarching_plan.md
+      - A docs/agent_plans/v1_step_by_step/v1_step_0.md
+      - M logging/commit_log.md
+  - 6ce4651 chore(guardrails): add ignore rules and pre-commit secret checks
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:55:01-05:00
+    - Purpose: This commit adds 2 across .githooks, .gitignore.
+    - Files:
+      - A .githooks/pre-commit
+      - A .gitignore
+  - 4962eed feat(contracts): add shared domain, API, SSE, and error contracts
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:55:07-05:00
+    - Purpose: This commit adds 5 across shared.
+    - Files:
+      - A shared/contracts/api.ts
+      - A shared/contracts/domain.ts
+      - A shared/contracts/errors.ts
+      - A shared/contracts/index.ts
+      - A shared/contracts/sse.ts
+  - ef7aea9 feat(backend): scaffold step0 validation routes, middleware, and tests
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:55:41-05:00
+    - Purpose: This commit adds 9, modifies 22 across backend.
+    - Files:
+      - M backend/.env.example
+      - A backend/package-lock.json
+      - M backend/package.json
+      - A backend/src/__tests__/routes.validation.test.ts
+      - A backend/src/__tests__/stress-tests.test.ts
+      - M backend/src/index.ts
+      - A backend/src/lib/errors.ts
+      - A backend/src/lib/http.ts
+      - A backend/src/lib/schemas.ts
+      - A backend/src/lib/sse.ts
+      - A backend/src/lib/validation.ts
+      - M backend/src/middleware/auth.ts
+      - M backend/src/middleware/ratelimit.ts
+      - M backend/src/middleware/tier.ts
+      - M backend/src/routes/auth.ts
+      - M backend/src/routes/bind.ts
+      - M backend/src/routes/enhance.ts
+      - M backend/src/routes/projects.ts
+      - M backend/src/routes/segment.ts
+      - M backend/src/services/context.ts
+      - M backend/src/services/history.ts
+      - M backend/src/services/llm.ts
+      - M backend/src/services/prompts/action.ts
+      - M backend/src/services/prompts/bind.ts
+      - M backend/src/services/prompts/constraint.ts
+      - M backend/src/services/prompts/context.ts
+      - M backend/src/services/prompts/edge_case.ts
+      - M backend/src/services/prompts/output_format.ts
+      - M backend/src/services/prompts/tech_stack.ts
+      - A backend/src/types.ts
+      - M backend/tsconfig.json
+  - ff9c01b feat(extension): scaffold step0 popup/content/background surfaces
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:55:45-05:00
+    - Purpose: This commit adds 3, modifies 13 across extension.
+    - Files:
+      - A extension/.env.example
+      - M extension/manifest.json
+      - A extension/package-lock.json
+      - M extension/package.json
+      - M extension/src/background/index.ts
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - M extension/src/popup/components/ModeToggle.tsx
+      - M extension/src/popup/components/ProjectSelector.tsx
+      - M extension/src/popup/components/UpgradeCTA.tsx
+      - M extension/src/popup/hooks/useSettings.ts
+      - M extension/src/popup/index.html
+      - A extension/src/popup/main.tsx
+      - M extension/tsconfig.json
+      - M extension/wxt.config.ts
+  - b7b4f34 feat(web): scaffold step0 web shell and build pipeline
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:55:51-05:00
+    - Purpose: This commit adds 4, modifies 4 across web.
+    - Files:
+      - A web/.env.example
+      - A web/index.html
+      - A web/package-lock.json
+      - M web/package.json
+      - A web/src/App.tsx
+      - M web/src/index.tsx
+      - M web/tsconfig.json
+      - M web/vite.config.ts
+  - 122a263 docs(step0): add runbook, planning docs, prompts, and smoke checks
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:56:00-05:00
+    - Purpose: This commit adds 5, modifies 3 across .github, README.md, docs, logging, scripts.
+    - Files:
+      - A .github/prompts/step0-build-slice.prompt.md
+      - A .github/prompts/step0-plan-review.prompt.md
+      - M README.md
+      - A docs/STEP_0_SUMMARY.md
+      - M docs/agent_plans/v1_step_by_step/v1_step_0.md
+      - A docs/agent_plans/v1_step_by_step/v1_step_0_planning.md
+      - M logging/progress_log.md
+      - A scripts/smoke-tests.sh
+  - 6527c1a fix(hooks): handle missing remote tip in pre-push logging
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:57:47-05:00
+    - Purpose: This commit modifies 4 across .githooks, .github, logging.
+    - Files:
+      - M .githooks/pre-push
+      - M .github/skills/remote-commit-logging/SKILL.md
+      - M logging/commit_log.md
+      - M logging/progress_log.md
+
+### 2026-04-08 19:58:15Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/main
+- Range: 9061c0562e09dca25aa192d9ab1373ae4b699e7e..6527c1a8a3d04cc930deaa200375497352201d1e
+- Commits:
+  - 87f1882 Initial commit
+    - Author: Daniel-Wu-Github <132875410+Daniel-Wu-Github@users.noreply.github.com>
+    - Commit date: 2026-03-29T15:19:01-05:00
+    - Purpose: This commit adds 1 across README.md.
+    - Files:
+      - A README.md
+  - b57ca45 README
+    - Author: Daniel-Wu-Github <132875410+Daniel-Wu-Github@users.noreply.github.com>
+    - Commit date: 2026-03-29T15:19:36-05:00
+    - Purpose: Updated project name from 'insta_prompt' to 'PromptCompiler' and added detailed project description, documentation links, tech stack, roadmap, and development instructions.
+    - Files:
+      - M README.md
+  - e9e8170 docs
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-03-29T15:37:21-05:00
+    - Purpose: This commit adds 7, modifies 1 across README.md, docs.
+    - Files:
+      - M README.md
+      - A docs/ARCHITECTURE.md
+      - A docs/BACKEND_API.md
+      - A docs/CLAUSE_PIPELINE.md
+      - A docs/DATA_MODELS.md
+      - A docs/EXTENSION.md
+      - A docs/LLM_ROUTING.md
+      - A docs/UX_FLOW.md
+  - 6780f25 skills
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-03-29T17:03:27-05:00
+    - Purpose: This commit adds 15, modifies 1 across .githooks, .github, README.md, logging.
+    - Files:
+      - A .githooks/post-push
+      - A .github/copilot-instructions.md
+      - A .github/prompts/skills-setup.prompt.md
+      - A .github/skills/SKILL_MAP.md
+      - A .github/skills/detailed-chat-output/SKILL.md
+      - A .github/skills/remote-commit-logging/SKILL.md
+      - A .github/skills/repo-workflow/SKILL.md
+      - A .github/skills/self-improvement-loop/SKILL.md
+      - A .github/skills/skill-improvement-loop/SKILL.md
+      - A .github/skills/skill-improvement-loop/scripts/implicit-skill-smoke-test.sh
+      - A .github/skills/skill-map-governance/SKILL.md
+      - A .github/skills/verification-gate/SKILL.md
+      - A .github/skills/workflow-logging/SKILL.md
+      - M README.md
+      - A logging/commit_log.md
+      - A logging/progress_log.md
+  - ee55d09 monorepo arch
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-03-29T17:54:36-05:00
+    - Purpose: This commit adds 48, modifies 4, deletes 1 across .githooks, .github, backend, extension, logging, web.
+    - Files:
+      - D .githooks/post-push
+      - A .githooks/pre-push
+      - M .github/skills/remote-commit-logging/SKILL.md
+      - M .github/skills/workflow-logging/SKILL.md
+      - A backend/.env.example
+      - A backend/package.json
+      - A backend/src/index.ts
+      - A backend/src/middleware/.gitkeep
+      - A backend/src/middleware/auth.ts
+      - A backend/src/middleware/ratelimit.ts
+      - A backend/src/middleware/tier.ts
+      - A backend/src/routes/.gitkeep
+      - A backend/src/routes/auth.ts
+      - A backend/src/routes/bind.ts
+      - A backend/src/routes/enhance.ts
+      - A backend/src/routes/projects.ts
+      - A backend/src/routes/segment.ts
+      - A backend/src/services/.gitkeep
+      - A backend/src/services/context.ts
+      - A backend/src/services/history.ts
+      - A backend/src/services/llm.ts
+      - A backend/src/services/prompts/action.ts
+      - A backend/src/services/prompts/bind.ts
+      - A backend/src/services/prompts/constraint.ts
+      - A backend/src/services/prompts/context.ts
+      - A backend/src/services/prompts/edge_case.ts
+      - A backend/src/services/prompts/output_format.ts
+      - A backend/src/services/prompts/tech_stack.ts
+      - A backend/tsconfig.json
+      - A extension/manifest.json
+      - A extension/package.json
+      - A extension/src/background/.gitkeep
+      - A extension/src/background/index.ts
+      - A extension/src/content/.gitkeep
+      - A extension/src/content/index.ts
+      - A extension/src/popup/.gitkeep
+      - A extension/src/popup/App.tsx
+      - A extension/src/popup/components/AccountStatus.tsx
+      - A extension/src/popup/components/ModeToggle.tsx
+      - A extension/src/popup/components/ProjectSelector.tsx
+      - A extension/src/popup/components/UpgradeCTA.tsx
+      - A extension/src/popup/hooks/useSettings.ts
+      - A extension/src/popup/index.html
+      - A extension/tsconfig.json
+      - A extension/wxt.config.ts
+      - M logging/commit_log.md
+      - M logging/progress_log.md
+      - A web/package.json
+      - A web/src/components/.gitkeep
+      - A web/src/index.tsx
+      - A web/src/pages/.gitkeep
+      - A web/tsconfig.json
+      - A web/vite.config.ts
+  - 962c46b step 0 plan
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-07T17:15:05-05:00
+    - Purpose: This commit adds 2, modifies 1 across docs, logging.
+    - Files:
+      - A docs/agent_plans/v1_overarching_plan.md
+      - A docs/agent_plans/v1_step_by_step/v1_step_0.md
+      - M logging/commit_log.md
+  - 6ce4651 chore(guardrails): add ignore rules and pre-commit secret checks
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:55:01-05:00
+    - Purpose: This commit adds 2 across .githooks, .gitignore.
+    - Files:
+      - A .githooks/pre-commit
+      - A .gitignore
+  - 4962eed feat(contracts): add shared domain, API, SSE, and error contracts
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:55:07-05:00
+    - Purpose: This commit adds 5 across shared.
+    - Files:
+      - A shared/contracts/api.ts
+      - A shared/contracts/domain.ts
+      - A shared/contracts/errors.ts
+      - A shared/contracts/index.ts
+      - A shared/contracts/sse.ts
+  - ef7aea9 feat(backend): scaffold step0 validation routes, middleware, and tests
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:55:41-05:00
+    - Purpose: This commit adds 9, modifies 22 across backend.
+    - Files:
+      - M backend/.env.example
+      - A backend/package-lock.json
+      - M backend/package.json
+      - A backend/src/__tests__/routes.validation.test.ts
+      - A backend/src/__tests__/stress-tests.test.ts
+      - M backend/src/index.ts
+      - A backend/src/lib/errors.ts
+      - A backend/src/lib/http.ts
+      - A backend/src/lib/schemas.ts
+      - A backend/src/lib/sse.ts
+      - A backend/src/lib/validation.ts
+      - M backend/src/middleware/auth.ts
+      - M backend/src/middleware/ratelimit.ts
+      - M backend/src/middleware/tier.ts
+      - M backend/src/routes/auth.ts
+      - M backend/src/routes/bind.ts
+      - M backend/src/routes/enhance.ts
+      - M backend/src/routes/projects.ts
+      - M backend/src/routes/segment.ts
+      - M backend/src/services/context.ts
+      - M backend/src/services/history.ts
+      - M backend/src/services/llm.ts
+      - M backend/src/services/prompts/action.ts
+      - M backend/src/services/prompts/bind.ts
+      - M backend/src/services/prompts/constraint.ts
+      - M backend/src/services/prompts/context.ts
+      - M backend/src/services/prompts/edge_case.ts
+      - M backend/src/services/prompts/output_format.ts
+      - M backend/src/services/prompts/tech_stack.ts
+      - A backend/src/types.ts
+      - M backend/tsconfig.json
+  - ff9c01b feat(extension): scaffold step0 popup/content/background surfaces
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:55:45-05:00
+    - Purpose: This commit adds 3, modifies 13 across extension.
+    - Files:
+      - A extension/.env.example
+      - M extension/manifest.json
+      - A extension/package-lock.json
+      - M extension/package.json
+      - M extension/src/background/index.ts
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - M extension/src/popup/components/ModeToggle.tsx
+      - M extension/src/popup/components/ProjectSelector.tsx
+      - M extension/src/popup/components/UpgradeCTA.tsx
+      - M extension/src/popup/hooks/useSettings.ts
+      - M extension/src/popup/index.html
+      - A extension/src/popup/main.tsx
+      - M extension/tsconfig.json
+      - M extension/wxt.config.ts
+  - b7b4f34 feat(web): scaffold step0 web shell and build pipeline
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:55:51-05:00
+    - Purpose: This commit adds 4, modifies 4 across web.
+    - Files:
+      - A web/.env.example
+      - A web/index.html
+      - A web/package-lock.json
+      - M web/package.json
+      - A web/src/App.tsx
+      - M web/src/index.tsx
+      - M web/tsconfig.json
+      - M web/vite.config.ts
+  - 122a263 docs(step0): add runbook, planning docs, prompts, and smoke checks
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:56:00-05:00
+    - Purpose: This commit adds 5, modifies 3 across .github, README.md, docs, logging, scripts.
+    - Files:
+      - A .github/prompts/step0-build-slice.prompt.md
+      - A .github/prompts/step0-plan-review.prompt.md
+      - M README.md
+      - A docs/STEP_0_SUMMARY.md
+      - M docs/agent_plans/v1_step_by_step/v1_step_0.md
+      - A docs/agent_plans/v1_step_by_step/v1_step_0_planning.md
+      - M logging/progress_log.md
+      - A scripts/smoke-tests.sh
+  - 6527c1a fix(hooks): handle missing remote tip in pre-push logging
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-08T14:57:47-05:00
+    - Purpose: This commit modifies 4 across .githooks, .github, logging.
+    - Files:
+      - M .githooks/pre-push
+      - M .github/skills/remote-commit-logging/SKILL.md
+      - M logging/commit_log.md
+      - M logging/progress_log.md

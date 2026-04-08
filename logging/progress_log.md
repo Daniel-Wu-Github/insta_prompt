@@ -227,3 +227,20 @@
 	- Fulfillment: Commit split is complete and push blocker root cause in the pre-push hook is remediated.
 	- Deviation: Initial push attempt failed before this fix due invalid revision range from missing remote tip object.
 
+## Entry 010 - 2026-04-08 - Added Step 1 Planning Docs
+
+- Task: Create the end-to-end Step 1 plan using the same planning-and-workboard structure as Step 0.
+- What the agent did: Added a Step 1 planning blueprint and a Step 1 tactical workboard covering Supabase schema, RLS, server-side auth verification, `/auth/token`, tests, risks, and exit criteria.
+- How it did it: Reviewed the overarching plan, backend API, data model, extension, and bootstrap summary docs; checked the current auth placeholders and shared contract shape; then wrote the new planning docs to mirror the Step 0 workflow format.
+- Files edited:
+	- docs/agent_plans/v1_step_by_step/v1_step_1_planning.md
+	- docs/agent_plans/v1_step_by_step/v1_step_1.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed the new Step 1 planning files were added at the expected paths.
+	- Confirmed the Step 1 scope matches the Step 1 section of `docs/agent_plans/v1_overarching_plan.md`.
+	- Confirmed the docs call out the existing Step 0 baseline and the current auth placeholders that Step 1 must replace.
+- Task alignment:
+	- Fulfillment: Provides the requested end-to-end Step 1 planning artifacts in the same style as Step 0.
+	- Deviation: None.
+
