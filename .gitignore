@@ -1,0 +1,16 @@
+node_modules/
+*/node_modules/
+
+.env
+.env.local
+.env.*.local
+
+dist/
+build/
+.output/
+.wxt/
+*.tsbuildinfo
+
+.DS_Store
+Thumbs.db
+*.log
