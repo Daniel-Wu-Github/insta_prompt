@@ -208,3 +208,22 @@
 	- Fulfillment: Removes the remaining extension bootstrap blocker and completes the pending verification checklist for the strict Step 0 corrective pass.
 	- Deviation: No push was executed in this pass because no new commit/push request was issued after verification completion.
 
+## Entry 009 - 2026-04-08 - Commit Split Executed and Pre-Push Hook Range Fallback Fixed
+
+- Task: Split Step 0 corrective work into concern-focused commits and push `main`.
+- What the agent did: Created six concern-based commits (guardrails, contracts, backend, extension, web, docs), then fixed `.githooks/pre-push` to avoid failing when remote tip SHAs are missing locally after rewritten history.
+- How the agent did it: Staged file groups by concern, committed sequentially, diagnosed push failure from invalid revision range, added a remote-tip existence check with safe fallback range generation, and documented the hook behavior update.
+- Files edited:
+	- .githooks/pre-push
+	- .github/skills/remote-commit-logging/SKILL.md
+	- logging/commit_log.md
+	- logging/progress_log.md
+- Verification:
+	- `git --no-pager log --oneline -8` shows the six new concern-focused commits in order.
+	- Hook logic now checks `git cat-file -e <remote_sha>^{commit}` before range-based `git rev-list`.
+	- Commit log partial entry from failed attempt was completed with an explicit `none` marker.
+	- Pending final `git push origin main` retry after this hook-fix commit.
+- Task alignment:
+	- Fulfillment: Commit split is complete and push blocker root cause in the pre-push hook is remediated.
+	- Deviation: Initial push attempt failed before this fix due invalid revision range from missing remote tip object.
+

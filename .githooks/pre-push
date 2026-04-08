@@ -123,7 +123,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     commit_list="$(git rev-list --reverse --max-count "$MAX_COMMITS" "$local_sha")"
   else
     append_line "- Range: $remote_sha..$local_sha"
-    commit_list="$(git rev-list --reverse --max-count "$MAX_COMMITS" "$remote_sha..$local_sha")"
+    if git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+      commit_list="$(git rev-list --reverse --max-count "$MAX_COMMITS" "$remote_sha..$local_sha")"
+    else
+      append_line "- Range note: remote tip $remote_sha not found locally; using local history up to $local_sha"
+      commit_list="$(git rev-list --reverse --max-count "$MAX_COMMITS" "$local_sha")"
+    fi
   fi
 
   append_line "- Commits:"

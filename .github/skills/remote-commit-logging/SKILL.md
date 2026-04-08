@@ -34,6 +34,7 @@ Do not use this skill for ordinary change summaries that do not require push-tri
 - Keep logs append-only and grouped under `## Branch: <name>` sections.
 - Include remote name/ref, commit range, commit subject, author/date, purpose, and changed files.
 - Keep failures non-destructive: logging issues should not block push completion.
+- Handle rewritten-history cases gracefully when remote tip SHAs are not present locally by using a safe fallback range.
 - Preserve hook executable mode when committing (for example: `git add --chmod=+x .githooks/pre-push`).
 - Because this runs before push, log entries represent push-attempt intent; they are strongly correlated with successful pushes but cannot prove remote acceptance by themselves.
 
