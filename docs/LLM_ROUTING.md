@@ -2,6 +2,12 @@
 
 > Model selection logic, cost model, and system prompt structure.
 
+Step scope note:
+
+- This document describes Step 3+ implementation surfaces.
+- Step 1 does not implement model routing or SSE orchestration.
+- Step 2 enforces tier and rate-limit gates that feed into later routing behavior.
+
 ---
 
 ## Routing Table

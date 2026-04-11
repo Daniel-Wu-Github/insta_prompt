@@ -2,6 +2,12 @@
 
 > Bun + Hono API server. All LLM calls are proxied through here.
 
+Step scope note:
+
+- Step 1 locks auth/session foundations (`/auth/token` contract + auth context population).
+- Step 2 adds rate-limit and tier-enforcement behavior.
+- Step 3+ implements full `/segment`, `/enhance`, and `/bind` model-routing behavior.
+
 ---
 
 ## Stack
@@ -18,6 +24,17 @@
 ---
 
 ## Endpoints
+
+### Endpoint Step Map
+
+| Method | Path | Step | Notes |
+|---|---|---|---|
+| POST | `/auth/token` | Step 1 | Public refresh-session proxy; no custom JWT issuer |
+| POST | `/segment` | Step 3+ | Production classifier behavior lands after Step 1 foundations |
+| POST | `/enhance` | Step 3+ | Production model routing and prompt expansion lands after Step 1 foundations |
+| POST | `/bind` | Step 3+ | Production bind orchestration lands after Step 1 foundations |
+| GET | `/projects` | v2-ready | Schema and contracts may exist before full v2 behavior |
+| POST | `/projects/:id/context` | v2-ready | Schema and contracts may exist before full v2 behavior |
 
 ### POST `/enhance`
 Expand a single classified section. Returns SSE stream.
@@ -92,6 +109,10 @@ Assemble all accepted expanded sections into one coherent prompt. Returns SSE st
 ### POST `/auth/token`
 Refresh a Supabase session and return the verified token plus app context. Called by the extension after Supabase login.
 
+Route class: public endpoint (no Authorization header required).
+
+`[TODO: Step 2 IP-based Rate Limit]`
+
 **Request**
 ```json
 {
@@ -112,10 +133,12 @@ Refresh a Supabase session and return the verified token plus app context. Calle
 ```
 
 **Behavior**
-- Use `supabase.auth.refreshSession()` or equivalent server-side refresh logic.
-- Verify the refreshed access token with `supabase.auth.getUser()`.
+- Require a non-empty `refresh_token` request field; return `400` for missing/empty values before any Supabase call.
+- Use `supabase.auth.refreshSession()` server-side to refresh the Supabase session.
+- Verify the refreshed access token with `supabase.auth.getUser()` before returning a response.
 - Rely on the `auth.users` trigger to create the `profiles` row on first signup.
-- Return the token and profile context needed by the extension background worker.
+- Return only Supabase-derived credentials and app context needed by the extension background worker.
+- Do not mint custom JWTs or alternate credential formats.
 
 ---
 
@@ -132,13 +155,15 @@ Accept chunked file content + embedding for a project's repo context. (v2)
 ## Middleware Stack
 
 ```
-Every request →
+Every protected request (not `/auth/token`) →
   1. CORS headers (allow extension origin)
-  2. Auth middleware — verify Supabase JWT, extract user_id + tier
-  3. Rate limit middleware — Redis INCR on rate:daily:{user_id}, TTL 24h
-  4. Tier middleware — enforce model routing rules (free → Groq only)
+  2. Auth middleware — verify Supabase JWT, extract user_id + tier (Step 1 context population)
+  3. Rate limit middleware — Redis INCR on rate:daily:{user_id}, TTL 24h (Step 2 enforcement)
+  4. Tier middleware — enforce model routing rules (free → Groq only) (Step 2 enforcement)
   5. Route handler
 ```
+
+`/auth/token` remains outside the protected middleware chain because the refresh token in the request body is the credential for that exchange.
 
 ```typescript
 // backend/src/middleware/auth.ts
@@ -149,8 +174,9 @@ export const authMiddleware = async (c: Context, next: Next) => {
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) return c.json({ error: 'Unauthorized' }, 401);
 
+  const tier = await resolveProfileTier(data.user.id); // read from profiles-backed app metadata
   c.set('userId', data.user.id);
-  c.set('tier', data.user.user_metadata.tier ?? 'free');
+  c.set('tier', tier ?? 'free');
   await next();
 };
 ```

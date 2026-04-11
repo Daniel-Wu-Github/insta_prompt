@@ -46,6 +46,7 @@ When unsure, align changes to these docs or explicitly call out the mismatch.
 ## Agent Operating Requirements (Non-Project-Specific)
 
 - Research and plan before implementation.
+- Load `.github/skills/scope-creep-guard/SKILL.md` for every task before planning or edits and enforce its boundary checks.
 - Execute in small verifiable steps and iterate until the task is fully complete.
 - Use additional sessions when necessary; do not stop at partial completion.
 - Compact conversation context whenever context usage exceeds about 65 percent during long-running iteration.

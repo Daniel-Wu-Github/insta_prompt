@@ -90,19 +90,21 @@ Popup              → React UI for mode toggle, project selector, account statu
 | POST | `/enhance` | SSE stream | Expand a single section |
 | POST | `/segment` | JSON | Classify raw segments |
 | POST | `/bind` | SSE stream | Final assembly pass |
-| POST | `/auth/token` | JSON | Issue / refresh JWT |
+| POST | `/auth/token` | JSON | Refresh Supabase session and return verified app auth context |
 | GET | `/projects` | JSON | List user projects (v2) |
 | POST | `/projects/:id/context` | JSON | Store repo context (v2) |
 
 ### Middleware Stack
 ```
-Request → Auth (JWT validation)
-        → Rate limit check (Redis counter by user_id)
-        → Tier check (free: Groq only, pro: full routing)
-        → Route handler
-        → LLM orchestrator
-        → SSE stream response
+Protected request (not `/auth/token`) → Auth (JWT validation)
+            → Rate limit check (Redis counter by user_id)
+            → Tier check (free: Groq only, pro: full routing)
+            → Route handler
+            → LLM orchestrator
+            → SSE stream response
 ```
+
+`/auth/token` is public and remains outside the protected middleware chain; Step 2 adds explicit IP-based rate limiting for this endpoint.
 
 ---
 
@@ -114,7 +116,8 @@ Request → Auth (JWT validation)
 ### Core Tables
 
 ```sql
-users               id, email, tier, encrypted_api_key, created_at
+auth.users          id, email, created_at
+profiles            id, tier, encrypted_api_key, stripe_customer_id, created_at
 projects            id, user_id, name, repo_url, tech_stack[], system_context
 context_chunks      id, project_id, file_path, content, embedding vector(1536)
 enhancement_history id, user_id, project_id, raw_input, final_prompt, mode, model_used, created_at
@@ -138,7 +141,7 @@ See [`LLM_ROUTING.md`](LLM_ROUTING.md) for full routing logic.
 
 ```
 /enhance called
-  → read tier from JWT
+  → read tier from verified auth context backed by profiles
   → read mode from request body
   → select model (see routing table)
   → inject project context if project_id present (v2)

@@ -6,8 +6,18 @@
 
 ## Postgres Schema
 
-### `users`
+Lifecycle marker legend:
+
+- v1 required: must be fully provisioned and protected in Step 1.
+- v2-ready: schema exists early to avoid migration churn, but feature behavior may be deferred.
+
+### `users` and `profiles` (v1 required)
 Managed by Supabase Auth. Extended with a `profiles` table for app-specific metadata.
+
+Step 1 identity linkage:
+
+- `profiles.id` is the canonical app identity key and maps directly to `auth.users.id`.
+- New `auth.users` rows must bootstrap matching `profiles` rows via an `AFTER INSERT` trigger.
 
 ```sql
 create table profiles (
@@ -25,11 +35,18 @@ create policy "Own profile only" on profiles
 
 -- Bootstrap: create a profiles row automatically when Supabase Auth inserts a new user
 -- Step 1 planning requires this trigger so tier checks and foreign keys never see a missing profile row.
+-- Bootstrap insert must use NEW.id -> public.profiles.id and explicit tier='free'.
+-- Trigger function must be SECURITY DEFINER so signup-time bootstrap is not blocked by RLS.
 ```
+
+Step 1 RLS intent:
+
+- `profiles` ownership checks should explicitly cover reads and writes (`USING` and `WITH CHECK`) for own-row access.
+- Profile bootstrap remains trigger-driven; clients do not insert `profiles` rows directly.
 
 ---
 
-### `projects` (v2)
+### `projects` (v2-ready)
 Project profiles for context-aware enhancements.
 
 ```sql
@@ -49,9 +66,13 @@ create policy "Own projects only" on projects
   using (auth.uid() = user_id);
 ```
 
+Step 1 RLS intent:
+
+- `projects` policies should pair `USING` and `WITH CHECK` conditions on `auth.uid() = user_id` to prevent cross-user writes.
+
 ---
 
-### `context_chunks` (v2 — requires pgvector)
+### `context_chunks` (v2-ready — requires pgvector)
 Chunked file content from connected repos. Used for semantic retrieval at enhancement time.
 
 ```sql
@@ -72,6 +93,10 @@ create index on context_chunks
   with (lists = 100);
 ```
 
+Step 1 RLS intent:
+
+- `context_chunks` ownership must be enforced through the owning `projects.user_id` relationship for both read and write paths.
+
 Retrieval query (top 3 most relevant chunks for a given query):
 ```sql
 select content, file_path
@@ -83,7 +108,7 @@ limit 3;
 
 ---
 
-### `enhancement_history`
+### `enhancement_history` (v1 required)
 Log of every completed enhancement. Used for usage tracking, debugging, and future personalization.
 
 ```sql
@@ -103,6 +128,10 @@ alter table enhancement_history enable row level security;
 create policy "Own history only" on enhancement_history
   using (auth.uid() = user_id);
 ```
+
+Step 1 RLS intent:
+
+- `enhancement_history` policies should pair `USING` and `WITH CHECK` on `auth.uid() = user_id` to prevent cross-user inserts/updates.
 
 ---
 

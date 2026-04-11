@@ -2,6 +2,37 @@
 
 This is the tactical workboard for Step 1 in [v1_overarching_plan.md](../../agent_plans/v1_overarching_plan.md). The goal is to turn the Step 0 scaffold into a trustworthy identity and persistence layer that later routing, tier, and extension flows can rely on.
 
+## 1.0 Resolve Review Feedback
+
+Goal: make the data/auth mechanics explicit before the implementation slices start.
+
+- [ ] Add the `auth.users` trigger that seeds `public.profiles` with `tier = 'free'`.
+- [ ] Enable `vector` before creating `context_chunks`.
+- [ ] Define `/auth/token` as a Supabase refresh-session proxy with a typed response contract.
+- [ ] Run auth and RLS tests against a real local Supabase harness.
+
+Copilot session:
+
+- Plan agent first.
+- Ask agent if you need a narrow check on the local Supabase harness shape.
+
+Prompt:
+
+```text
+Resolve the Step 1 review feedback before implementation.
+
+Make the profile bootstrap, vector setup, auth-token flow, and local Supabase test path explicit in the step docs.
+
+Do not edit unrelated files.
+```
+
+Done when:
+
+1. The Step 1 docs explicitly state how new users get profiles.
+2. The Step 1 docs explicitly state how `vector` is enabled.
+3. The Step 1 docs explicitly state what `/auth/token` does.
+4. The Step 1 docs explicitly state how auth/RLS tests run locally.
+
 Step 1 is done when the repo has:
 
 1. Supabase schema and RLS for `profiles`, `enhancement_history`, `projects`, and `context_chunks`.
@@ -195,12 +226,17 @@ Done when:
 Goal: make ownership rules real before auth middleware depends on them.
 
 - [ ] Create SQL migrations for `profiles`, `enhancement_history`, `projects`, and `context_chunks`.
-- [ ] Enable the `vector` extension before creating `context_chunks`.
-- [ ] Add an `AFTER INSERT` trigger on `auth.users` that seeds `public.profiles` with `tier = 'free'`.
+- [ ] **Mandatory:** The migration provisioning `context_chunks` MUST include `CREATE EXTENSION IF NOT EXISTS vector;` before the table definition.
+- [ ] **Mandatory:** Add an `AFTER INSERT` trigger on `auth.users` that auto-creates a `public.profiles` row with `tier = 'free'` for every new user.
+- [ ] **Mandatory:** The trigger function called by the `auth.users` trigger must be created with `SECURITY DEFINER` so profile bootstrap inserts are not blocked by RLS during signup.
+- [ ] Lock the canonical `profiles` identity shape: `profiles.id` maps directly to `auth.users.id` and Step 1 does not add a duplicate `profiles.user_id` identity column.
 - [ ] Add RLS policies for user-owned tables.
 - [ ] Lock the canonical `tier` and ownership fields.
-- [ ] Start a local Supabase harness with `npx supabase init` and `npx supabase start`.
-- [ ] Add a smoke check or test harness for the migration set.
+- [ ] **Prerequisite:** Confirm Docker and Docker Compose are installed and running before starting the local Supabase harness.
+- [ ] **Mandatory:** Initialize the local Supabase harness with `npx supabase init` (if not already initialized) and start it with `npx supabase start` to provide a real Postgres + Auth runtime for testing.
+- [ ] **Mandatory:** Run `npx supabase status` and capture local service endpoints and credentials needed by backend test harness configuration.
+- [ ] Verify the expected repo artifacts exist and are tracked for this slice: `supabase/config.toml` and `supabase/migrations/**`.
+- [ ] Verify migrations apply cleanly against the running local Supabase instance.
 
 Copilot session:
 
@@ -214,30 +250,48 @@ Create the Step 1 database migrations and RLS policies.
 
 Use the docs as the source of truth for the table shapes and ownership rules.
 
-Rules:
-- keep the migrations minimal and explicit
-- do not add feature logic yet
-- preserve the v2-ready schema intent
-- enable vector before creating context_chunks
-- create a profiles bootstrap trigger on auth.users
-- add validation or smoke checks if needed
+Mandatory requirements:
+- Create supabase/migrations/0001_step1_profiles_and_history.sql that:
+  * Enables the vector extension with CREATE EXTENSION IF NOT EXISTS vector;
+  * Creates the profiles table with canonical identity mapping to auth.users.id and tier metadata fields aligned to docs/DATA_MODELS.md
+  * Creates an AFTER INSERT trigger on auth.users that auto-inserts a new profiles row with tier='free'
+  * Creates the trigger function as SECURITY DEFINER with deterministic recreation semantics for local reset workflows
+  * Creates the enhancement_history table
+- Create supabase/migrations/0002_step1_projects_and_context.sql that creates projects and context_chunks tables
+- The migration provisioning context_chunks MUST include CREATE EXTENSION IF NOT EXISTS vector; before the table definition
+- Create supabase/migrations/0003_step1_rls.sql with RLS policies for all user-owned tables
+- Keep migrations minimal and explicit; preserve the v2-ready schema intent
+- Do not add feature logic or GitHub OAuth scaffolding yet
+- Do not use placeholder auth or mock behavior
 
-Stop after the persistence layer is complete.
+Verification:
+- Confirm Docker prerequisites before starting Supabase (`docker --version` and `docker compose --version`)
+- Run migrations against a real local Supabase instance started with `npx supabase start`
+- Confirm `npx supabase status` reports healthy local services before running migration checks
+- Confirm the vector extension is available
+- Confirm the trigger fires by simulating a new auth.users insert and checking that profiles auto-creates
+- Confirm the profile bootstrap trigger function is created as SECURITY DEFINER
+
+Stop after the persistence layer is complete and verified.
 ```
 
 Done when:
 
 1. Every Step 1 table has a named migration.
-2. The profile bootstrap trigger exists and defaults new rows to `tier = 'free'`.
-3. Ownership rules are explicit in SQL.
-4. The schema matches the docs and the v2-ready intent.
+2. The profile bootstrap trigger exists, defaults new rows to `tier = 'free'`, and uses a `SECURITY DEFINER` trigger function.
+3. Vector extension is explicitly enabled in the first migration.
+4. Ownership rules are explicit in SQL.
+5. The schema is verified against a real running local Supabase instance.
+6. Local harness prerequisites and repo artifacts are validated (`supabase/config.toml`, `supabase/migrations/**`, and service status).
+7. The schema matches the docs and the v2-ready intent.
 
 ### 1.4 Implement server-side auth verification
 
 Goal: replace placeholder auth with Supabase-backed identity.
 
-- [ ] Replace dev-token behavior in `backend/src/middleware/auth.ts`.
+- [ ] Replace the `dev-user` placeholder behavior in `backend/src/middleware/auth.ts`.
 - [ ] Resolve `userId` and `tier` from verified Supabase state.
+- [ ] Require one deterministic unauthorized response shape for missing, invalid, and expired bearer tokens.
 - [ ] Keep auth failures deterministic and non-leaky.
 - [ ] Update any context types or helpers that assume dev-only auth.
 
@@ -253,13 +307,14 @@ Implement the Step 1 auth middleware using Supabase verification.
 
 I want one consistent unauthorized behavior for missing, invalid, or expired tokens.
 Keep the implementation minimal and compatible with the future Step 2 middleware.
+Do not hardcode user IDs and do not trust client tier headers in this middleware.
 
 Do not build any LLM or rate-limiting logic yet.
 ```
 
 Done when:
 
-1. Missing or invalid auth returns the same 401 shape every time.
+1. Missing, invalid, and expired auth all return the same 401 shape every time.
 2. Verified requests expose `userId` and `tier` in context.
 3. The middleware no longer trusts client-supplied tier headers.
 
@@ -268,7 +323,9 @@ Done when:
 Goal: define the token exchange the extension will consume.
 
 - [ ] Finalize request and response shapes in shared contracts.
-- [ ] Update `backend/src/routes/auth.ts` to act as a Supabase refresh-session proxy.
+- [ ] Require a non-empty `refresh_token` request field and fail fast on missing or empty values before any Supabase call.
+- [ ] Update `backend/src/routes/auth.ts` to **call `supabase.auth.refreshSession()` server-side** to refresh the access token (not create a custom JWT).
+- [ ] Verify the refreshed token with `supabase.auth.getUser()` before returning any response.
 - [ ] Validate malformed request bodies before any auth calls.
 - [ ] Keep the response stable enough for `chrome.storage.session` persistence.
 
@@ -282,24 +339,36 @@ Prompt:
 ```text
 Implement the Step 1 /auth/token route and any needed shared auth contracts.
 
+Implementation requirements:
+- POST /auth/token requires a non-empty refresh token in the request body
+- Call supabase.auth.refreshSession() server-side to obtain a new access token
+- Verify the new access token by calling supabase.auth.getUser()
+- Return only the verified access token plus app context (user_id, tier) in the response
+- Do NOT issue custom JWTs or create alternative credential formats
+- Validate request payloads before making any Supabase calls
+- If refresh_token is missing or empty, return 400 and do not attempt any fallback credential path
+- Treat this as a Supabase session refresh proxy, not a custom auth issuer
+
 Keep the token exchange shape explicit, validated, and compatible with extension session storage.
-Treat the route as a Supabase refresh-session proxy, not a custom JWT issuer.
 Do not touch unrelated backend routes.
 
-Stop when the token handoff is complete.
+Stop when the token handoff is complete and the response shape is ready for extension storage.
 ```
 
 Done when:
 
 1. The request and response shapes are stable and documented in code.
-2. Invalid payloads fail before any auth work happens.
-3. The token flow is ready for the extension background worker to consume and stores the verified tier context.
+2. Invalid payloads, including missing or empty refresh_token, fail before any Supabase calls happen.
+3. The /auth/token route explicitly uses `supabase.auth.refreshSession()` and verifies with `supabase.auth.getUser()`.
+4. The token flow is ready for the extension background worker to consume and stores the verified tier context.
+5. No custom JWT or non-Supabase credential format is issued.
 
 ### 1.6 Reconcile middleware and service helpers
 
 Goal: make the rest of the backend trust the same auth context.
 
 - [ ] Stop any middleware from trusting request headers for tier or ownership.
+- [ ] Remove any `x-user-tier` request-header trust path and source tier only from verified auth context.
 - [ ] Introduce Supabase helper functions if the middleware needs them.
 - [ ] Keep rate limiting and tier enforcement behavior deferred to Step 2.
 - [ ] Confirm protected routes still mount in the correct order.
@@ -314,6 +383,7 @@ Prompt:
 Check the auth-adjacent middleware and helper layers for Step 1.
 
 Find any remaining placeholder assumptions about user identity, tier, or ownership.
+Remove any remaining `x-user-tier` trust path and preserve Step 2 enforcement boundaries.
 Do not add Step 2 enforcement logic yet.
 ```
 
@@ -322,14 +392,16 @@ Done when:
 1. Tier and ownership come from verified context, not request headers.
 2. Any new helper code stays small and backend-only.
 3. Middleware ordering still matches the architecture docs.
+4. Protected route behavior no longer depends on `x-user-tier` header input.
 
 ### 1.7 Add integration and ownership tests
 
 Goal: prove the auth and data foundation is real.
 
 - [ ] Cover missing Authorization, invalid JWT, expired JWT, and valid JWT cases.
-- [ ] Cover `/auth/token` validation and success paths.
-- [ ] Cover RLS and ownership assumptions for profile and history rows.
+- [ ] Cover `/auth/token` missing-refresh-token, malformed-body, invalid-refresh-token, and success paths.
+- [ ] Cover RLS and ownership assumptions for profile and history rows with cross-user isolation checks.
+- [ ] Verify profile bootstrap trigger behavior with a real local Supabase-authenticated user creation path.
 - [ ] Update existing route tests to remove dev-token assumptions.
 - [ ] Run the auth/RLS integration suite against the local Supabase harness.
 - [ ] Keep client mocks only for isolated helper tests that do not claim database coverage.
@@ -351,7 +423,9 @@ Done when:
 
 1. Unauthorized and expired-token failures are covered.
 2. Auth success paths verify the expected user context.
-3. RLS and ownership behavior are testable from the repo against a real local Supabase instance.
+3. `/auth/token` validation and success paths are covered with deterministic expectations.
+4. RLS and ownership behavior are testable from the repo against a real local Supabase instance.
+5. Cross-user isolation and profile bootstrap behavior are verified in integration coverage.
 
 ### 1.8 Final review and handoff
 
@@ -360,6 +434,7 @@ Goal: make sure Step 1 is safe to build on before Step 2 starts.
 - [ ] Review the diff against the Step 1 acceptance criteria.
 - [ ] Check for contract mismatches and auth-context drift.
 - [ ] Confirm the schema and tests line up with the docs.
+- [ ] Confirm no Step 2 or Step 3+ implementation behavior landed early (except explicit scope notes/TODO markers).
 - [ ] Log the result and any follow-up needed before Step 2.
 
 Copilot session:
@@ -379,7 +454,8 @@ Done when:
 
 1. The Step 1 board is reflected in the files.
 2. The auth foundation is repeatable.
-3. You are ready to move on without reopening the same questions.
+3. No Step 2 or Step 3+ behavior was implemented prematurely.
+4. You are ready to move on without reopening the same questions.
 
 ## Step 1 Quality Bar
 

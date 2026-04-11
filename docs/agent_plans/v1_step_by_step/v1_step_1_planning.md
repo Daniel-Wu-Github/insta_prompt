@@ -14,9 +14,30 @@ It is aligned with:
 
 ## 1.1 Scope Lock and Source of Truth
 
+### Phase 1 decision lock matrix
+
+The following decisions are now locked for implementation and must not be re-opened in later Step 1 slices unless a source-of-truth doc changes first.
+
+| Decision area | Locked choice (Phase 1) | Why this is locked now | Downstream dependency |
+|---|---|---|---|
+| Profile identity model | `public.profiles.id` maps directly to `auth.users.id`; Step 1 does not introduce a duplicate `profiles.user_id` identity column. | Prevents dual-identity drift across migrations, auth middleware, and RLS ownership checks. | 1.4 migrations, 1.5 auth middleware, 1.7 ownership tests |
+| Tier source of truth | `tier` is derived from verified Supabase-backed profile state only; no request header can set or override tier. | Removes client-controlled privilege escalation risk before Step 2 enforcement work begins. | 1.5 auth middleware wiring, 1.6 `/auth/token`, 1.7 auth tests |
+| `/auth/token` contract | Route is public, request must include non-empty `refresh_token`, and response shape is fixed to `token`, `token_type`, `expires_in`, `refresh_token`, `user_id`, `tier`. | Keeps extension session handoff deterministic and prevents contract drift. | 1.6 route implementation, shared contract validation, extension background storage |
+| Vector and trigger prerequisites | The migration provisioning `context_chunks` MUST include `CREATE EXTENSION IF NOT EXISTS vector;` before the table definition; profile bootstrap trigger must insert `NEW.id` into `public.profiles.id` with explicit `tier = 'free'`, and the trigger function must be `SECURITY DEFINER`. | Prevents migration-order failures and missing profile bootstrap behavior. | 1.4 SQL migrations, 1.7 schema smoke assertions |
+| RLS posture | Every user-owned table must ship with explicit ownership policies for read/write paths, including `WITH CHECK` protections for writes. | Ensures durable access controls even if future backend filters regress. | 1.4 RLS migration, 1.7 auth and ownership tests |
+
 ### Step 1 scope in one paragraph
 
 Step 1 turns the Step 0 scaffold into a trustworthy identity and persistence foundation: provision the Supabase schema and RLS policies for user profiles, enhancement history, and v2-ready project/context tables; add the database trigger that auto-creates `profiles` rows when new `auth.users` rows appear; replace placeholder auth handling with server-side JWT verification that resolves the authenticated user and tier from Supabase; define the `/auth/token` refresh-and-validation exchange used by the extension after login; and lock the auth test matrix against a real local Supabase harness so later tier and rate-limiting work can rely on truthful user context. This phase must keep all provider calls behind the backend, preserve the MV3 extension boundary, and avoid starting the later routing or UX steps.
+
+### Review feedback resolved
+
+The Step 1 planning surface now explicitly covers the four gaps called out in review:
+
+1. New Supabase users get a `profiles` row automatically via an `auth.users` trigger.
+2. `context_chunks` migration setup requires `vector` before the table is created.
+3. `/auth/token` is defined as a Supabase session refresh proxy, not a custom JWT issuer.
+4. Auth and RLS tests are planned against a real local Supabase harness, not only mocked clients.
 
 ### Step 1 deliverables extracted from the overarching plan
 
@@ -53,6 +74,12 @@ Step 1 turns the Step 0 scaffold into a trustworthy identity and persistence fou
 
 ## 1.2 Copilot Workflow Surface Plan
 
+### Numbering convention
+
+1. Taskboard execution numbering (`1.x`) lives in `docs/agent_plans/v1_step_by_step/v1_step_1.md`.
+2. This planning blueprint uses decision labels (`D1..D9`) plus file-level slice labels for dependency mapping.
+3. If numbering appears to overlap, treat the taskboard as execution order and this blueprint as locked design constraints.
+
 ### Always-on instruction surfaces (confirmed)
 
 1. `.github/copilot-instructions.md`
@@ -84,14 +111,20 @@ Rationale:
 1. Supabase CLI compatibility keeps schema history portable and reviewable.
 2. The migration history stays outside backend runtime code, which reduces ownership drift.
 3. A single root-level migration surface makes the v2-ready schema easier to audit.
-4. The first migration must enable `vector` before `context_chunks` is created.
+4. The first migration must enable the `vector` extension before `context_chunks` is created, and must include the `AFTER INSERT` trigger on `auth.users` to auto-create `profiles` rows.
 
 Planned files:
 
-- `supabase/migrations/0001_step1_profiles_and_history.sql`
-- `supabase/migrations/0002_step1_projects_and_context.sql`
-- `supabase/migrations/0003_step1_rls.sql`
-- `supabase/config.toml` for the local Supabase CLI harness
+- `supabase/migrations/0001_step1_profiles_and_history.sql` — provisions `profiles` table, creates `AFTER INSERT` trigger on `auth.users` to seed new profiles with `tier = 'free'`, provisions `enhancement_history` table, and enables the `vector` extension.
+- `supabase/migrations/0002_step1_projects_and_context.sql` — provisions `projects` and `context_chunks` tables (safe to create now that `vector` is enabled).
+- `supabase/migrations/0003_step1_rls.sql` — all RLS policies for user-owned tables.
+- `supabase/config.toml` — local Supabase CLI harness configuration.
+
+Planning rule:
+
+1. The migration provisioning `context_chunks` MUST include `CREATE EXTENSION IF NOT EXISTS vector;` before the table definition.
+2. The vector extension statement belongs in the earliest Step 1 migration that can run before any `context_chunks` DDL.
+3. The migration sequence must remain deterministic under local reset workflows.
 
 ### Decision D2: `profiles` is the canonical app-metadata row
 
@@ -106,6 +139,7 @@ Planning rule:
 1. `tier` must be derived from verified Supabase state, never from request headers.
 2. Backend middleware may cache `tier` in Hono context after verification, but it must not trust unverified client input.
 3. The `context_chunks` migration must enable `vector` before creating the table.
+4. Phase 1 schema lock: `profiles` uses `id uuid primary key references auth.users(id)` as the canonical identity and does not add a duplicate `user_id` identity column.
 
 ### Decision D3: Auth verification happens server-side and is the only source of truth for user context
 
@@ -120,6 +154,7 @@ Planning rule:
 1. `backend/src/middleware/auth.ts` should verify the bearer token with Supabase before setting `userId`.
 2. The middleware must attach `tier` from Supabase-backed profile data, not from a header override.
 3. Any placeholder dev-token behavior must be removed before Step 1 is considered complete.
+4. Missing, invalid, or expired bearer tokens must map to the same deterministic unauthorized response envelope.
 
 ### Decision D4: `/auth/token` stays a backend contract for the extension session handoff
 
@@ -149,6 +184,8 @@ Planning rule:
 1. Each owned table gets an explicit policy.
 2. Backend helpers may still filter by owner in code, but the database remains authoritative.
 3. No client-supplied `user_id` or `project_id` is ever treated as authoritative without a server lookup.
+4. Write paths (`INSERT` and `UPDATE`) must include explicit ownership checks (for example, `WITH CHECK`) so clients cannot write cross-user rows.
+5. `context_chunks` ownership must be enforced through the owning `projects.user_id` relationship.
 
 ### Decision D6: New Supabase users must receive a `profiles` row automatically
 
@@ -161,8 +198,11 @@ Rationale:
 Planning rule:
 
 1. The profiles migration must create an `AFTER INSERT` trigger on `auth.users`.
-2. The trigger function must insert into `public.profiles` with `tier = 'free'` by default.
-3. The trigger must be safe to re-run in local migration resets.
+2. The trigger function must insert `NEW.id` into `public.profiles.id` and set `tier = 'free'` explicitly in the insert statement.
+3. The trigger function must be created as `SECURITY DEFINER` so the bootstrap insert can run safely under RLS constraints during signup.
+4. The trigger function should write an explicit `created_at` value at insert time for deterministic bootstrap behavior.
+5. Migration SQL must be re-run safe in local reset workflows with explicit trigger/function idempotency semantics.
+6. The migration should use deterministic trigger/function recreation semantics (for example, `CREATE OR REPLACE FUNCTION ...`, `DROP TRIGGER IF EXISTS ... ON auth.users`, then `CREATE TRIGGER ...`) so re-applies do not fail unpredictably.
 
 ### Decision D7: Step 1 tests use a real local Supabase instance, not only mocks
 
@@ -174,9 +214,9 @@ Rationale:
 
 Planning rule:
 
-1. The Step 1 workflow must explicitly run `npx supabase init` and `npx supabase start` for the local harness.
-2. Integration tests must target the local Supabase database for auth and RLS assertions.
-3. Client mocks are allowed only for isolated unit tests that do not claim database-level coverage.
+1. The Step 1 workflow **must** initialize and run the local Supabase harness: `npx supabase init` (if not already done) and `npx supabase start` to begin the Docker-backed Postgres and Auth service.
+2. Integration tests **must** target the local Supabase database for auth and RLS assertions; no auth/RLS coverage comes from mocks.
+3. Client mocks are allowed only for isolated unit tests of pure helpers that do not touch the database or make auth calls.
 
 ### Decision D8: `/auth/token` is a Supabase refresh-and-validation proxy
 
@@ -188,10 +228,13 @@ Rationale:
 
 Planning rule:
 
-1. The route accepts a Supabase refresh token and uses `supabase.auth.refreshSession()` or equivalent server-side refresh logic.
-2. The refreshed access token is verified with `supabase.auth.getUser()` before any response is returned.
-3. The response includes the verified token plus app context needed by the extension session.
-4. The route does not become a custom auth issuer.
+1. The route is public and accepts a required, non-empty Supabase `refresh_token` in the request body.
+2. The route **must** call `supabase.auth.refreshSession()` server-side to obtain a refreshed access token (not a custom JWT or equivalent workaround).
+3. The refreshed access token is verified with `supabase.auth.getUser()` before any response is returned to ensure the token is valid and the user profile exists.
+4. The response shape is fixed to `token`, `token_type`, `expires_in`, `refresh_token`, `user_id`, and `tier`.
+5. If Supabase rotates the refresh token, the response returns the rotated `refresh_token`; otherwise `refresh_token` may be `null`.
+6. The route does not become a custom auth issuer and does not mint any non-Supabase credentials.
+7. Phase D must mark this endpoint in `docs/BACKEND_API.md` with `[TODO: Step 2 IP-based Rate Limit]` so Step 2 explicitly protects the public surface.
 
 ### Decision D9: `projects` and `context_chunks` are provisioned now but remain dormant in v1
 
@@ -239,14 +282,25 @@ Dependencies: the data model decisions above must be locked before any SQL is wr
 
 Dependencies: migration shape and auth contract decisions must be stable first.
 
+Execution order constraint:
+
+1. Implement and validate `backend/src/services/supabase.ts` before changing `backend/src/middleware/auth.ts`.
+2. Update `backend/src/middleware/tier.ts` only after verified auth context is available from auth middleware.
+3. Keep route-mount ordering validation in `backend/src/index.ts` as the final check in this slice.
+
 ### 1.6 `/auth/token` exchange and session handoff
 
 - `backend/src/routes/auth.ts`
 - `shared/contracts/api.ts`
 - `backend/src/lib/validation.ts`
-- `backend/src/services/supabase.ts` if the route needs shared refresh-session helpers
+- `backend/src/services/supabase.ts` (reuse shared refresh-session and verification helpers)
 
 Dependencies: the auth route must agree with the token shape and the verified user context.
+
+Execution order constraint:
+
+1. Finish the `backend/src/services/supabase.ts` refresh and verification helpers in 1.5 before implementing `/auth/token` response handling.
+2. Lock shared request/response contract updates before wiring route responses.
 
 ### 1.7 Auth test matrix and ownership checks
 
@@ -257,6 +311,12 @@ Dependencies: the auth route must agree with the token shape and the verified us
 - `backend/src/__tests__/setup.ts` or equivalent local harness bootstrap if needed
 
 Dependencies: middleware, route, and schema choices must be in place before tests can stabilize.
+
+Test boundary rule:
+
+1. Integration coverage (required): JWT verification paths, `/auth/token` refresh paths, trigger bootstrap behavior, and RLS ownership/cross-user isolation against local Supabase.
+2. Unit coverage (optional): pure helper behavior that does not call Supabase auth APIs and does not claim RLS/database guarantees.
+3. Mocked tests must not be used to claim auth or RLS coverage for Step 1 acceptance.
 
 ### 1.8 Final review and handoff
 
@@ -277,6 +337,81 @@ Dependencies: all prior Step 1 slices complete and verified.
    Mitigation: enforce one shared contract and validate both request and response boundaries.
 5. Risk: Step 2 depends on trustworthy tier data but Step 1 leaves the placeholder path intact.
    Mitigation: route all tier lookups through verified Supabase profile data now, even if enforcement comes later.
+6. Risk: scope creep introduces Step 2 or Step 3+ behavior during Step 1 execution.
+   Mitigation: enforce a per-slice scope gate that blocks rate-limit enforcement, model-routing logic, and extension UX behavior changes until their planned steps.
+
+## Phase E - Consistency Gate Before Implementation Handoff
+
+Goal: verify the planning and source-of-truth surfaces are aligned before any Step 1 runtime implementation begins.
+
+Required checks:
+
+1. Run a cross-doc consistency check across:
+   - `docs/agent_plans/v1_step_by_step/v1_step_1.md`
+   - `docs/agent_plans/v1_step_by_step/v1_step_1_planning.md`
+   - `docs/BACKEND_API.md`
+   - `docs/DATA_MODELS.md`
+   - `shared/contracts/api.ts`
+2. Confirm no document implies Step 2 enforcement implementation inside Step 1.
+3. Confirm critical Step 1 items are aligned across checklist, prompt text, and done criteria.
+4. Publish one final implementation order and stop condition set per slice.
+
+Phase E pass criteria:
+
+1. Profile identity, trigger behavior, and tier source are described consistently.
+2. `/auth/token` contract wording is consistent across planning and source-of-truth docs.
+3. Scope notes keep Step 2 and Step 3+ implementation out of Step 1.
+
+### Phase E execution result (documentation and contract pass)
+
+Cross-doc check outcome:
+
+1. Checked `v1_step_1.md`, `v1_step_1_planning.md`, `BACKEND_API.md`, `DATA_MODELS.md`, and `shared/contracts/api.ts` for Step 1 consistency.
+2. Confirmed no Step 2 enforcement implementation or Step 3+ routing implementation is requested inside Step 1 scope docs.
+3. Confirmed checklist, prompt text, and done-criteria alignment is present for Step 1 critical items in sections 1.3 to 1.7 of `v1_step_1.md`.
+
+Consistency resolution applied:
+
+1. `shared/contracts/api.ts` now types `AuthTokenRequest.refresh_token` as required, matching Step 1 docs.
+2. Trigger hardening language now explicitly requires a `SECURITY DEFINER` trigger function for profile bootstrap behavior.
+
+Phase E gate status:
+
+1. Documentation consistency: pass.
+2. Contract consistency: pass.
+3. Runtime-handoff readiness: pass for Step 1 documentation and contract baseline.
+
+## Phase F - Implementation Handoff Sequence
+
+Goal: define the execution order after docs are fixed, without performing implementation in this planning pass.
+
+Slice sequence:
+
+1. Slice 1: local harness preflight and environment wiring.
+2. Slice 2: migration files and trigger.
+3. Slice 3: Supabase service layer.
+4. Slice 4: auth middleware replacement.
+5. Slice 5: tier middleware cleanup.
+6. Slice 6: token route replacement.
+7. Slice 7: auth and RLS integration tests against local Supabase.
+8. Slice 8: final Step 1 criteria review only.
+
+Slice stop conditions (for execution pass):
+
+1. Slice 1 stop: local Supabase harness prerequisites verified, service status captured, and no schema or middleware behavior changes landed.
+2. Slice 2 stop: migrations apply cleanly, `vector` ordering and profile trigger behavior verified, and all ownership/RLS SQL is explicit.
+3. Slice 3 stop: Supabase service helpers exist with deterministic error handling; no route or middleware behavior changed yet.
+4. Slice 4 stop: auth middleware no longer uses placeholder identity paths; unauthorized envelope is deterministic across missing/invalid/expired tokens.
+5. Slice 5 stop: tier trust is removed from request headers and sourced only from verified auth context; no Step 2 enforcement logic added.
+6. Slice 6 stop: `/auth/token` uses refresh-session plus token verification path, request validation fails fast for missing/empty refresh token, and no custom credential issuance exists.
+7. Slice 7 stop: integration coverage proves auth, trigger bootstrap, and RLS ownership/cross-user isolation on local Supabase; mock-only auth/RLS claims are excluded.
+8. Slice 8 stop: Step 1 acceptance criteria reviewed against actual diffs, residual risks documented, and no Step 2 or Step 3+ implementation behavior introduced.
+
+Stop condition for this planning pass:
+
+1. Do not implement runtime backend, extension, web, or migration behavior here.
+2. End after planning/docs consistency and handoff order are complete.
+3. Runtime implementation begins only in a dedicated execution pass that follows the above slice order.
 
 ## Planning Completion Status
 

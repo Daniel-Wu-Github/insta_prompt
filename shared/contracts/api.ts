@@ -22,7 +22,7 @@ export interface BindRequest {
 }
 
 export interface AuthTokenRequest {
-  refresh_token?: string;
+  refresh_token: string;
 }
 
 export interface AuthTokenResponse {

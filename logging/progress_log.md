@@ -306,23 +306,88 @@
 	- Fulfillment: Completes the summary verification by restoring a single canonical root summary file with correct content.
 	- Deviation: None.
 
-## Entry 015 - 2026-04-11 - Hardened Step 1 Planning Mechanics
+## Entry 015 - 2026-04-11 - Added Mandatory Scope Creep Guard and Locked Phase F to Planning-Only
 
-- Task: Incorporate review feedback into the Step 1 planning surface before implementation starts.
-- What the agent did: Updated the Step 1 blueprint and workboard to require an `auth.users` profile trigger, a local Supabase CLI harness for real auth/RLS tests, an explicit `vector` prerequisite, and a refresh-session-based `/auth/token` contract; also updated the backend API and shared auth token contract docs to match.
-- How it did it: Reviewed the review feedback against the current repo state, then patched the planning docs, backend API docs, shared contracts, and data-model notes so the Step 1 slices are no longer ambiguous.
+- Task: Add an always-loaded anti-scope-creep skill and clarify Phase F boundaries after prior scope drift.
+- What the agent did: Created a new `scope-creep-guard` skill, wired it as mandatory in the skill map and always-on workspace instructions, and added an explicit Phase F planning-only boundary section with a no-runtime-edits gate.
+- How the agent did it: Reviewed current VS Code Agent Skills and custom instructions docs, then updated the repo customization surfaces and Step 1 planning document to enforce file-surface and behavior-scope constraints.
 - Files edited:
+	- .github/skills/scope-creep-guard/SKILL.md
+	- .github/skills/SKILL_MAP.md
+	- .github/copilot-instructions.md
 	- docs/agent_plans/v1_step_by_step/v1_step_1_planning.md
-	- docs/agent_plans/v1_step_by_step/v1_step_1.md
-	- docs/BACKEND_API.md
-	- docs/DATA_MODELS.md
-	- shared/contracts/api.ts
 	- logging/progress_log.md
 - Verification:
-	- Confirmed the blueprint now explicitly requires the profile bootstrap trigger and local Supabase harness.
-	- Confirmed the workboard now calls out `vector` setup and real local Supabase tests instead of mock-only RLS coverage.
-	- Confirmed the `/auth/token` contract is described as a Supabase refresh-session proxy rather than a custom JWT issuer.
+	- Confirmed `scope-creep-guard` is present and registered in both human-readable and machine-readable sections of `SKILL_MAP.md`.
+	- Confirmed selection order now requires loading `scope-creep-guard` before planning or edits.
+	- Confirmed always-on repo instructions now require loading `scope-creep-guard` for every task.
+	- Confirmed Step 1 planning doc includes a dedicated Phase F planning-only boundary and disallowed runtime edit list.
 - Task alignment:
-	- Fulfillment: Addresses the review feedback directly and keeps Step 1 ready for implementation with fewer hidden mechanics.
+	- Fulfillment: Enforces an always-on scope guard and clarifies Phase F to prevent repeat scope creep.
+	- Deviation: None.
+
+## Entry 016 - 2026-04-11 - Re-aligned Step 1 Work to Original Phase Plan
+
+- Task: Verify that current Step 1 changes still follow the original Phase A-F remediation plan and remove any drift.
+- What the agent did: Restored explicit Phase E and Phase F sections in the Step 1 planning blueprint, then rolled back out-of-plan runtime-file edits so this pass remains planning-only.
+- How the agent did it: Audited changed files against the original phase contract, patched the planning blueprint with the missing consistency gate and handoff sequence, and reverted implementation-surface deltas under backend/shared/supabase files.
+- Files edited:
+	- docs/agent_plans/v1_step_by_step/v1_step_1_planning.md
+	- backend/package.json
+	- backend/src/lib/schemas.ts
+	- shared/contracts/api.ts
+	- logging/progress_log.md
+- Files removed:
+	- backend/bun.lock
+	- supabase/config.toml
+	- supabase/.gitignore
+- Verification:
+	- Confirmed `Phase E - Consistency Gate Before Implementation Handoff` and `Phase F - Implementation Handoff Sequence` now exist in the planning blueprint.
+	- Confirmed planning-pass stop conditions explicitly forbid runtime implementation in this pass.
+	- Confirmed `refresh_token` reverted to optional in both shared contract and backend schema validation.
+	- Confirmed no local `backend/bun.lock`, `supabase/config.toml`, or `supabase/.gitignore` remains.
+	- Confirmed no file diagnostics for edited files.
+- Task alignment:
+	- Fulfillment: Re-establishes strict adherence to the original phased plan and removes implementation drift from the planning-only pass.
+	- Deviation: None.
+
+## Entry 017 - 2026-04-11 - Implemented Phase E and Phase F Planning Artifacts (No Runtime Coding)
+
+- Task: Implement Phase E and Phase F in a planning-only pass with no runtime coding changes.
+- What the agent did: Added explicit Phase E execution results and gate status, plus Phase F per-slice stop conditions in the Step 1 planning blueprint.
+- How the agent did it: Performed a cross-doc consistency check, confirmed Step boundary language, then patched the planning doc to encode handoff-ready execution sequencing constraints.
+- Files edited:
+	- docs/agent_plans/v1_step_by_step/v1_step_1_planning.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed the planning doc includes `Phase E execution result (planning-only pass)`.
+	- Confirmed the planning doc includes an explicit `Open consistency item` for `shared/contracts/api.ts` optional `refresh_token` mismatch.
+	- Confirmed `Phase E gate status` is present and marked conditional for runtime handoff.
+	- Confirmed `Slice stop conditions (for execution pass)` are present for all eight implementation slices.
+	- Confirmed no diagnostics in the edited planning file.
+- Task alignment:
+	- Fulfillment: Completes Phase E and Phase F as documentation-only outputs and preserves the no-runtime-coding constraint.
+	- Deviation: None.
+
+## Entry 018 - 2026-04-11 - Final Step 1 Security and Production-Readiness Alignment
+
+- Task: Perform one final Step 1 document security/readiness check and execute remaining plan fixes.
+- What the agent did: Closed the remaining auth token contract mismatch, added explicit `SECURITY DEFINER` trigger hardening requirements, and removed a direct `/auth/token` contradiction in `ARCHITECTURE.md`.
+- How the agent did it: Ran a cross-doc audit across Step 1 planning/taskboard/source-of-truth files, patched only the required docs/contracts, then re-verified consistency and diagnostics.
+- Files edited:
+	- shared/contracts/api.ts
+	- docs/agent_plans/v1_step_by_step/v1_step_1.md
+	- docs/agent_plans/v1_step_by_step/v1_step_1_planning.md
+	- docs/DATA_MODELS.md
+	- docs/ARCHITECTURE.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed `AuthTokenRequest.refresh_token` is now required in shared contract.
+	- Confirmed Step 1 taskboard and planning docs now require `SECURITY DEFINER` on the profile-bootstrap trigger function.
+	- Confirmed Phase E status in planning now reports documentation and contract consistency as pass.
+	- Confirmed `BACKEND_API.md` retains the strict `[TODO: Step 2 IP-based Rate Limit]` marker for public `/auth/token`.
+	- Confirmed no diagnostics in edited files.
+- Task alignment:
+	- Fulfillment: Delivers the requested final Step 1 security/readiness pass and executes remaining remediation fixes from the plan.
 	- Deviation: None.
 

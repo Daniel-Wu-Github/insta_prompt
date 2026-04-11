@@ -12,7 +12,9 @@ All agents must do these steps before using or editing skills:
 
 1. Classify the task (domain, risk, lifecycle stage).
 2. Load [repo-workflow](repo-workflow/SKILL.md).
-3. Add cross-cutting skills as needed in this order:
+3. Load [scope-creep-guard](scope-creep-guard/SKILL.md) for every task before planning or edits.
+4. For documentation maintenance, load [documentation-cohesion](documentation-cohesion/SKILL.md).
+5. Add cross-cutting skills as needed in this order:
   1. [skill-map-governance](skill-map-governance/SKILL.md)
   2. [verification-gate](verification-gate/SKILL.md)
   3. [workflow-logging](workflow-logging/SKILL.md)
@@ -26,6 +28,8 @@ All agents must do these steps before using or editing skills:
 | Skill | Path | Purpose | Load When |
 |---|---|---|---|
 | repo-workflow | [repo-workflow/SKILL.md](repo-workflow/SKILL.md) | Maintain instruction and workflow surfaces | Any customization or workflow maintenance task |
+| scope-creep-guard | [scope-creep-guard/SKILL.md](scope-creep-guard/SKILL.md) | Enforce explicit phase boundaries and prevent out-of-scope edits | Every task, before planning or edits |
+| documentation-cohesion | [documentation-cohesion/SKILL.md](documentation-cohesion/SKILL.md) | Ensure fixes integrate naturally and remain readable by humans and AI agents | Creating or refining planning docs, taskboards, prompts, or specification documents |
 | skill-map-governance | [skill-map-governance/SKILL.md](skill-map-governance/SKILL.md) | Keep the skill map synchronized with the skill catalog | Any skill add/remove/rename/scope change |
 | verification-gate | [verification-gate/SKILL.md](verification-gate/SKILL.md) | Enforce verification before completion | Any task that edits files, config, or process docs |
 | workflow-logging | [workflow-logging/SKILL.md](workflow-logging/SKILL.md) | Capture decisions, progress, and change records | Material process or instruction updates |
@@ -59,6 +63,8 @@ skillMap:
   requiredOnChange: true
   selectionOrder:
     - repo-workflow
+    - scope-creep-guard
+    - documentation-cohesion
     - skill-map-governance
     - verification-gate
     - workflow-logging
@@ -70,6 +76,12 @@ skillMap:
     - name: repo-workflow
       path: .github/skills/repo-workflow/SKILL.md
       type: meta-workflow
+    - name: scope-creep-guard
+      path: .github/skills/scope-creep-guard/SKILL.md
+      type: safety-governance
+    - name: documentation-cohesion
+      path: .github/skills/documentation-cohesion/SKILL.md
+      type: documentation-quality
     - name: skill-map-governance
       path: .github/skills/skill-map-governance/SKILL.md
       type: governance
