@@ -1,4 +1,4 @@
-import type { Mode, Section } from "./domain";
+import type { Mode, Section, Tier } from "./domain";
 
 export interface SegmentRequest {
   segments: string[];
@@ -23,6 +23,15 @@ export interface BindRequest {
 
 export interface AuthTokenRequest {
   refresh_token?: string;
+}
+
+export interface AuthTokenResponse {
+  token: string;
+  token_type: "bearer";
+  expires_in: number;
+  refresh_token: string | null;
+  user_id: string;
+  tier: Tier;
 }
 
 export interface ProjectContextChunk {

@@ -90,7 +90,32 @@ Assemble all accepted expanded sections into one coherent prompt. Returns SSE st
 ---
 
 ### POST `/auth/token`
-Issue or refresh a JWT. Called by the extension after Supabase login.
+Refresh a Supabase session and return the verified token plus app context. Called by the extension after Supabase login.
+
+**Request**
+```json
+{
+  "refresh_token": "<supabase refresh token>"
+}
+```
+
+**Response**
+```json
+{
+  "token": "<supabase access token>",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "refresh_token": "<rotated refresh token or null>",
+  "user_id": "<supabase user id>",
+  "tier": "free"
+}
+```
+
+**Behavior**
+- Use `supabase.auth.refreshSession()` or equivalent server-side refresh logic.
+- Verify the refreshed access token with `supabase.auth.getUser()`.
+- Rely on the `auth.users` trigger to create the `profiles` row on first signup.
+- Return the token and profile context needed by the extension background worker.
 
 ---
 

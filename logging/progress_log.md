@@ -244,3 +244,85 @@
 	- Fulfillment: Provides the requested end-to-end Step 1 planning artifacts in the same style as Step 0.
 	- Deviation: None.
 
+## Entry 011 - 2026-04-11 - Added Step 0 Testing Notes
+
+- Task: Explain how to open the extension popup in a browser and record the Step 0 bind-stream caveat in the testing notes.
+- What the agent did: Added WSL-specific popup-loading instructions to `docs/agent_plans/v1_testing_notes.md` and recorded the current bind-stream word-splitting / trailing-space stub behavior as an explicit Step 0 caveat.
+- How the agent did it: Checked the empty testing-notes file, confirmed the WXT dev server warning behavior, then wrote a concise manual test section and caveat note for future verification.
+- Files edited:
+	- docs/agent_plans/v1_testing_notes.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed the testing notes now explain how to load `extension/.output/chrome-mv3-dev` as an unpacked extension and open the popup from the toolbar icon.
+	- Confirmed the notes warn not to use `http://localhost:3001` as the popup URL.
+	- Confirmed the bind-stream caveat is documented exactly where requested.
+- Task alignment:
+	- Fulfillment: Adds the requested popup-opening guidance and records the Step 0 bind-stream formatting caveat in the appropriate documentation.
+	- Deviation: None.
+
+## Entry 012 - 2026-04-11 - Fixed WXT Manifest Permissions for Service Worker Startup
+
+- Task: Diagnose and fix the Chrome extension service worker crash reported as status code 15.
+- What the agent did: Moved the extension manifest metadata and permissions into `extension/wxt.config.ts`, rebuilt the extension, and verified that the generated dev manifest now includes `PromptCompiler`, `storage`, and `alarms` before loading in Chrome.
+- How the agent did it: Reviewed WXT manifest-generation docs, confirmed the source `manifest.json` was not what WXT loads, patched the global `manifest` config, then rebuilt both production and dev outputs to inspect the emitted manifest.
+- Files edited:
+	- extension/wxt.config.ts
+	- logging/progress_log.md
+- Verification:
+	- `extension/.output/chrome-mv3-dev/manifest.json` now includes `permissions: ["storage", "alarms", "tabs", "scripting"]`.
+	- The generated manifest name is now `PromptCompiler` instead of the package name.
+	- `npm run build` and `npm run dev` both complete successfully after the change.
+- Task alignment:
+	- Fulfillment: Resolves the service worker startup crash by ensuring the generated WXT manifest grants the APIs used by the background worker.
+	- Deviation: None.
+
+## Entry 013 - 2026-04-11 - Restored Canonical Step 0 Summary Path
+
+- Task: Verify the Step 0 summary and fix any repository path mismatches.
+- What the agent did: Confirmed the summary content was accurate, found that other docs still referenced `docs/STEP_0_SUMMARY.md`, and restored that canonical file so the references resolve again.
+- How the agent did it: Rechecked the summary against the backend, extension, web, and smoke-test artifacts, then added the missing root summary file using the existing verified content.
+- Files edited:
+	- docs/STEP_0_SUMMARY.md
+	- logging/progress_log.md
+- Verification:
+	- `docs/STEP_0_SUMMARY.md` now exists again and matches the verified Step 0 summary content.
+	- Existing references in Step 1 planning docs now resolve to a real file.
+- Task alignment:
+	- Fulfillment: Confirms the summary is correct and repairs the repo path mismatch that would otherwise leave broken links.
+	- Deviation: None.
+
+## Entry 014 - 2026-04-11 - Deduplicated Canonical Step 0 Summary
+
+- Task: Ensure the restored canonical Step 0 summary file is a single clean copy.
+- What the agent did: Removed the accidental duplicated block from [docs/STEP_0_SUMMARY.md](docs/STEP_0_SUMMARY.md) so the root summary matches the verified content exactly.
+- How the agent did it: Re-read the root summary file, compared it to the verified v1_steps_summary copy, and trimmed the appended duplicate block.
+- Files edited:
+	- docs/STEP_0_SUMMARY.md
+	- logging/progress_log.md
+- Verification:
+	- `docs/STEP_0_SUMMARY.md` now contains one copy of the Step 0 summary content.
+	- The file matches the verified summary text and keeps existing references valid.
+- Task alignment:
+	- Fulfillment: Completes the summary verification by restoring a single canonical root summary file with correct content.
+	- Deviation: None.
+
+## Entry 015 - 2026-04-11 - Hardened Step 1 Planning Mechanics
+
+- Task: Incorporate review feedback into the Step 1 planning surface before implementation starts.
+- What the agent did: Updated the Step 1 blueprint and workboard to require an `auth.users` profile trigger, a local Supabase CLI harness for real auth/RLS tests, an explicit `vector` prerequisite, and a refresh-session-based `/auth/token` contract; also updated the backend API and shared auth token contract docs to match.
+- How it did it: Reviewed the review feedback against the current repo state, then patched the planning docs, backend API docs, shared contracts, and data-model notes so the Step 1 slices are no longer ambiguous.
+- Files edited:
+	- docs/agent_plans/v1_step_by_step/v1_step_1_planning.md
+	- docs/agent_plans/v1_step_by_step/v1_step_1.md
+	- docs/BACKEND_API.md
+	- docs/DATA_MODELS.md
+	- shared/contracts/api.ts
+	- logging/progress_log.md
+- Verification:
+	- Confirmed the blueprint now explicitly requires the profile bootstrap trigger and local Supabase harness.
+	- Confirmed the workboard now calls out `vector` setup and real local Supabase tests instead of mock-only RLS coverage.
+	- Confirmed the `/auth/token` contract is described as a Supabase refresh-session proxy rather than a custom JWT issuer.
+- Task alignment:
+	- Fulfillment: Addresses the review feedback directly and keeps Step 1 ready for implementation with fewer hidden mechanics.
+	- Deviation: None.
+

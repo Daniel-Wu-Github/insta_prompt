@@ -5,10 +5,12 @@ This is the tactical workboard for Step 1 in [v1_overarching_plan.md](../../agen
 Step 1 is done when the repo has:
 
 1. Supabase schema and RLS for `profiles`, `enhancement_history`, `projects`, and `context_chunks`.
-2. Auth middleware that verifies JWTs and attaches `userId` and `tier` from Supabase-backed state.
-3. A validated `/auth/token` exchange that the extension can store and refresh in session storage.
-4. Integration tests for missing, expired, and valid auth paths.
-5. Enough auth-context truth for Step 2 rate limiting and tier enforcement to build on without rework.
+2. An `auth.users` trigger that creates a default `profiles` row on signup.
+3. A local Supabase harness that can run the database, auth, and RLS checks from the repo.
+4. Auth middleware that verifies JWTs and attaches `userId` and `tier` from Supabase-backed state.
+5. A validated `/auth/token` refresh-session exchange that the extension can store in session storage.
+6. Integration tests for missing, expired, and valid auth paths.
+7. Enough auth-context truth for Step 2 rate limiting and tier enforcement to build on without rework.
 
 ## How To Vibe Code Step 1 In VS Code
 
@@ -193,8 +195,11 @@ Done when:
 Goal: make ownership rules real before auth middleware depends on them.
 
 - [ ] Create SQL migrations for `profiles`, `enhancement_history`, `projects`, and `context_chunks`.
+- [ ] Enable the `vector` extension before creating `context_chunks`.
+- [ ] Add an `AFTER INSERT` trigger on `auth.users` that seeds `public.profiles` with `tier = 'free'`.
 - [ ] Add RLS policies for user-owned tables.
 - [ ] Lock the canonical `tier` and ownership fields.
+- [ ] Start a local Supabase harness with `npx supabase init` and `npx supabase start`.
 - [ ] Add a smoke check or test harness for the migration set.
 
 Copilot session:
@@ -213,6 +218,8 @@ Rules:
 - keep the migrations minimal and explicit
 - do not add feature logic yet
 - preserve the v2-ready schema intent
+- enable vector before creating context_chunks
+- create a profiles bootstrap trigger on auth.users
 - add validation or smoke checks if needed
 
 Stop after the persistence layer is complete.
@@ -221,8 +228,9 @@ Stop after the persistence layer is complete.
 Done when:
 
 1. Every Step 1 table has a named migration.
-2. Ownership rules are explicit in SQL.
-3. The schema matches the docs and the v2-ready intent.
+2. The profile bootstrap trigger exists and defaults new rows to `tier = 'free'`.
+3. Ownership rules are explicit in SQL.
+4. The schema matches the docs and the v2-ready intent.
 
 ### 1.4 Implement server-side auth verification
 
@@ -260,7 +268,7 @@ Done when:
 Goal: define the token exchange the extension will consume.
 
 - [ ] Finalize request and response shapes in shared contracts.
-- [ ] Update `backend/src/routes/auth.ts` to match the real exchange flow.
+- [ ] Update `backend/src/routes/auth.ts` to act as a Supabase refresh-session proxy.
 - [ ] Validate malformed request bodies before any auth calls.
 - [ ] Keep the response stable enough for `chrome.storage.session` persistence.
 
@@ -275,6 +283,7 @@ Prompt:
 Implement the Step 1 /auth/token route and any needed shared auth contracts.
 
 Keep the token exchange shape explicit, validated, and compatible with extension session storage.
+Treat the route as a Supabase refresh-session proxy, not a custom JWT issuer.
 Do not touch unrelated backend routes.
 
 Stop when the token handoff is complete.
@@ -284,7 +293,7 @@ Done when:
 
 1. The request and response shapes are stable and documented in code.
 2. Invalid payloads fail before any auth work happens.
-3. The token flow is ready for the extension background worker to consume.
+3. The token flow is ready for the extension background worker to consume and stores the verified tier context.
 
 ### 1.6 Reconcile middleware and service helpers
 
@@ -322,6 +331,8 @@ Goal: prove the auth and data foundation is real.
 - [ ] Cover `/auth/token` validation and success paths.
 - [ ] Cover RLS and ownership assumptions for profile and history rows.
 - [ ] Update existing route tests to remove dev-token assumptions.
+- [ ] Run the auth/RLS integration suite against the local Supabase harness.
+- [ ] Keep client mocks only for isolated helper tests that do not claim database coverage.
 
 Copilot session:
 
@@ -340,7 +351,7 @@ Done when:
 
 1. Unauthorized and expired-token failures are covered.
 2. Auth success paths verify the expected user context.
-3. RLS and ownership behavior are testable from the repo.
+3. RLS and ownership behavior are testable from the repo against a real local Supabase instance.
 
 ### 1.8 Final review and handoff
 

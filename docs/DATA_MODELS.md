@@ -22,6 +22,9 @@ create table profiles (
 alter table profiles enable row level security;
 create policy "Own profile only" on profiles
   using (auth.uid() = id);
+
+-- Bootstrap: create a profiles row automatically when Supabase Auth inserts a new user
+-- Step 1 planning requires this trigger so tier checks and foreign keys never see a missing profile row.
 ```
 
 ---

@@ -16,23 +16,25 @@ It is aligned with:
 
 ### Step 1 scope in one paragraph
 
-Step 1 turns the Step 0 scaffold into a trustworthy identity and persistence foundation: provision the Supabase schema and RLS policies for user profiles, enhancement history, and v2-ready project/context tables; replace placeholder auth handling with server-side JWT verification that resolves the authenticated user and tier from Supabase; define the `/auth/token` exchange used by the extension after login; and lock the auth test matrix so later tier and rate-limiting work can rely on truthful user context. This phase must keep all provider calls behind the backend, preserve the MV3 extension boundary, and avoid starting the later routing or UX steps.
+Step 1 turns the Step 0 scaffold into a trustworthy identity and persistence foundation: provision the Supabase schema and RLS policies for user profiles, enhancement history, and v2-ready project/context tables; add the database trigger that auto-creates `profiles` rows when new `auth.users` rows appear; replace placeholder auth handling with server-side JWT verification that resolves the authenticated user and tier from Supabase; define the `/auth/token` refresh-and-validation exchange used by the extension after login; and lock the auth test matrix against a real local Supabase harness so later tier and rate-limiting work can rely on truthful user context. This phase must keep all provider calls behind the backend, preserve the MV3 extension boundary, and avoid starting the later routing or UX steps.
 
 ### Step 1 deliverables extracted from the overarching plan
 
 1. SQL migrations for `profiles`, `enhancement_history`, `projects`, and `context_chunks`.
-2. RLS policies for all user-owned records.
-3. Backend auth middleware that verifies JWTs and attaches `userId` and `tier`.
-4. `/auth/token` contract for the extension token refresh flow.
-5. Integration tests for unauthorized, expired token, and valid token paths.
-6. Shared auth contract updates if the token exchange shape needs new typed responses.
+2. A trigger on `auth.users` that creates a default `profiles` row on signup.
+3. RLS policies for all user-owned records.
+4. Backend auth middleware that verifies JWTs and attaches `userId` and `tier`.
+5. A precise `/auth/token` refresh contract for the extension session handoff.
+6. A local Supabase test harness for real auth and RLS coverage.
+7. Integration tests for unauthorized, expired token, and valid token paths.
+8. Shared auth contract updates if the token exchange shape needs new typed responses.
 
 ### Source-of-truth file map
 
 | Concern | Source of truth | Why this is canonical |
 |---|---|---|
 | Core architecture and proxy-only boundary | `docs/ARCHITECTURE.md` + `.github/copilot-instructions.md` | Defines the backend-first auth model and cross-layer invariants. |
-| Persistent model shape and ownership rules | `docs/DATA_MODELS.md` | Defines `profiles`, `enhancement_history`, `projects`, and `context_chunks`. |
+| Persistent model shape and ownership rules | `docs/DATA_MODELS.md` | Defines `profiles`, `enhancement_history`, `projects`, `context_chunks`, and the vector prerequisite. |
 | Backend auth endpoint and middleware order | `docs/BACKEND_API.md` | Defines `/auth/token`, verified auth headers, and request order. |
 | Extension token storage boundary | `docs/EXTENSION.md` | Defines `chrome.storage.session` ownership and background-worker privilege. |
 | Shared request/response contracts | `shared/contracts/**` | Keeps auth and data shapes reusable across backend and extension surfaces. |
@@ -82,12 +84,14 @@ Rationale:
 1. Supabase CLI compatibility keeps schema history portable and reviewable.
 2. The migration history stays outside backend runtime code, which reduces ownership drift.
 3. A single root-level migration surface makes the v2-ready schema easier to audit.
+4. The first migration must enable `vector` before `context_chunks` is created.
 
 Planned files:
 
 - `supabase/migrations/0001_step1_profiles_and_history.sql`
 - `supabase/migrations/0002_step1_projects_and_context.sql`
 - `supabase/migrations/0003_step1_rls.sql`
+- `supabase/config.toml` for the local Supabase CLI harness
 
 ### Decision D2: `profiles` is the canonical app-metadata row
 
@@ -101,6 +105,7 @@ Planning rule:
 
 1. `tier` must be derived from verified Supabase state, never from request headers.
 2. Backend middleware may cache `tier` in Hono context after verification, but it must not trust unverified client input.
+3. The `context_chunks` migration must enable `vector` before creating the table.
 
 ### Decision D3: Auth verification happens server-side and is the only source of truth for user context
 
@@ -128,7 +133,8 @@ Planning rule:
 
 1. The extension background worker owns token storage.
 2. Content scripts never read or store auth tokens directly.
-3. The response shape must stay consistent across backend and extension use.
+3. The backend `/auth/token` route is a Supabase session refresh proxy, not a custom JWT issuer.
+4. The response shape must stay consistent across backend and extension use.
 
 ### Decision D5: RLS is mandatory for every user-owned persistence table
 
@@ -144,7 +150,50 @@ Planning rule:
 2. Backend helpers may still filter by owner in code, but the database remains authoritative.
 3. No client-supplied `user_id` or `project_id` is ever treated as authoritative without a server lookup.
 
-### Decision D6: `projects` and `context_chunks` are provisioned now but remain dormant in v1
+### Decision D6: New Supabase users must receive a `profiles` row automatically
+
+Rationale:
+
+1. `auth.users` is owned by Supabase Auth, so profile creation must be automatic and idempotent.
+2. Tier checks, foreign keys, and profile-based lookups break if first-time users have no `profiles` row.
+3. A database trigger keeps the bootstrap behavior close to the data model instead of scattering it across app code.
+
+Planning rule:
+
+1. The profiles migration must create an `AFTER INSERT` trigger on `auth.users`.
+2. The trigger function must insert into `public.profiles` with `tier = 'free'` by default.
+3. The trigger must be safe to re-run in local migration resets.
+
+### Decision D7: Step 1 tests use a real local Supabase instance, not only mocks
+
+Rationale:
+
+1. RLS cannot be validated without a real Postgres instance running the policies.
+2. JWT verification and profile bootstrap need the Supabase runtime to be meaningful.
+3. Mock-only client tests are still useful for pure helpers, but they do not satisfy Step 1's data guarantees.
+
+Planning rule:
+
+1. The Step 1 workflow must explicitly run `npx supabase init` and `npx supabase start` for the local harness.
+2. Integration tests must target the local Supabase database for auth and RLS assertions.
+3. Client mocks are allowed only for isolated unit tests that do not claim database-level coverage.
+
+### Decision D8: `/auth/token` is a Supabase refresh-and-validation proxy
+
+Rationale:
+
+1. The endpoint should clarify whether it refreshes a session or issues custom credentials.
+2. The backend should not mint a new app-specific JWT when Supabase already owns identity.
+3. A refresh proxy is the smallest contract that still gives the extension a stable handoff point.
+
+Planning rule:
+
+1. The route accepts a Supabase refresh token and uses `supabase.auth.refreshSession()` or equivalent server-side refresh logic.
+2. The refreshed access token is verified with `supabase.auth.getUser()` before any response is returned.
+3. The response includes the verified token plus app context needed by the extension session.
+4. The route does not become a custom auth issuer.
+
+### Decision D9: `projects` and `context_chunks` are provisioned now but remain dormant in v1
 
 Rationale:
 
@@ -175,7 +224,7 @@ Dependencies: Step 0 contracts stay frozen while the token exchange shape is fin
 - `supabase/migrations/0001_step1_profiles_and_history.sql`
 - `supabase/migrations/0002_step1_projects_and_context.sql`
 - `supabase/migrations/0003_step1_rls.sql`
-- `supabase/config.toml` if a local Supabase CLI harness is added alongside the SQL files
+- `supabase/config.toml` for the local Supabase CLI harness
 
 Dependencies: the data model decisions above must be locked before any SQL is written.
 
@@ -195,6 +244,7 @@ Dependencies: migration shape and auth contract decisions must be stable first.
 - `backend/src/routes/auth.ts`
 - `shared/contracts/api.ts`
 - `backend/src/lib/validation.ts`
+- `backend/src/services/supabase.ts` if the route needs shared refresh-session helpers
 
 Dependencies: the auth route must agree with the token shape and the verified user context.
 
@@ -203,7 +253,8 @@ Dependencies: the auth route must agree with the token shape and the verified us
 - `backend/src/__tests__/auth.integration.test.ts` (new)
 - `backend/src/__tests__/routes.validation.test.ts` (update placeholder auth assertions)
 - `backend/src/__tests__/stress-tests.test.ts` (update if middleware behavior changes under real auth)
-- `supabase/migrations/**` smoke assertions or a lightweight SQL harness if the repo adopts one
+- `supabase/migrations/**` smoke assertions against the local Supabase harness
+- `backend/src/__tests__/setup.ts` or equivalent local harness bootstrap if needed
 
 Dependencies: middleware, route, and schema choices must be in place before tests can stabilize.
 
