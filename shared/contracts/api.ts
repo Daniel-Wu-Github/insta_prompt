@@ -22,10 +22,12 @@ export interface BindRequest {
 }
 
 export interface AuthTokenRequest {
+  // Supabase refresh token used by backend refresh-session proxy.
   refresh_token: string;
 }
 
 export interface AuthTokenResponse {
+  // Fixed response contract for extension session handoff.
   token: string;
   token_type: "bearer";
   expires_in: number;

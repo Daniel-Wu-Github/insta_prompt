@@ -74,7 +74,7 @@ export const bindRequestSchema = z
 
 export const authTokenRequestSchema = z
   .object({
-    refresh_token: z.string().min(1).optional(),
+    refresh_token: z.string().trim().min(1),
   })
   .strict();
 
@@ -102,12 +102,6 @@ export const projectIdParamSchema = z
 export const authHeaderSchema = z
   .object({
     authorization: z.string().startsWith("Bearer "),
-  })
-  .strict();
-
-export const userTierHeaderSchema = z
-  .object({
-    "x-user-tier": tierSchema.optional(),
   })
   .strict();
 

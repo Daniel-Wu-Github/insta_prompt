@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 
+import type { AuthTokenResponse } from "../../../shared/contracts";
 import { readJsonBody, validationErrorResponse, zodValidationErrorResponse } from "../lib/http";
 import { authTokenRequestSchema } from "../lib/schemas";
+import { refreshAndVerifySession } from "../services/supabase";
 import { parseWithSchema } from "../lib/validation";
 
 export const authRoutes = new Hono();
@@ -17,11 +19,21 @@ authRoutes.post("/token", async (c) => {
 		return zodValidationErrorResponse(c, parsed.error);
 	}
 
-	return c.json({
-		token: "dev-token",
-		token_type: "bearer",
-		expires_in: 3600,
-		refresh_token: parsed.data.refresh_token ?? null,
-	});
+	const refreshed = await refreshAndVerifySession(parsed.data.refresh_token);
+	if (!refreshed.ok) {
+		return c.json(
+			{
+				error: {
+					code: refreshed.code,
+					message: refreshed.message,
+				},
+			},
+			refreshed.status,
+		);
+	}
+
+	const response: AuthTokenResponse = refreshed.data;
+
+	return c.json(response);
 });
 

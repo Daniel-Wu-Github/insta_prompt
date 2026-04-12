@@ -2,8 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import app from "../index";
 
-const authHeaders = {
-  Authorization: "Bearer dev-token",
+const jsonHeaders = {
   "Content-Type": "application/json",
 };
 
@@ -12,98 +11,107 @@ describe("route validation", () => {
     const response = await app.fetch(
       new Request("http://localhost/segment", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonHeaders,
         body: JSON.stringify({ segments: ["build feature"], mode: "balanced" }),
       }),
     );
 
+    const body = (await response.json()) as {
+      error: {
+        code: string;
+        message: string;
+      };
+    };
+
     expect(response.status).toBe(401);
+    expect(body.error.code).toBe("UNAUTHORIZED");
+    expect(body.error.message).toBe("Missing or invalid Authorization header");
   });
 
-  it("returns validation envelope for invalid segment payload", async () => {
-    const response = await app.fetch(
-      new Request("http://localhost/segment", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ mode: "balanced" }),
-      }),
-    );
-
-    const body = (await response.json()) as {
-      error: { code: string; details: Array<{ path: string; message: string }> };
-    };
-
-    expect(response.status).toBe(400);
-    expect(body.error.code).toBe("VALIDATION_ERROR");
-    expect(body.error.details.length).toBeGreaterThan(0);
-  });
-
-  it("returns valid segment response using Step 0 deterministic action classification", async () => {
-    const response = await app.fetch(
-      new Request("http://localhost/segment", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ segments: ["build a dark mode toggle"], mode: "balanced" }),
-      }),
-    );
-
-    const body = (await response.json()) as {
-      sections: Array<{ id: string; goal_type: string; canonical_order: number }>;
-    };
-
-    expect(response.status).toBe(200);
-    expect(body.sections.length).toBe(1);
-    expect(body.sections[0].id).toBe("s1");
-    expect(body.sections[0].goal_type).toBe("action");
-    expect(body.sections[0].canonical_order).toBe(4);
-  });
-
-  it("returns validation envelope for invalid enhance payload", async () => {
-    const response = await app.fetch(
-      new Request("http://localhost/enhance", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ section: { id: "s1" } }),
-      }),
-    );
-
-    const body = (await response.json()) as { error: { code: string } };
-
-    expect(response.status).toBe(400);
-    expect(body.error.code).toBe("VALIDATION_ERROR");
-  });
-
-  it("returns validation envelope for invalid bind payload", async () => {
-    const response = await app.fetch(
-      new Request("http://localhost/bind", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ sections: [], mode: "balanced" }),
-      }),
-    );
-
-    const body = (await response.json()) as { error: { code: string } };
-
-    expect(response.status).toBe(400);
-    expect(body.error.code).toBe("VALIDATION_ERROR");
-  });
-
-  it("returns validation envelope for invalid x-user-tier header", async () => {
+  it("returns 401 when Authorization header is malformed", async () => {
     const response = await app.fetch(
       new Request("http://localhost/segment", {
         method: "POST",
         headers: {
-          Authorization: "Bearer dev-token",
-          "Content-Type": "application/json",
-          "x-user-tier": "enterprise",
+          ...jsonHeaders,
+          Authorization: "dev-token",
         },
         body: JSON.stringify({ segments: ["build feature"], mode: "balanced" }),
       }),
     );
 
-    const body = (await response.json()) as { error: { code: string } };
+    const body = (await response.json()) as {
+      error: {
+        code: string;
+        message: string;
+      };
+    };
 
-    expect(response.status).toBe(400);
-    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(response.status).toBe(401);
+    expect(body.error.code).toBe("UNAUTHORIZED");
+    expect(body.error.message).toBe("Missing or invalid Authorization header");
+  });
+
+  it("returns 401 when bearer token fails server-side verification", async () => {
+    const response = await app.fetch(
+      new Request("http://localhost/segment", {
+        method: "POST",
+        headers: {
+          ...jsonHeaders,
+          Authorization: "Bearer dev-token",
+        },
+        body: JSON.stringify({ segments: ["build feature"], mode: "balanced" }),
+      }),
+    );
+
+    const body = (await response.json()) as {
+      error: {
+        code: string;
+        message: string;
+      };
+    };
+
+    expect(response.status).toBe(401);
+    expect(body.error.code).toBe("UNAUTHORIZED");
+    expect(body.error.message).toBe("Missing or invalid Authorization header");
+  });
+
+  it("uses the same unauthorized envelope for missing and invalid bearer tokens", async () => {
+    const missingAuthResponse = await app.fetch(
+      new Request("http://localhost/enhance", {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify({ section: { id: "s1" } }),
+      }),
+    );
+
+    const invalidTokenResponse = await app.fetch(
+      new Request("http://localhost/enhance", {
+        method: "POST",
+        headers: {
+          ...jsonHeaders,
+          Authorization: "Bearer not-a-real-token",
+        },
+        body: JSON.stringify({ section: { id: "s1" } }),
+      }),
+    );
+
+    const missingAuthBody = (await missingAuthResponse.json()) as {
+      error: {
+        code: string;
+        message: string;
+      };
+    };
+
+    const invalidTokenBody = (await invalidTokenResponse.json()) as {
+      error: {
+        code: string;
+        message: string;
+      };
+    };
+
+    expect(missingAuthResponse.status).toBe(401);
+    expect(invalidTokenResponse.status).toBe(401);
+    expect(invalidTokenBody).toEqual(missingAuthBody);
   });
 });

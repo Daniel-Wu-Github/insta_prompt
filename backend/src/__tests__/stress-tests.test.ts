@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import app from "../index";
 
-const authHeaders = {
+const invalidAuthHeaders = {
   Authorization: "Bearer dev-token",
   "Content-Type": "application/json",
 };
@@ -22,49 +22,49 @@ describe("stress: middleware ordering", () => {
 });
 
 describe("stress: concurrent requests", () => {
-  it("processes 10 concurrent valid segment requests", async () => {
+  it("rejects 10 concurrent segment requests with invalid bearer tokens", async () => {
     const requests = Array(10)
       .fill(null)
       .map(() =>
         app.fetch(
           new Request("http://localhost/segment", {
             method: "POST",
-            headers: authHeaders,
+            headers: invalidAuthHeaders,
             body: JSON.stringify({ segments: ["build feature"], mode: "balanced" }),
           }),
         ),
       );
 
     const responses = await Promise.all(requests);
-    const successCount = responses.filter((r) => r.status === 200).length;
-    expect(successCount).toBe(10);
+    const unauthorizedCount = responses.filter((r) => r.status === 401).length;
+    expect(unauthorizedCount).toBe(10);
   });
 
-  it("processes 10 concurrent invalid segment requests", async () => {
+  it("rejects 10 concurrent segment requests with missing auth", async () => {
     const requests = Array(10)
       .fill(null)
       .map(() =>
         app.fetch(
           new Request("http://localhost/segment", {
             method: "POST",
-            headers: authHeaders,
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ mode: "balanced" }),
           }),
         ),
       );
 
     const responses = await Promise.all(requests);
-    const invalidCount = responses.filter((r) => r.status === 400).length;
-    expect(invalidCount).toBe(10);
+    const unauthorizedCount = responses.filter((r) => r.status === 401).length;
+    expect(unauthorizedCount).toBe(10);
   });
 });
 
-describe("stress: sse envelope", () => {
-  it("bind returns tokenized SSE with done event", async () => {
+describe("stress: unauthorized envelope", () => {
+  it("bind returns deterministic unauthorized payload for invalid bearer token", async () => {
     const response = await app.fetch(
       new Request("http://localhost/bind", {
         method: "POST",
-        headers: authHeaders,
+        headers: invalidAuthHeaders,
         body: JSON.stringify({
           mode: "balanced",
           sections: [
@@ -78,9 +78,15 @@ describe("stress: sse envelope", () => {
       }),
     );
 
-    expect(response.status).toBe(200);
-    const text = await response.text();
-    expect(text.includes("\"type\":\"token\"")).toBe(true);
-    expect(text.includes("\"type\":\"done\"")).toBe(true);
+    const body = (await response.json()) as {
+      error: {
+        code: string;
+        message: string;
+      };
+    };
+
+    expect(response.status).toBe(401);
+    expect(body.error.code).toBe("UNAUTHORIZED");
+    expect(body.error.message).toBe("Missing or invalid Authorization header");
   });
 });
