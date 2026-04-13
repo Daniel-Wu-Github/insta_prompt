@@ -91,7 +91,7 @@ Good prompts are specific enough that the agent can finish without guessing. Bad
 Example planning prompt:
 
 ```text
-Read [docs/ARCHITECTURE.md](../../ARCHITECTURE.md), [docs/BACKEND_API.md](../../BACKEND_API.md), [docs/DATA_MODELS.md](../../DATA_MODELS.md), [docs/EXTENSION.md](../../EXTENSION.md), [docs/LLM_ROUTING.md](../../LLM_ROUTING.md), and [docs/STEP_0_SUMMARY.md](../../STEP_0_SUMMARY.md).
+Read [docs/ARCHITECTURE.md](../../ARCHITECTURE.md), [docs/BACKEND_API.md](../../BACKEND_API.md), [docs/DATA_MODELS.md](../../DATA_MODELS.md), [docs/EXTENSION.md](../../EXTENSION.md), [docs/LLM_ROUTING.md](../../LLM_ROUTING.md), and [docs/agent_plans/v1_steps_summary/STEP_0_SUMMARY.md](../v1_steps_summary/STEP_0_SUMMARY.md).
 
 Create a Step 1 taskboard only.
 

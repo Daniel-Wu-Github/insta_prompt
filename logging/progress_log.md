@@ -391,3 +391,45 @@
 	- Fulfillment: Delivers the requested final Step 1 security/readiness pass and executes remaining remediation fixes from the plan.
 	- Deviation: None.
 
+## Entry 019 - 2026-04-12 - Documented Non-Specific Skills and VS Code Replication Workflow
+
+- Task: Capture all non-project-specific skills in a dedicated document, include a detailed agent prompt, replicate workflow guidance for VS Code usage, and prepare an exportable archive.
+- What the agent did: Authored a comprehensive non-specific skills handbook with full skill catalog coverage, load-order model, a reusable detailed bootstrap prompt, VS Code integration guidance, extension-contributed skill replication pattern, rollout checklist, and export manifest.
+- How the agent did it: Loaded all repository skill definitions and workflow instruction surfaces, validated current VS Code/GitHub/Agent Skills behaviors against official docs, then wrote the consolidated guide in one pass aligned to existing skill-map and instruction contracts.
+- Files edited:
+	- docs/NONSPECIFIC_SKILLS.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed `docs/NONSPECIFIC_SKILLS.md` now contains all 10 current skills with brief purpose summaries.
+	- Confirmed the document includes a detailed reusable agent prompt block.
+	- Confirmed the document includes full replication guidance for `.github/skills`, `SKILL_MAP.md`, `.github/copilot-instructions.md`, and extension `chatSkills` contribution.
+	- Confirmed this progress entry follows the required numbered, dated workflow-log schema.
+- Task alignment:
+	- Fulfillment: Delivers the requested highly detailed documentation and workflow replication guidance prior to archiving.
+	- Deviation: None.
+
+## Entry 020 - 2026-04-12 - Built Sanitized Template Repo Bundle
+
+- Task: Separate the reusable workflow files into a template-ready bundle and flag project-specific content that should stay out of the shared starter repo.
+- What the agent did: Created a sanitized `template-repo/` folder with generic instructions, prompts, skills, logs, README, and hook support; removed PromptCompiler-specific examples from the copied workflow docs; initialized the folder as its own local git repository; and packaged the bundle into a zip archive for handoff.
+- How the agent did it: Copied the portable workflow assets into a dedicated template directory, rewrote the project-specific surfaces to generic equivalents, re-scanned for leakage, initialized a standalone git repository in the template folder, and verified the archive contents and checksum.
+- Files edited:
+	- template-repo/README.md
+	- template-repo/.gitignore
+	- template-repo/.github/copilot-instructions.md
+	- template-repo/.github/prompts/build-slice.prompt.md
+	- template-repo/.github/prompts/plan-review.prompt.md
+	- template-repo/.github/skills/scope-creep-guard/SKILL.md
+	- template-repo/.github/skills/documentation-cohesion/SKILL.md
+	- template-repo/logging/progress_log.md
+	- template-repo/logging/commit_log.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed `template-repo/` is initialized as a standalone git repository.
+	- Confirmed the template repo no longer contains PromptCompiler, Step 0/Step 1, vector-extension, auth.users, Supabase, or WXT references.
+	- Confirmed the archive `exports/skill-workflow-template-repo_2026-04-12.zip` contains the sanitized template repository layout.
+	- Confirmed the archive checksum is `a4609ccb02d8a54999ec9bfc1a69543964ab9d956c8eb02e632ade302e78f6c4`.
+- Task alignment:
+	- Fulfillment: Produces a reusable template bundle with the project-specific content removed and the workflow assets preserved.
+	- Deviation: A GitHub remote repository was not created in this session because no commit/push step was requested and the environment policy does not allow automatic commits.
+

@@ -8,7 +8,7 @@ It is aligned with:
 - `docs/DATA_MODELS.md`
 - `docs/EXTENSION.md`
 - `docs/LLM_ROUTING.md`
-- `docs/STEP_0_SUMMARY.md`
+- `docs/agent_plans/v1_steps_summary/STEP_0_SUMMARY.md`
 - `docs/agent_plans/v1_overarching_plan.md`
 - `docs/agent_plans/v1_step_by_step/v1_step_1.md`
 
@@ -61,7 +61,7 @@ The Step 1 planning surface now explicitly covers the four gaps called out in re
 | Shared request/response contracts | `shared/contracts/**` | Keeps auth and data shapes reusable across backend and extension surfaces. |
 | Step-level acceptance criteria | `docs/agent_plans/v1_step_by_step/v1_step_1.md` | Defines done criteria for this phase. |
 | Step-wide sequencing intent | `docs/agent_plans/v1_overarching_plan.md` | Defines dependency order against later steps. |
-| Current bootstrap baseline | `docs/STEP_0_SUMMARY.md` | Captures what Step 0 intentionally left behind. |
+| Current bootstrap baseline | `docs/agent_plans/v1_steps_summary/STEP_0_SUMMARY.md` | Captures what Step 0 intentionally left behind. |
 
 ### Step 1 out of scope
 
