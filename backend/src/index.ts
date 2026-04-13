@@ -11,22 +11,20 @@ import { segmentRoutes } from "./routes/segment";
 import type { AppEnv } from "./types";
 
 const app = new Hono<AppEnv>();
+const PROTECTED_ROUTE_PREFIXES = ["/segment", "/enhance", "/bind", "/projects"] as const;
 
 app.get("/health", (c) => {
 	return c.json({ ok: true });
 });
 
+// /auth stays public; /auth/token abuse protection is enforced in authRoutes.
 app.route("/auth", authRoutes);
 
-// Preserve required middleware order: auth -> rate limit -> tier.
-app.use("/segment", authMiddleware, rateLimitMiddleware, tierMiddleware);
-app.use("/segment/*", authMiddleware, rateLimitMiddleware, tierMiddleware);
-app.use("/enhance", authMiddleware, rateLimitMiddleware, tierMiddleware);
-app.use("/enhance/*", authMiddleware, rateLimitMiddleware, tierMiddleware);
-app.use("/bind", authMiddleware, rateLimitMiddleware, tierMiddleware);
-app.use("/bind/*", authMiddleware, rateLimitMiddleware, tierMiddleware);
-app.use("/projects", authMiddleware, rateLimitMiddleware, tierMiddleware);
-app.use("/projects/*", authMiddleware, rateLimitMiddleware, tierMiddleware);
+// Preserve required middleware order on protected routes: auth -> ratelimit -> tier.
+for (const routePrefix of PROTECTED_ROUTE_PREFIXES) {
+	app.use(routePrefix, authMiddleware, rateLimitMiddleware, tierMiddleware);
+	app.use(`${routePrefix}/*`, authMiddleware, rateLimitMiddleware, tierMiddleware);
+}
 
 app.route("/segment", segmentRoutes);
 app.route("/enhance", enhanceRoutes);
