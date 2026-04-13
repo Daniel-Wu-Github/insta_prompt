@@ -21,16 +21,17 @@ The following decisions are now locked for implementation and must not be re-ope
 |---|---|---|---|
 | Daily quota key and reset semantics | Protected LLM routes use Redis counter `rate:daily:{userId}` with TTL set to next UTC midnight at first increment. | Keeps free-tier quotas deterministic and auditable for every user-day. | 2.3 rate middleware, 2.7 quota boundary tests |
 | Quota scope | Free daily cap applies to `/segment`, `/enhance`, and `/bind`. It does not apply to `/projects` in Step 2. | Prevents accidental throttling of non-LLM routes while preserving the Step 2 free-tier contract. | 2.3 middleware route targeting, 2.6 wiring review |
-| Public endpoint protection | `/auth/token` remains outside auth middleware and receives dedicated IP-based rate limiting in Step 2. | Public refresh endpoints are abuse-prone and must be protected before Step 3+ traffic volume grows. | 2.4 route guard, 2.7 public endpoint tests |
+| Public endpoint protection | `/auth/token` remains outside auth middleware and receives dedicated IP-based rate limiting using trusted proxy headers (`fly-client-ip`, fallback `x-forwarded-for`). | Public refresh endpoints are abuse-prone and backend runs behind reverse proxy infrastructure, so raw socket IP is not trustworthy. | 2.4 route guard, 2.7 public endpoint tests |
 | Middleware order invariant | Protected routes keep strict ordering: auth -> ratelimit -> tier -> route handler. | Tier and quota enforcement must consume verified auth context and execute before route logic. | 2.6 route wiring checks, 2.7 ordering tests |
 | Tier source of truth and trust boundary | Tier always comes from verified auth context set by Step 1 middleware; headers/body cannot override it. | Prevents privilege escalation and keeps Step 3 routing assumptions valid. | 2.5 tier middleware, 2.7 negative tests |
-| Tier gate behavior in Step 2 | Tier middleware enforces eligibility and emits deterministic 403 envelopes; provider/model selection remains deferred to Step 3 router. | Preserves phase boundaries while still shipping real access control in Step 2. | 2.5 tier policy surface, 2.8 scope audit |
+| Tier gate behavior in Step 2 | Tier middleware validates recognized tier values and route-policy eligibility, while `/segment`, `/enhance`, and `/bind` remain available to recognized tiers in Step 2. | Preserves phase boundaries and avoids Step 3 model-router leakage while still shipping deterministic access control. | 2.5 tier policy surface, 2.8 scope audit |
 | Redis failure behavior | Redis connectivity failures return deterministic `503` (`RATE_LIMIT_UNAVAILABLE`) rather than silently bypassing limits. | Avoids abuse windows and keeps enforcement behavior explicit under infra faults. | 2.3 middleware error path, 2.7 resilience tests |
-| Error envelope and headers | 429 and 403 responses use stable error codes and include deterministic rate-limit headers where applicable. | Keeps extension and backend tests stable and debuggable across retries. | 2.3/2.4 response design, 2.7 assertions |
+| Error envelope and headers | 429 and 403 responses use stable error codes; protected LLM routes emit deterministic `X-RateLimit-*` headers while `/auth/token` emits retry headers only on 429 responses. | Keeps extension and backend tests stable, debuggable, and avoids leaking abuse thresholds on public success responses. | 2.3/2.4 response design, 2.7 assertions |
+| Docs-first boundary for this pass | Planning/docs updates are completed first; backend/runtime edits are deferred to Phase F execution slices. | Prevents accidental scope creep into runtime code before planning lock and consistency checks complete. | Phase E consistency gate, Phase F handoff execution |
 
 ### Step 2 scope in one paragraph
 
-Step 2 converts the Step 1 auth foundation into enforceable access controls: implement Redis-backed daily request limits for free-tier usage on protected LLM routes, add dedicated abuse protection for the public `/auth/token` endpoint, enforce tier eligibility in middleware without trusting any client-supplied tier hints, and standardize rate/tier failure envelopes so later Step 3-5 orchestration can rely on deterministic pre-handler behavior. This phase must preserve proxy-only architecture, middleware order invariants, and strict step boundaries by deferring model-router and prompt-template implementation to Step 3+.
+Step 2 converts the Step 1 auth foundation into enforceable access controls: implement Redis-backed daily request limits for free-tier usage on protected LLM routes, add dedicated abuse protection for the public `/auth/token` endpoint, enforce tier eligibility in middleware without trusting any client-supplied tier hints, and standardize rate/tier failure envelopes so later Step 3-5 orchestration can rely on deterministic pre-handler behavior. This phase must preserve proxy-only architecture, middleware order invariants, and strict step boundaries by deferring model-router and prompt-template implementation to Step 3+. In this docs-first planning pass, runtime file edits remain deferred until the Phase F execution pass.
 
 ### Step 2 deliverables extracted from the overarching plan
 
@@ -41,6 +42,24 @@ Step 2 converts the Step 1 auth foundation into enforceable access controls: imp
 5. Unified error envelopes for rate-limit and tier failures.
 6. Middleware-order verification for auth -> ratelimit -> tier on protected routes.
 7. Integration tests for quota boundaries, tier violations, and public endpoint protection.
+
+### Runtime-deferred implementation surface for this planning pass
+
+The following runtime files are intentionally deferred until Phase F execution slices:
+
+1. `backend/src/middleware/ratelimit.ts`
+2. `backend/src/middleware/tier.ts`
+3. `backend/src/routes/auth.ts`
+4. `backend/src/index.ts` (only if middleware wiring changes are needed)
+5. `backend/src/services/rateLimit.ts` (new)
+6. `backend/src/__tests__/ratelimit.integration.test.ts` (new) and related Step 2 test expansions
+7. `backend/package.json` (Redis client dependency lock)
+
+Planning rule:
+
+1. Do not modify runtime behavior files during this docs/planning pass.
+2. Use Phase F slice ordering to implement deferred runtime work.
+3. Treat any runtime file edits in this phase as scope creep.
 
 ### Source-of-truth file map
 
@@ -119,7 +138,9 @@ Planning rule:
 
 1. Protected LLM quota applies to `/segment`, `/enhance`, `/bind` after auth passes.
 2. `/auth/token` gets a separate IP-based limit policy in Step 2.
-3. `/projects` remains outside free daily LLM quota in Step 2.
+3. IP extraction for `/auth/token` must use trusted proxy headers (`fly-client-ip`, fallback first hop from `x-forwarded-for`) rather than raw socket IP.
+4. `/auth/token` limiter keys are separate from authenticated user daily quota keys.
+5. `/projects` remains outside free daily LLM quota in Step 2.
 
 ### Decision D3: Middleware order is preserved and explicitly test-locked
 
@@ -146,8 +167,10 @@ Rationale:
 Planning rule:
 
 1. Tier comes only from verified auth context (`c.get("tier")`).
-2. Middleware returns deterministic `403` for unsupported tier/request combinations.
-3. Concrete provider/model selection remains in Step 3 `services/llm.ts`.
+2. Missing tier context returns deterministic `401` (`UNAUTHORIZED`).
+3. Unrecognized tier values or explicit route-policy violations return deterministic `403` (`TIER_FORBIDDEN`).
+4. In Step 2, recognized tiers (`free`, `pro`, `byok`) are allowed on `/segment`, `/enhance`, `/bind`, and `/projects` unless an endpoint is explicitly marked gated; do not derive policy from payload model/provider hints.
+5. Concrete provider/model selection remains in Step 3 `services/llm.ts`.
 
 ### Decision D5: Error envelopes for rate and tier failures are deterministic and typed
 
@@ -175,7 +198,9 @@ Planning rule:
 
 1. Emit `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` on protected LLM responses where quota check runs.
 2. On 429 responses, headers reflect the exhausted state.
-3. Header semantics are validated in integration tests.
+3. Do not emit `X-RateLimit-*` headers on successful `/auth/token` 200 responses.
+4. `/auth/token` 429 responses emit retry-oriented headers (for example `Retry-After`).
+5. Header semantics are validated in integration tests.
 
 ### Decision D7: Redis outages fail closed with explicit 503 responses
 
@@ -188,8 +213,9 @@ Rationale:
 Planning rule:
 
 1. Redis failures do not bypass quota checks.
-2. Middleware returns deterministic 503 envelope and logs cause.
-3. Tests cover failure behavior with mocked Redis errors.
+2. Redis operations are wrapped in `try/catch` so thrown network/DNS/timeout exceptions map to deterministic `503` envelopes.
+3. Middleware returns deterministic 503 envelope and logs cause.
+4. Tests cover both thrown exceptions and controlled Redis client failure behavior.
 
 ### Decision D8: Step 2 tests must cover concurrency, boundaries, and policy drift
 
@@ -212,15 +238,17 @@ Planning rule:
 - `backend/src/middleware/ratelimit.ts`
 - `backend/src/services/rateLimit.ts` (new)
 - `backend/src/types.ts`
+- `backend/package.json`
 - `backend/src/lib/errors.ts` and/or `backend/src/lib/http.ts` (only if shared envelope helpers are added)
 
 Dependencies: Step 1 auth context must already provide verified `userId` and `tier`.
 
 Execution order constraint:
 
-1. Build the rate service abstraction first.
-2. Wire middleware next with deterministic headers/envelopes.
-3. Keep route wiring changes for 2.6 verification pass.
+1. Lock Redis client contract (`@upstash/redis`) and local Redis test runtime strategy before middleware coding.
+2. Build the rate service abstraction first.
+3. Wire middleware next with deterministic headers/envelopes.
+4. Keep route wiring changes for 2.6 verification pass.
 
 ### 2.4 Public `/auth/token` rate protection
 
@@ -232,9 +260,10 @@ Dependencies: 2.3 service helpers and failure envelope conventions.
 
 Execution order constraint:
 
-1. Define IP extraction and keying rules first.
+1. Define trusted proxy IP extraction and keying rules first.
 2. Apply route-level limit before `refreshAndVerifySession` call.
 3. Keep `/auth/token` outside auth middleware chain.
+4. Keep `/auth/token` success responses free of `X-RateLimit-*` headers; use retry headers on 429 only.
 
 ### 2.5 Tier middleware enforcement
 
@@ -247,8 +276,9 @@ Dependencies: 2.3 and 2.4 envelope conventions.
 Execution order constraint:
 
 1. Implement deterministic 401/403 split without altering auth middleware.
-2. Keep tier source as verified context only.
-3. Do not implement Step 3 model-router behavior in this slice.
+2. Keep tier source as verified context only and use explicit route-policy matrix checks.
+3. Keep `/segment`, `/enhance`, `/bind`, and `/projects` available to recognized tiers in Step 2 unless explicitly gated.
+4. Do not implement Step 3 model-router behavior in this slice.
 
 ### 2.6 Middleware wiring and route-scope verification
 
@@ -276,7 +306,8 @@ Test boundary rule:
 
 1. Integration coverage required: quota boundary and tier-forbidden behavior.
 2. Stress coverage required: concurrent limit checks and deterministic envelopes.
-3. Public endpoint coverage required: `/auth/token` IP throttling and retry expectations.
+3. Public endpoint coverage required: `/auth/token` IP throttling, trusted proxy IP extraction, and retry/header expectations.
+4. Redis outage coverage required: thrown exception path plus explicit client failure path both map to deterministic 503 responses.
 
 ### 2.8 Final review and handoff
 
@@ -292,13 +323,13 @@ Dependencies: all prior Step 2 slices complete and verified.
 2. Risk: Middleware order drifts during route refactors.
    Mitigation: enforce route-order assertions in stress tests and review checklist.
 3. Risk: `/auth/token` remains abusable because it bypasses auth stack.
-   Mitigation: dedicated IP limiter with deterministic 429 behavior.
+   Mitigation: dedicated IP limiter with deterministic 429 behavior and trusted proxy-header IP extraction.
 4. Risk: Tier checks accidentally trust request headers/body.
    Mitigation: tier middleware consumes only `c.get("tier")` from auth middleware.
 5. Risk: Step 2 work leaks into Step 3 router implementation.
    Mitigation: explicit stop condition forbidding provider/model implementation changes.
 6. Risk: Quota headers are inconsistent and break client messaging.
-   Mitigation: single helper for rate headers plus header assertions in tests.
+   Mitigation: single helper for rate headers, explicit `/auth/token` success-header suppression, and header assertions in tests.
 
 ## Phase E - Consistency Gate Before Implementation Handoff
 
@@ -314,12 +345,14 @@ Required checks:
 2. Confirm no Step 3 model-router implementation is requested in Step 2 docs.
 3. Confirm `/auth/token` public-limit requirement appears in checklist, prompts, and done criteria.
 4. Confirm free cap, tier gate, and middleware order language are consistent.
+5. Confirm runtime-deferred implementation file surface is explicit and unchanged in this docs/planning pass.
 
 Phase E pass criteria:
 
 1. Enforcement boundaries are explicit and non-conflicting.
 2. Step 2 docs preserve Step 3-5 implementation separation.
 3. Runtime handoff sequence is complete and deterministic.
+4. Deferred runtime files are clearly mapped for Phase F execution.
 
 ## Phase F - Implementation Handoff Sequence
 
@@ -327,10 +360,10 @@ Goal: define execution order after planning lock, without implementing runtime b
 
 Slice sequence:
 
-1. Slice 1: rate-limit service abstraction and header/error contract.
+1. Slice 1: rate-limit service abstraction, Redis dependency lock, and header/error contract.
 2. Slice 2: protected-route free quota middleware.
-3. Slice 3: `/auth/token` public IP-based limiter.
-4. Slice 4: tier middleware deterministic 403 enforcement.
+3. Slice 3: `/auth/token` public IP-based limiter with trusted proxy IP extraction and retry-header policy.
+4. Slice 4: tier middleware deterministic 401/403 enforcement with explicit Step 2 route-policy matrix.
 5. Slice 5: route wiring and middleware order verification.
 6. Slice 6: test matrix expansion (boundary, concurrency, public endpoint).
 7. Slice 7: final criteria audit and progress log update.
@@ -339,8 +372,8 @@ Slice stop conditions (for execution pass):
 
 1. Slice 1 stop: rate helper returns deterministic `limit`, `remaining`, `reset`, and failure states.
 2. Slice 2 stop: free-tier requests deterministically hit 429 after cap on protected LLM routes.
-3. Slice 3 stop: `/auth/token` rejects over-limit IP bursts with deterministic 429.
-4. Slice 4 stop: unsupported tier paths return deterministic 403 without touching Step 3 router.
+3. Slice 3 stop: `/auth/token` rejects over-limit IP bursts with deterministic 429 using trusted proxy-header IP extraction.
+4. Slice 4 stop: unsupported tier-policy paths return deterministic 403 without touching Step 3 router.
 5. Slice 5 stop: middleware order validated in `index.ts` and no protected route bypasses enforcement.
 6. Slice 6 stop: tests cover quota boundaries, concurrent checks, and public endpoint limits.
 7. Slice 7 stop: Step 2 acceptance criteria map cleanly to code and tests with no Step 3 bleed.
@@ -350,6 +383,7 @@ Stop condition for this planning pass:
 1. Do not implement backend runtime behavior here.
 2. End after planning/docs consistency and handoff order are complete.
 3. Runtime implementation begins only in a dedicated execution pass that follows this slice order.
+4. Runtime-deferred files remain unchanged until Phase F begins.
 
 ## Planning Completion Status
 

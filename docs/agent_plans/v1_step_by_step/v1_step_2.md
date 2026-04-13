@@ -6,9 +6,9 @@ Step 2 is done when the repo has:
 
 1. Redis-backed daily quota enforcement for free-tier usage on protected LLM routes.
 2. Deterministic `429` behavior at the free-tier cap boundary (30/day).
-3. Deterministic tier enforcement with `403` responses for unsupported access.
+3. Deterministic tier enforcement with `403` responses for explicitly unsupported access.
 4. Dedicated IP-based abuse protection on public `/auth/token`.
-5. Stable rate-limit headers and unified error envelopes.
+5. Stable rate-limit headers and unified error envelopes with protected/public header policy split.
 6. Middleware-order tests that prove `auth -> ratelimit -> tier` remains intact.
 7. No Step 3 model-router implementation leakage.
 
@@ -140,6 +140,8 @@ Goal: ensure Step 1 assumptions are stable before enforcement code lands.
 - [ ] Confirm protected routes still mount `auth -> ratelimit -> tier` in `backend/src/index.ts`.
 - [ ] Confirm public `/auth/token` still bypasses auth middleware and remains explicitly public.
 - [ ] Confirm free-tier cap target remains 30/day in docs and acceptance criteria.
+- [ ] Confirm Step 2 Redis runtime and library contract is explicit (`@upstash/redis` + local Redis test runtime strategy).
+- [ ] Confirm runtime implementation file surface is deferred until Step 2 execution pass (not this docs/planning pass).
 
 Copilot session:
 
@@ -155,6 +157,7 @@ Report only:
 - what is ready
 - what is missing
 - what can cause enforcement drift
+- what runtime prerequisites are still unlocked
 
 Do not edit files.
 ```
@@ -164,6 +167,7 @@ Done when:
 1. Preconditions are explicit.
 2. Route wiring assumptions are verified.
 3. Step 2 scope starts from confirmed Step 1 behavior.
+4. Runtime prerequisites and deferred implementation surfaces are explicit.
 
 ### 2.1 Lock scope and source of truth
 
@@ -203,6 +207,7 @@ Goal: keep enforcement work repeatable and low-noise.
 - [ ] Decide whether reusable Step 2 prompts should be added for enforcement slices.
 - [ ] Keep skill loading minimal: scope guard + docs cohesion + verification.
 - [ ] Preserve source-of-truth references in prompts to avoid drift.
+- [ ] Document runtime-deferred implementation files so planning edits do not drift into backend code.
 
 Copilot session:
 
@@ -222,6 +227,17 @@ Done when:
 1. Reusable prompt strategy is clear.
 2. Instruction overlap is controlled.
 3. Step 2 prompts can be executed without re-explaining architecture rules.
+4. Runtime file changes remain explicitly deferred to the execution pass.
+
+Runtime-deferred implementation files for this docs/planning pass:
+
+1. `backend/src/middleware/ratelimit.ts`
+2. `backend/src/middleware/tier.ts`
+3. `backend/src/routes/auth.ts`
+4. `backend/src/index.ts` (only if middleware wiring changes are needed)
+5. `backend/src/services/rateLimit.ts` (new)
+6. `backend/src/__tests__/ratelimit.integration.test.ts` (new) and related Step 2 test expansions
+7. `backend/package.json` (Redis client dependency lock)
 
 ### 2.3 Implement protected-route daily free quota (Redis)
 
@@ -232,7 +248,8 @@ Goal: enforce free-tier daily limits before route handlers execute.
 - [ ] Apply cap only to `/segment`, `/enhance`, and `/bind` in Step 2.
 - [ ] Return deterministic `429` with `RATE_LIMIT_EXCEEDED` when cap is exceeded.
 - [ ] Emit deterministic `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers.
-- [ ] Return deterministic `503` (`RATE_LIMIT_UNAVAILABLE`) on Redis failure.
+- [ ] Use `@upstash/redis` for Step 2 Redis integration.
+- [ ] Wrap Redis calls in `try/catch`; return deterministic `503` (`RATE_LIMIT_UNAVAILABLE`) for thrown network/DNS/timeout errors and explicit Redis client failures.
 
 Copilot session:
 
@@ -250,12 +267,13 @@ Allowed files:
 - backend/src/types.ts (only if context/types updates are needed)
 
 Requirements:
+- Use `@upstash/redis`
 - Redis-backed user counter using key rate:daily:{userId}
 - TTL to next UTC midnight
 - Enforce free-tier cap of 30/day on /segment, /enhance, /bind
 - Return deterministic 429 envelope with RATE_LIMIT_EXCEEDED
 - Emit X-RateLimit-* headers
-- Return deterministic 503 RATE_LIMIT_UNAVAILABLE on Redis failures
+- Wrap Redis calls in try/catch and return deterministic 503 RATE_LIMIT_UNAVAILABLE on thrown/network Redis failures
 - Do not implement Step 3 model routing
 
 Stop when middleware behavior is complete and testable.
@@ -266,7 +284,7 @@ Done when:
 1. Free-tier boundary is deterministic at 30/day.
 2. Non-free tiers are not blocked by this free cap.
 3. Headers and envelopes are stable.
-4. Redis failure behavior is explicit.
+4. Redis failure behavior is explicit for both client-returned errors and thrown exceptions.
 
 ### 2.4 Add IP-based rate protection for public `/auth/token`
 
@@ -277,6 +295,8 @@ Goal: protect the public refresh endpoint without adding auth middleware.
 - [ ] Emit deterministic `429` envelope and retry-oriented headers for over-limit IPs.
 - [ ] Keep refresh-token validation behavior unchanged for under-limit requests.
 - [ ] Ensure `/auth/token` limiter keys are separate from user daily counters.
+- [ ] Extract IP from trusted proxy headers (`fly-client-ip`, fallback first entry of `x-forwarded-for`); never use raw socket IP as primary source.
+- [ ] Do not emit `X-RateLimit-*` headers on successful `200` `/auth/token` responses.
 
 Copilot session:
 
@@ -296,6 +316,9 @@ Allowed files:
 Requirements:
 - /auth/token remains public (no auth middleware)
 - dedicated IP-based limit and deterministic 429 response
+- IP extraction uses trusted proxy headers (prefer fly-client-ip; fallback x-forwarded-for first hop)
+- Do not emit X-RateLimit-* headers on successful 200 responses for /auth/token
+- Emit retry-oriented headers (for example Retry-After) on 429 responses
 - no changes to refresh-session contract shape
 - no custom JWT behavior
 
@@ -307,16 +330,19 @@ Done when:
 1. Public endpoint abuse path is controlled.
 2. Refresh flow remains contract-compatible.
 3. Limit behavior is deterministic and observable.
+4. IP extraction and public-header behavior are explicit and testable.
 
 ### 2.5 Implement tier eligibility middleware (deterministic 403)
 
-Goal: enforce access boundaries before Step 3 model routing starts.
+Goal: enforce tier trust boundaries and explicit route policy before Step 3 model routing starts.
 
 - [ ] Read tier from verified auth context only (`c.get("tier")`).
-- [ ] Block unsupported tier/request combinations with deterministic `403` (`TIER_FORBIDDEN`).
 - [ ] Keep missing-tier context as deterministic `401` (`UNAUTHORIZED`).
+- [ ] Return deterministic `403` (`TIER_FORBIDDEN`) for unrecognized tier values or explicitly disallowed route-policy combinations.
+- [ ] Keep `/segment`, `/enhance`, `/bind`, and `/projects` available to recognized tiers in Step 2 unless an endpoint is explicitly marked gated by policy.
+- [ ] Do not infer provider/model policy from request payload fields.
 - [ ] Avoid any provider/model router implementation in this slice.
-- [ ] Keep middleware behavior stable across `/segment`, `/enhance`, `/bind`, and `/projects` policy decisions.
+- [ ] Keep middleware behavior stable across `/segment`, `/enhance`, `/bind`, and `/projects` according to the explicit Step 2 policy map.
 
 Copilot session:
 
@@ -336,7 +362,9 @@ Allowed files:
 Requirements:
 - tier source is verified auth context only
 - deterministic 401 when context is missing
-- deterministic 403 TIER_FORBIDDEN on policy violations
+- deterministic 403 TIER_FORBIDDEN on unrecognized tier values or explicit route-policy violations
+- Step 2 default policy keeps /segment, /enhance, /bind, and /projects open to recognized tiers unless explicitly gated
+- do not add or require payload model/provider selection checks in Step 2
 - no Step 3 model selection logic
 
 Stop after tier gate behavior is deterministic and testable.
@@ -345,7 +373,7 @@ Stop after tier gate behavior is deterministic and testable.
 Done when:
 
 1. Tier trust boundary is preserved.
-2. Policy failures are deterministic.
+2. Policy failures are deterministic and do not depend on Step 3 model-routing fields.
 3. Step boundary with Step 3 remains intact.
 
 ### 2.6 Reconcile middleware ordering and route scope
@@ -355,7 +383,9 @@ Goal: verify final route wiring before test hardening.
 - [ ] Confirm protected routes still mount `auth -> ratelimit -> tier` in `backend/src/index.ts`.
 - [ ] Confirm `/auth/token` public limiter is wired and isolated.
 - [ ] Confirm `/projects` behavior matches Step 2 scope decision.
+- [ ] Confirm `/projects` behavior matches the explicit Step 2 default policy map.
 - [ ] Confirm no protected route bypasses enforcement middleware.
+- [ ] Confirm Step 2 route-policy matrix does not rely on request payload model/provider hints.
 
 Copilot session:
 
@@ -390,6 +420,9 @@ Goal: prove enforcement behavior under realistic load and edge conditions.
 - [ ] Add tests for `/auth/token` over-limit IP behavior.
 - [ ] Add stress tests for concurrent protected requests near quota boundary.
 - [ ] Add tests for Redis failure path returning deterministic 503.
+- [ ] Add tests for trusted proxy IP extraction precedence (`fly-client-ip` over `x-forwarded-for` fallback).
+- [ ] Add tests that successful `/auth/token` responses do not leak `X-RateLimit-*` headers while `429` responses emit retry headers.
+- [ ] Add tests for thrown Redis exceptions mapping to deterministic `503`.
 
 Copilot session:
 
@@ -404,6 +437,8 @@ Cover:
 - free-tier daily boundary transitions
 - deterministic 429/403/503 envelopes
 - /auth/token public limiter behavior
+- trusted proxy IP extraction behavior
+- /auth/token header policy split (no X-RateLimit-* on 200; retry headers on 429)
 - middleware order assumptions under stress
 
 Do not add Step 3 route-quality assertions.
@@ -422,6 +457,7 @@ Goal: ensure Step 2 is complete and Step 3 can start without rework.
 - [ ] Review diff against Step 2 acceptance criteria.
 - [ ] Confirm no Step 3-5 implementation behavior landed early.
 - [ ] Confirm rate and tier errors are deterministic and documented in tests.
+- [ ] Confirm deferred runtime file surfaces from planning are implemented only in the Step 2 execution pass.
 - [ ] Update progress logs and note deferred Step 3 concerns.
 
 Copilot session:
@@ -456,8 +492,9 @@ Treat Step 2 as production work, not temporary scaffolding.
 1. Every enforcement decision has a deterministic error path.
 2. Every protected route has explicit middleware order.
 3. Every public endpoint with abuse risk has an explicit guard.
-4. Every limit boundary is test-covered.
-5. Every phase boundary is preserved.
+4. Public limiter IP extraction trusts proxy headers and avoids raw socket-IP assumptions.
+5. Every limit boundary is test-covered.
+6. Every phase boundary is preserved.
 
 ## Step 2 Exit Criteria
 
@@ -467,8 +504,9 @@ Do not start Step 3 until all of these are true:
 2. Free-tier cap is enforced with deterministic 429 behavior.
 3. Tier violations are enforced with deterministic 403 behavior.
 4. Public `/auth/token` has explicit IP-based abuse protection.
-5. Middleware-order and boundary tests pass.
-6. No Step 3 model-router behavior was implemented early.
+5. `/auth/token` uses trusted proxy-header IP extraction and header behavior does not leak success-path thresholds.
+6. Middleware-order and boundary tests pass.
+7. No Step 3 model-router behavior was implemented early.
 
 ## Short Version You Can Remember
 

@@ -98,13 +98,13 @@ Popup              → React UI for mode toggle, project selector, account statu
 ```
 Protected request (not `/auth/token`) → Auth (JWT validation)
             → Rate limit check (Redis counter by user_id)
-            → Tier check (free: Groq only, pro: full routing)
+            → Tier check (validated tier eligibility from auth context)
             → Route handler
             → LLM orchestrator
             → SSE stream response
 ```
 
-`/auth/token` is public and remains outside the protected middleware chain; Step 2 adds explicit IP-based rate limiting for this endpoint.
+`/auth/token` is public and remains outside the protected middleware chain; Step 2 adds explicit IP-based rate limiting for this endpoint, with IP extraction from trusted proxy headers on Fly.io deployments.
 
 ---
 

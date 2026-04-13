@@ -21,7 +21,7 @@ while IFS= read -r file; do
     continue
   fi
 
-  added_lines="$(git diff --cached -U0 -- "${file}" | grep '^+' | grep -v '^+++')"
+  added_lines="$(git diff --cached -U0 -- "${file}" | grep '^+' | grep -v '^+++' || true)"
   if [[ -z "${added_lines}" ]]; then
     continue
   fi

@@ -433,3 +433,33 @@
 	- Fulfillment: Produces a reusable template bundle with the project-specific content removed and the workflow assets preserved.
 	- Deviation: A GitHub remote repository was not created in this session because no commit/push step was requested and the environment policy does not allow automatic commits.
 
+## Entry 021 - 2026-04-13 - Implemented Step 2-5 Skill Pack and Synced Skill Map
+
+- Task: Start implementation of the planned high-value skills for Step 2 through Step 5 and register them in governance surfaces.
+- What the agent did: Added seven project-specific skills with reference docs, then updated the skill map selection order, registry table, and machine-readable index to include the new skills.
+- How the agent did it: Created each skill folder with a dedicated `SKILL.md` and a focused references file, patched `SKILL_MAP.md` to encode step-aware load conditions, and validated file presence plus map registration via workspace searches.
+- Files edited:
+	- .github/skills/rate-limiting-tier-enforcement/SKILL.md
+	- .github/skills/rate-limiting-tier-enforcement/references/RATE_LIMIT_MATRIX.md
+	- .github/skills/llm-router-and-model-selection/SKILL.md
+	- .github/skills/llm-router-and-model-selection/references/ROUTING_MATRIX.md
+	- .github/skills/system-prompt-assembly/SKILL.md
+	- .github/skills/system-prompt-assembly/references/PROMPT_ASSEMBLY_CHECKLIST.md
+	- .github/skills/canonical-clause-ordering/SKILL.md
+	- .github/skills/canonical-clause-ordering/references/CANONICAL_ORDER_MAP.md
+	- .github/skills/clause-state-management/SKILL.md
+	- .github/skills/clause-state-management/references/STATE_MACHINE_NOTES.md
+	- .github/skills/mv3-extension-boundaries/SKILL.md
+	- .github/skills/mv3-extension-boundaries/references/MV3_BOUNDARY_MATRIX.md
+	- .github/skills/sse-streaming-bridge/SKILL.md
+	- .github/skills/sse-streaming-bridge/references/SSE_BRIDGE_FLOW.md
+	- .github/skills/SKILL_MAP.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed all seven new `SKILL.md` files exist under `.github/skills/`.
+	- Confirmed all seven new reference files exist under each skill's `references/` directory.
+	- Confirmed `SKILL_MAP.md` now includes all seven skills in selection order, registry table, and machine-readable `selectionOrder`/`registry` blocks.
+- Task alignment:
+	- Fulfillment: Executes the requested start of implementation by delivering the full Step 2-5 skill pack and synchronizing governance indexing.
+	- Deviation: None.
+

@@ -111,7 +111,7 @@ Refresh a Supabase session and return the verified token plus app context. Calle
 
 Route class: public endpoint (no Authorization header required).
 
-`[TODO: Step 2 IP-based Rate Limit]`
+`[TODO: Step 2 IP-based rate limiter uses trusted proxy headers (fly-client-ip / x-forwarded-for) and keeps success-path headers minimal]`
 
 **Request**
 ```json
@@ -159,11 +159,13 @@ Every protected request (not `/auth/token`) →
   1. CORS headers (allow extension origin)
   2. Auth middleware — verify Supabase JWT, extract user_id + tier (Step 1 context population)
   3. Rate limit middleware — Redis INCR on rate:daily:{user_id}, TTL 24h (Step 2 enforcement)
-  4. Tier middleware — enforce model routing rules (free → Groq only) (Step 2 enforcement)
+  4. Tier middleware — enforce tier eligibility policy from verified auth context (401/403); model routing remains in Step 3
   5. Route handler
 ```
 
 `/auth/token` remains outside the protected middleware chain because the refresh token in the request body is the credential for that exchange.
+
+For Step 2 IP-based abuse controls on `/auth/token`, extract client IP from trusted proxy headers (`fly-client-ip`, fallback `x-forwarded-for`) rather than raw socket IP.
 
 ```typescript
 // backend/src/middleware/auth.ts

@@ -14,7 +14,10 @@ All agents must do these steps before using or editing skills:
 2. Load [repo-workflow](repo-workflow/SKILL.md).
 3. Load [scope-creep-guard](scope-creep-guard/SKILL.md) for every task before planning or edits.
 4. For documentation maintenance, load [documentation-cohesion](documentation-cohesion/SKILL.md).
-5. Add cross-cutting skills as needed in this order:
+5. For Step 2 enforcement work, load [rate-limiting-tier-enforcement](rate-limiting-tier-enforcement/SKILL.md).
+6. For Step 3 routing and prompt orchestration, load [llm-router-and-model-selection](llm-router-and-model-selection/SKILL.md) and [system-prompt-assembly](system-prompt-assembly/SKILL.md).
+7. For Step 4-5 clause and extension workflow work, load [canonical-clause-ordering](canonical-clause-ordering/SKILL.md), [clause-state-management](clause-state-management/SKILL.md), [mv3-extension-boundaries](mv3-extension-boundaries/SKILL.md), and [sse-streaming-bridge](sse-streaming-bridge/SKILL.md).
+8. Add cross-cutting skills as needed in this order:
   1. [skill-map-governance](skill-map-governance/SKILL.md)
   2. [verification-gate](verification-gate/SKILL.md)
   3. [workflow-logging](workflow-logging/SKILL.md)
@@ -30,6 +33,13 @@ All agents must do these steps before using or editing skills:
 | repo-workflow | [repo-workflow/SKILL.md](repo-workflow/SKILL.md) | Maintain instruction and workflow surfaces | Any customization or workflow maintenance task |
 | scope-creep-guard | [scope-creep-guard/SKILL.md](scope-creep-guard/SKILL.md) | Enforce explicit phase boundaries and prevent out-of-scope edits | Every task, before planning or edits |
 | documentation-cohesion | [documentation-cohesion/SKILL.md](documentation-cohesion/SKILL.md) | Ensure fixes integrate naturally and remain readable by humans and AI agents | Creating or refining planning docs, taskboards, prompts, or specification documents |
+| rate-limiting-tier-enforcement | [rate-limiting-tier-enforcement/SKILL.md](rate-limiting-tier-enforcement/SKILL.md) | Enforce Step 2 quota and tier gate behavior with deterministic contracts | Step 2 backend middleware and public-endpoint abuse-control work |
+| llm-router-and-model-selection | [llm-router-and-model-selection/SKILL.md](llm-router-and-model-selection/SKILL.md) | Build deterministic tier/mode/callType model routing behavior | Step 3 backend model-routing implementation and tests |
+| system-prompt-assembly | [system-prompt-assembly/SKILL.md](system-prompt-assembly/SKILL.md) | Build goal-type prompt factories and bind assembly behavior | Step 3 prompt-template and assembly implementation work |
+| canonical-clause-ordering | [canonical-clause-ordering/SKILL.md](canonical-clause-ordering/SKILL.md) | Enforce canonical clause slot ordering across API and UI layers | Step 4-5 section ordering, bind sorting, and contract alignment work |
+| clause-state-management | [clause-state-management/SKILL.md](clause-state-management/SKILL.md) | Enforce section lifecycle and stale-propagation correctness | Step 4-5 acceptance flow, stale invalidation, and bind gating work |
+| mv3-extension-boundaries | [mv3-extension-boundaries/SKILL.md](mv3-extension-boundaries/SKILL.md) | Preserve MV3 process and storage boundaries | Step 5 extension process-boundary and messaging work |
+| sse-streaming-bridge | [sse-streaming-bridge/SKILL.md](sse-streaming-bridge/SKILL.md) | Enforce stream contract and abort-safe relay behavior | Step 5 SSE streaming bridge implementation across backend and extension |
 | skill-map-governance | [skill-map-governance/SKILL.md](skill-map-governance/SKILL.md) | Keep the skill map synchronized with the skill catalog | Any skill add/remove/rename/scope change |
 | verification-gate | [verification-gate/SKILL.md](verification-gate/SKILL.md) | Enforce verification before completion | Any task that edits files, config, or process docs |
 | workflow-logging | [workflow-logging/SKILL.md](workflow-logging/SKILL.md) | Capture decisions, progress, and change records | Material process or instruction updates |
@@ -65,6 +75,13 @@ skillMap:
     - repo-workflow
     - scope-creep-guard
     - documentation-cohesion
+    - rate-limiting-tier-enforcement
+    - llm-router-and-model-selection
+    - system-prompt-assembly
+    - canonical-clause-ordering
+    - clause-state-management
+    - mv3-extension-boundaries
+    - sse-streaming-bridge
     - skill-map-governance
     - verification-gate
     - workflow-logging
@@ -82,6 +99,27 @@ skillMap:
     - name: documentation-cohesion
       path: .github/skills/documentation-cohesion/SKILL.md
       type: documentation-quality
+    - name: rate-limiting-tier-enforcement
+      path: .github/skills/rate-limiting-tier-enforcement/SKILL.md
+      type: enforcement
+    - name: llm-router-and-model-selection
+      path: .github/skills/llm-router-and-model-selection/SKILL.md
+      type: routing
+    - name: system-prompt-assembly
+      path: .github/skills/system-prompt-assembly/SKILL.md
+      type: prompt-assembly
+    - name: canonical-clause-ordering
+      path: .github/skills/canonical-clause-ordering/SKILL.md
+      type: pipeline-ordering
+    - name: clause-state-management
+      path: .github/skills/clause-state-management/SKILL.md
+      type: pipeline-state
+    - name: mv3-extension-boundaries
+      path: .github/skills/mv3-extension-boundaries/SKILL.md
+      type: extension-architecture
+    - name: sse-streaming-bridge
+      path: .github/skills/sse-streaming-bridge/SKILL.md
+      type: streaming
     - name: skill-map-governance
       path: .github/skills/skill-map-governance/SKILL.md
       type: governance
