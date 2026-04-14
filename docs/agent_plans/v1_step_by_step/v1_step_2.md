@@ -414,6 +414,7 @@ Done when:
 
 Goal: prove enforcement behavior under realistic load and edge conditions.
 
+- [ ] CRITICAL: Add a local Redis container to docker-compose.yml to provide a real Redis runtime for integration tests. The test suite MUST run against this local instance, not just a mocked client.
 - [ ] Add tests for free-tier quota boundary (29, 30, 31).
 - [ ] Add tests for deterministic 429 envelopes and headers.
 - [ ] Add tests for tier-forbidden 403 paths.

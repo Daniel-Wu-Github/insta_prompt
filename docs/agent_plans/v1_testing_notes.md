@@ -266,3 +266,318 @@ Use this section to log your own observations while running the guide:
 - Sunny path result: All steps passed (preflight, Supabase reset, env export, schema checks, bun test, Studio verification, cURL validation)
 - Rainy path result: Did not run since none encountered.
 - Bugs found: None
+
+## Step 2 Manual Testing Guide (Rate Limiting and Tier Enforcement)
+
+Use this guide to validate Step 2 end-to-end with real local Supabase and Redis services.
+
+### What This Covers
+
+1. Local Supabase + Redis harness health.
+2. Step 2 middleware and route-wiring enforcement invariants.
+3. Protected-route free-tier quota boundary checks (sunny and rainy paths).
+4. Public `/auth/token` IP abuse-protection checks (sunny and rainy paths).
+5. Deterministic `429`/`403`/`503` envelope and header behavior checks through integration tests.
+
+### Terminal Setup
+
+1. Terminal A: repo root for Docker Compose and Supabase commands.
+2. Terminal B: backend folder for env export and test runs.
+3. Terminal C: backend folder for manual server and cURL checks.
+
+### Step 2 - Preflight
+
+How to run: run from repo root before touching Redis, Supabase, or backend tests.
+
+```bash
+cd /root/insta_prompt
+docker --version
+docker compose version
+bun --version
+npx supabase --version
+redis-cli --version
+```
+
+Sunny day expected:
+
+1. All commands print a version.
+2. No command-not-found errors.
+
+Rainy day expected:
+
+1. Missing Docker/Bun/Supabase CLI/redis-cli causes command-not-found or version errors.
+2. Fix the missing dependency, then rerun preflight.
+
+### Step 2 - Start Redis and Reset Local Supabase
+
+How to run: execute in Terminal A. This gives you a clean Supabase state and healthy local Redis.
+
+```bash
+cd /root/insta_prompt
+docker compose up -d redis
+docker compose ps redis
+npx supabase start
+npx supabase db reset --yes --no-seed
+```
+
+Sunny day expected:
+
+1. `docker compose ps redis` shows the `redis` service as Up (healthy).
+2. Supabase starts and prints local URLs.
+3. Reset reapplies migrations `0001_step1_profiles_and_history.sql`, `0002_step1_projects_and_context.sql`, and `0003_step1_rls.sql`.
+4. Notices like trigger missing on first apply or vector already exists are acceptable.
+
+Rainy day expected:
+
+1. If Docker is not running, Redis and Supabase start fail.
+2. If Supabase containers are stale, status/reset commands can fail with container health errors.
+3. Recovery command sequence:
+
+```bash
+cd /root/insta_prompt
+docker compose down
+docker compose up -d redis
+npx supabase stop
+npx supabase start
+npx supabase db reset --yes --no-seed
+```
+
+### Step 2 - Export Local Env Vars For Integration Tests
+
+How to run: execute in Terminal B before `bun test`. Repeat this in every new shell session.
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+export SUPABASE_SERVICE_KEY="$SERVICE_ROLE_KEY"
+export REDIS_URL="redis://127.0.0.1:6379"
+set +a
+env | grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_KEY|ANON_KEY|JWT_SECRET|REDIS_URL)='
+```
+
+OR USE ONE LINER:
+
+```bash
+cd /root/insta_prompt/backend && set -a && STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')" && eval "$STATUS_ENV" && export SUPABASE_URL="$API_URL" SUPABASE_SERVICE_KEY="$SERVICE_ROLE_KEY" REDIS_URL="redis://127.0.0.1:6379" && set +a && env | grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_KEY|ANON_KEY|JWT_SECRET|REDIS_URL)='
+```
+
+Sunny day expected:
+
+1. Env print shows non-empty values for `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ANON_KEY`, `JWT_SECRET`, and `REDIS_URL`.
+2. No command errors during `status`/`eval`.
+
+Rainy day expected:
+
+1. If Supabase is not running, `npx supabase status -o env` can fail with container errors.
+2. If Redis is down, env export can still succeed but Step 2 integration tests will fail or return `503` envelopes.
+3. Recovery: start Supabase and Redis first, then rerun this export block.
+
+### Step 2 - Verify Enforcement Invariants Manually
+
+How to run: execute in Terminal A after setup/reset.
+
+```bash
+cd /root/insta_prompt
+docker exec promptcompiler-redis redis-cli ping
+rg "FREE_DAILY_LIMIT|AUTH_TOKEN_IP_LIMIT|rate:daily:|rate:auth-token-ip:" backend/src/services/rateLimit.ts
+rg "authMiddleware, rateLimitMiddleware, tierMiddleware" backend/src/index.ts
+rg "PROTECTED_ROUTE_PREFIXES = \[\"/segment\", \"/enhance\", \"/bind\", \"/projects\"\]" backend/src/index.ts
+rg "fly-client-ip|x-forwarded-for|Retry-After" backend/src/routes/auth.ts
+```
+
+Sunny day expected:
+
+1. Redis ping returns `PONG`.
+2. `rateLimit.ts` shows free-tier limit `30`, `/auth/token` IP limit `20`, and both Redis key prefixes.
+3. `index.ts` shows protected route middleware order as auth -> ratelimit -> tier.
+4. `index.ts` route prefixes include `/segment`, `/enhance`, `/bind`, and `/projects`.
+5. `auth.ts` shows trusted proxy IP extraction (`fly-client-ip`, fallback `x-forwarded-for`) and `Retry-After` on throttled responses.
+
+Rainy day expected:
+
+1. Redis ping fails if the container is down.
+2. Missing constants or middleware-order lines indicate implementation drift.
+3. Recovery: restart Redis/Supabase and rerun this check block.
+
+### Step 2 - Run Rate/Tier/Auth-Token Test Matrix
+
+How to run: execute in Terminal B after env export.
+
+```bash
+cd /root/insta_prompt/backend
+bun test
+```
+
+Sunny day expected:
+
+1. Suite passes with `28 pass` and `0 fail`.
+2. Integration tests confirm:
+	- free-tier protected-route boundary is deterministic at requests `29 -> 30 -> 31`.
+	- concurrent near-boundary protected requests stay deterministic.
+	- strict gated policy returns deterministic `403` `TIER_FORBIDDEN`.
+	- successful `/auth/token` responses do not include `X-RateLimit-*` headers.
+	- over-limit `/auth/token` IP bursts return deterministic `429` with `Retry-After`.
+	- Redis failure path returns deterministic `503` `RATE_LIMIT_UNAVAILABLE`.
+3. A `Rate limit Redis call failed ... forced redis failure` log line is expected during the intentional Redis-failure integration test.
+
+Rainy day expected:
+
+1. If integration tests say they are skipped, env vars are missing from the shell.
+2. If rate-limit integration fails early, Redis is likely down or `REDIS_URL` is missing/incorrect.
+3. If envelope/header assertions fail, Step 2 middleware behavior may have drifted.
+4. Recovery: restore Redis + Supabase, rerun env export, then rerun `bun test`.
+
+### Step 2 - Manual cURL Check for Protected `/segment` Daily Free-Tier Cap
+
+How to run: start backend server, mint a disposable free-tier user token, then send repeated protected-route calls.
+
+**Terminal C1** (start the server):
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+export SUPABASE_SERVICE_KEY="$SERVICE_ROLE_KEY"
+export REDIS_URL="redis://127.0.0.1:6379"
+set +a
+bun run src/index.ts
+```
+
+Wait for output like `Started development server: http://localhost:3000`.
+
+**Terminal C2** (in a new terminal, run the manual boundary check):
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+set +a
+
+AUTH_LINES="$(bun -e 'import { createClient } from "@supabase/supabase-js"; const url = process.env.SUPABASE_URL ?? process.env.API_URL; const anon = process.env.ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? process.env.PUBLISHABLE_KEY; if (!url || !anon) throw new Error("Missing URL or anon key"); const supabase = createClient(url, anon, { auth: { autoRefreshToken: false, persistSession: false } }); const email = `step2-manual-${Date.now()}@example.com`; const passphrase = `Aa1-${Date.now()}-z`; const signUp = await supabase.auth.signUp({ email, password: passphrase }); if (signUp.error || !signUp.data.user) throw signUp.error ?? new Error("signup failed"); let session = signUp.data.session; if (!session) { const signIn = await supabase.auth.signInWithPassword({ email, password: passphrase }); if (signIn.error || !signIn.data.session) throw signIn.error ?? new Error("signin failed"); session = signIn.data.session; } console.log(session.access_token); console.log(session.refresh_token);')"
+AUTH_JWT="$(printf '%s\n' "$AUTH_LINES" | sed -n '1p')"
+REFRESH_JWT="$(printf '%s\n' "$AUTH_LINES" | sed -n '2p')"
+
+for i in $(seq 1 31); do
+	code=$(curl -s -o /tmp/step2_segment_$i.json -w "%{http_code}" \
+		-X POST http://localhost:3000/segment \
+		-H "Authorization: Bearer $AUTH_JWT" \
+		-H "Content-Type: application/json" \
+		-d '{"segments":["build feature"],"mode":"balanced"}')
+	echo "segment_request_$i=$code"
+done
+
+curl -i -X POST http://localhost:3000/segment \
+	-H "Authorization: Bearer $AUTH_JWT" \
+	-H "Content-Type: application/json" \
+	-d '{"segments":["build feature"],"mode":"balanced"}'
+```
+
+Sunny day expected:
+
+1. Requests `1..30` return `200`.
+2. Request `31` returns `429`.
+3. The throttled response body includes `RATE_LIMIT_EXCEEDED`.
+4. Throttled response headers include `X-RateLimit-Limit: 30`, `X-RateLimit-Remaining: 0`, and a future epoch in `X-RateLimit-Reset`.
+
+Rainy day expected:
+
+1. `401` from the first request indicates missing/invalid bearer token setup.
+2. `503` indicates Redis is unavailable.
+3. `200` beyond request `31` indicates quota bypass or middleware wiring drift.
+4. Recovery:
+	 - Ensure Terminal C1 is still running with `REDIS_URL` set
+	 - Rerun env export and token mint commands in Terminal C2
+	 - Check `backend/src/index.ts`, `backend/src/middleware/ratelimit.ts`, and `backend/src/services/rateLimit.ts`
+
+### Step 2 - Manual cURL Check for Public `/auth/token` IP Limiter and Header Policy
+
+How to run: reuse `REFRESH_JWT` from Terminal C2, then validate both success path and burst-throttle path.
+
+```bash
+curl -i -X POST http://localhost:3000/auth/token \
+	-H "Content-Type: application/json" \
+	-H "fly-client-ip: 198.51.100.200" \
+	-d "{\"refresh_token\":\"$REFRESH_JWT\"}"
+
+for i in $(seq 1 21); do
+	code=$(curl -s -o /tmp/step2_auth_burst_$i.json -w "%{http_code}" \
+		-X POST http://localhost:3000/auth/token \
+		-H "Content-Type: application/json" \
+		-H "fly-client-ip: 198.51.100.201" \
+		-d '{"refresh_token":"not-a-real-refresh-token"}')
+	echo "auth_token_burst_$i=$code"
+done
+
+curl -i -X POST http://localhost:3000/auth/token \
+	-H "Content-Type: application/json" \
+	-H "fly-client-ip: 198.51.100.201" \
+	-d '{"refresh_token":"not-a-real-refresh-token"}'
+```
+
+Sunny day expected:
+
+1. The first request returns `200` and does not include `X-RateLimit-*` headers.
+2. Burst requests `1..20` return `401` (invalid refresh token) for the same IP.
+3. Burst request `21` returns `429` for the same IP.
+4. The throttled response includes `Retry-After` and `RATE_LIMIT_EXCEEDED`.
+5. The throttled `/auth/token` response does not include `X-RateLimit-*` headers.
+
+Rainy day expected:
+
+1. If success-path `200` includes `X-RateLimit-*`, header policy drift exists.
+2. If request `21` is not `429`, IP throttle behavior is missing or regressed.
+3. If all requests return `503`, Redis is unavailable.
+4. Recovery:
+	 - Restart Redis and rerun the same burst test
+	 - Re-check trusted IP extraction and throttle handling in `backend/src/routes/auth.ts`
+	 - Re-check limiter logic in `backend/src/services/rateLimit.ts`
+
+### Optional Rainy Day Drill
+
+How to run: intentionally stop Redis to validate deterministic unavailable behavior.
+
+```bash
+cd /root/insta_prompt
+docker compose stop redis
+```
+
+Then (from Terminal C2) run one protected route request and one `/auth/token` request:
+
+```bash
+curl -i -X POST http://localhost:3000/segment \
+	-H "Authorization: Bearer $AUTH_JWT" \
+	-H "Content-Type: application/json" \
+	-d '{"segments":["build feature"],"mode":"balanced"}'
+
+curl -i -X POST http://localhost:3000/auth/token \
+	-H "Content-Type: application/json" \
+	-H "fly-client-ip: 198.51.100.250" \
+	-d '{"refresh_token":"not-a-real-refresh-token"}'
+```
+
+Rainy drill expected:
+
+1. Both routes return deterministic `503` with `RATE_LIMIT_UNAVAILABLE` while Redis is stopped.
+2. Recovery:
+
+```bash
+cd /root/insta_prompt
+docker compose up -d redis
+```
+
+Then rerun env export and `bun test`.
+
+## Step 2 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date: 2026-04-13
+- Sunny path result: All core checks passed (preflight, Redis + Supabase setup/reset, env export, invariant checks, `bun test`, manual `/segment` boundary, manual `/auth/token` limiter)
+- Rainy path result: Did not run full stop-Redis drill yet.
+- Bugs found: None

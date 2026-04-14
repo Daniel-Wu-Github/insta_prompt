@@ -688,3 +688,85 @@ Entries are grouped by branch and extend commit messages with file-level change 
       - A exports/skill-workflow-template-repo_2026-04-12.zip
       - M logging/commit_log.md
       - M logging/progress_log.md
+
+### 2026-04-13 21:38:04Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/main
+- Range: e202123e84b37230689672b6c401c28d95885725..0ed6c30933b14cd7a2eb93a13af4dabf9c2e04c4
+- Commits:
+  - 0ed6c30 steps 2-5 skills and refined step 2 plan
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-13T16:38:00-05:00
+    - Purpose: This commit adds 14, modifies 8 across .githooks, .github, docs, logging.
+    - Files:
+      - M .githooks/pre-commit
+      - M .github/skills/SKILL_MAP.md
+      - A .github/skills/canonical-clause-ordering/SKILL.md
+      - A .github/skills/canonical-clause-ordering/references/CANONICAL_ORDER_MAP.md
+      - A .github/skills/clause-state-management/SKILL.md
+      - A .github/skills/clause-state-management/references/STATE_MACHINE_NOTES.md
+      - A .github/skills/llm-router-and-model-selection/SKILL.md
+      - A .github/skills/llm-router-and-model-selection/references/ROUTING_MATRIX.md
+      - A .github/skills/mv3-extension-boundaries/SKILL.md
+      - A .github/skills/mv3-extension-boundaries/references/MV3_BOUNDARY_MATRIX.md
+      - A .github/skills/rate-limiting-tier-enforcement/SKILL.md
+      - A .github/skills/rate-limiting-tier-enforcement/references/RATE_LIMIT_MATRIX.md
+      - A .github/skills/sse-streaming-bridge/SKILL.md
+      - A .github/skills/sse-streaming-bridge/references/SSE_BRIDGE_FLOW.md
+      - A .github/skills/system-prompt-assembly/SKILL.md
+      - A .github/skills/system-prompt-assembly/references/PROMPT_ASSEMBLY_CHECKLIST.md
+      - M docs/ARCHITECTURE.md
+      - M docs/BACKEND_API.md
+      - M docs/agent_plans/v1_step_by_step/v1_step_2.md
+      - M docs/agent_plans/v1_step_by_step/v1_step_2_planning.md
+      - M logging/commit_log.md
+      - M logging/progress_log.md
+
+### 2026-04-13 23:01:12Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/main
+- Range: 0ed6c30933b14cd7a2eb93a13af4dabf9c2e04c4..05e7f17113211e167f718b6fc4885a1f8711e954
+- Commits:
+  - 05e7f17 step 2 passes 1 and 2
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-13T18:01:03-05:00
+    - Purpose: This commit adds 1, modifies 4 across backend.
+    - Files:
+      - M backend/package-lock.json
+      - M backend/package.json
+      - M backend/src/middleware/ratelimit.ts
+      - M backend/src/routes/auth.ts
+      - A backend/src/services/rateLimit.ts
+
+### 2026-04-13 23:34:11Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/main
+- Range: 05e7f17113211e167f718b6fc4885a1f8711e954..5b3fabbb7144a837cd0a20bbf71dbf32c9bcee5a
+- Commits:
+  - 5b3fabb step 2 passes 3 and 4
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-13T18:34:08-05:00
+    - Purpose: This commit adds 1, modifies 2 across backend.
+    - Files:
+      - A backend/src/__tests__/tier.middleware.test.ts
+      - M backend/src/index.ts
+      - M backend/src/middleware/tier.ts
+
+### 2026-04-14 00:53:01Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/main
+- Range: 5b3fabbb7144a837cd0a20bbf71dbf32c9bcee5a..e4729572029af47c8e41c2446801fef4b1278d65
+- Commits:
+  - e472957 step 2 passes 5 and 6 + manual testing
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-13T19:52:53-05:00
+    - Purpose: This commit adds 1, modifies 7 across backend.
+    - Files:
+      - M backend/.env.example
+      - M backend/package-lock.json
+      - M backend/package.json
+      - A backend/src/__tests__/ratelimit.integration.test.ts
+      - M backend/src/__tests__/tier.middleware.test.ts
+      - M backend/src/index.ts
+      - M backend/src/middleware/tier.ts
+      - M backend/src/services/rateLimit.ts

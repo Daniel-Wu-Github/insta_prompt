@@ -304,6 +304,7 @@ Dependencies: runtime behavior in 2.3-2.6 complete.
 
 Test boundary rule:
 
+1. CRITICAL: Add a local Redis container to docker-compose.yml to provide a real Redis runtime for integration tests, and run the test suite against that instance rather than a mocked client.
 1. Integration coverage required: quota boundary and tier-forbidden behavior.
 2. Stress coverage required: concurrent limit checks and deterministic envelopes.
 3. Public endpoint coverage required: `/auth/token` IP throttling, trusted proxy IP extraction, and retry/header expectations.
