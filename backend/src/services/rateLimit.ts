@@ -1,8 +1,18 @@
-import { Redis } from "@upstash/redis";
+import { Redis as UpstashRedis } from "@upstash/redis";
+import { Redis as IORedis } from "ioredis";
 
 export const FREE_DAILY_LIMIT = 30;
 export const AUTH_TOKEN_IP_LIMIT = 20;
 export const AUTH_TOKEN_IP_WINDOW_SECONDS = 60;
+
+type RateLimitRedisClient = {
+	incr: (key: string) => Promise<number>;
+	expireat: (key: string, unixSeconds: number) => Promise<number>;
+	expire: (key: string, seconds: number) => Promise<number>;
+	ttl: (key: string) => Promise<number>;
+	flushdb?: () => Promise<void>;
+	close?: () => Promise<void>;
+};
 
 type DailyQuotaSuccess = {
 	ok: true;
@@ -32,7 +42,8 @@ type AuthTokenIpQuotaSuccess = {
 export type DailyQuotaResult = DailyQuotaSuccess | RateLimitUnavailable;
 export type AuthTokenIpQuotaResult = AuthTokenIpQuotaSuccess | RateLimitUnavailable;
 
-let cachedRedisClient: Redis | null | undefined;
+let cachedRedisClient: RateLimitRedisClient | null | undefined;
+let testOverrideRedisClient: RateLimitRedisClient | null | undefined;
 
 function getNextUtcMidnightEpochSeconds(now: Date): number {
 	return Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) / 1000);
@@ -46,8 +57,69 @@ function buildAuthTokenIpQuotaKey(clientIp: string): string {
 	return `rate:auth-token-ip:${encodeURIComponent(clientIp)}`;
 }
 
-function resolveRedisClient(): Redis | null {
+function createLocalRedisClient(redisUrl: string): RateLimitRedisClient {
+	const redis = new IORedis(redisUrl);
+
+	return {
+		async incr(key) {
+			return await redis.incr(key);
+		},
+		async expireat(key, unixSeconds) {
+			return await redis.expireat(key, unixSeconds);
+		},
+		async expire(key, seconds) {
+			return await redis.expire(key, seconds);
+		},
+		async ttl(key) {
+			return await redis.ttl(key);
+		},
+		async flushdb() {
+			await redis.flushdb();
+		},
+		async close() {
+			try {
+				await redis.quit();
+			} catch {
+				redis.disconnect();
+			}
+		},
+	};
+}
+
+function createUpstashRedisClient(url: string, redisTokenValue: string): RateLimitRedisClient {
+	const redis = new UpstashRedis({
+		url,
+		token: redisTokenValue,
+	});
+
+	return {
+		async incr(key) {
+			return await redis.incr(key);
+		},
+		async expireat(key, unixSeconds) {
+			return await redis.expireat(key, unixSeconds);
+		},
+		async expire(key, seconds) {
+			return await redis.expire(key, seconds);
+		},
+		async ttl(key) {
+			return await redis.ttl(key);
+		},
+	};
+}
+
+function resolveRedisClient(): RateLimitRedisClient | null {
+	if (testOverrideRedisClient !== undefined) {
+		return testOverrideRedisClient;
+	}
+
 	if (cachedRedisClient !== undefined) {
+		return cachedRedisClient;
+	}
+
+	const localRedisUrl = process.env.REDIS_URL?.trim() ?? "";
+	if (localRedisUrl.length > 0) {
+		cachedRedisClient = createLocalRedisClient(localRedisUrl);
 		return cachedRedisClient;
 	}
 
@@ -58,12 +130,31 @@ function resolveRedisClient(): Redis | null {
 		return cachedRedisClient;
 	}
 
-	cachedRedisClient = new Redis({
-		url,
-		token: redisAuthValue,
-	});
+	cachedRedisClient = createUpstashRedisClient(url, redisAuthValue);
 
 	return cachedRedisClient;
+}
+
+export function __setRateLimitRedisClientForTests(client: RateLimitRedisClient | null | undefined): void {
+	testOverrideRedisClient = client;
+	cachedRedisClient = undefined;
+}
+
+export async function __resetRateLimitRedisClientForTests(): Promise<void> {
+	testOverrideRedisClient = undefined;
+	const existingClient = cachedRedisClient;
+	cachedRedisClient = undefined;
+
+	if (existingClient?.close) {
+		await existingClient.close();
+	}
+}
+
+export async function __flushRateLimitRedisForTests(): Promise<void> {
+	const redis = resolveRedisClient();
+	if (redis?.flushdb) {
+		await redis.flushdb();
+	}
 }
 
 function unavailableResult(): RateLimitUnavailable {

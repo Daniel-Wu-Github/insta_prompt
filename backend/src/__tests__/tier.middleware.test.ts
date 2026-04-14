@@ -1,7 +1,11 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { Hono } from "hono";
 
-import { tierMiddleware } from "../middleware/tier";
+import {
+	__resetStrictTierRoutePoliciesForTests,
+	__setStrictTierRoutePoliciesForTests,
+	tierMiddleware,
+} from "../middleware/tier";
 
 function createTierHarness(seedTier?: string) {
 	const app = new Hono();
@@ -28,6 +32,10 @@ function createTierHarness(seedTier?: string) {
 }
 
 describe("tier middleware", () => {
+	afterEach(() => {
+		__resetStrictTierRoutePoliciesForTests();
+	});
+
 	it("returns deterministic 401 UNAUTHORIZED when tier context is missing", async () => {
 		const app = createTierHarness();
 		const response = await app.fetch(
@@ -91,5 +99,27 @@ describe("tier middleware", () => {
 		const response = await app.fetch(new Request("http://localhost/projects"));
 
 		expect(response.status).toBe(200);
+	});
+
+	it("returns deterministic 403 for free tier on a strictly gated endpoint policy", async () => {
+		__setStrictTierRoutePoliciesForTests([
+			{
+				routePrefix: "/projects",
+				allowedTiers: ["pro", "byok"],
+			},
+		]);
+
+		const app = createTierHarness("free");
+		const response = await app.fetch(new Request("http://localhost/projects"));
+		const body = (await response.json()) as {
+			error: {
+				code: string;
+				message: string;
+			};
+		};
+
+		expect(response.status).toBe(403);
+		expect(body.error.code).toBe("TIER_FORBIDDEN");
+		expect(body.error.message).toBe("Tier is not allowed for this route");
 	});
 });

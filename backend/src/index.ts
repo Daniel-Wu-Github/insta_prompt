@@ -22,7 +22,6 @@ app.route("/auth", authRoutes);
 
 // Preserve required middleware order on protected routes: auth -> ratelimit -> tier.
 for (const routePrefix of PROTECTED_ROUTE_PREFIXES) {
-	app.use(routePrefix, authMiddleware, rateLimitMiddleware, tierMiddleware);
 	app.use(`${routePrefix}/*`, authMiddleware, rateLimitMiddleware, tierMiddleware);
 }
 

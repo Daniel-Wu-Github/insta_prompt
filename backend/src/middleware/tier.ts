@@ -9,7 +9,16 @@ type TierRoutePolicy = {
 const RECOGNIZED_TIERS = new Set<string>(TIER_VALUES);
 
 // Step 2 default policy keeps recognized tiers open unless explicitly gated.
-const STRICT_TIER_ROUTE_POLICIES: readonly TierRoutePolicy[] = [];
+const DEFAULT_STRICT_TIER_ROUTE_POLICIES: readonly TierRoutePolicy[] = [];
+let strictTierRoutePolicies: readonly TierRoutePolicy[] = DEFAULT_STRICT_TIER_ROUTE_POLICIES;
+
+export function __setStrictTierRoutePoliciesForTests(policies: readonly TierRoutePolicy[]): void {
+	strictTierRoutePolicies = policies;
+}
+
+export function __resetStrictTierRoutePoliciesForTests(): void {
+	strictTierRoutePolicies = DEFAULT_STRICT_TIER_ROUTE_POLICIES;
+}
 
 function unauthorizedResponse() {
 	return {
@@ -38,7 +47,7 @@ function pathMatchesPrefix(path: string, prefix: string): boolean {
 }
 
 function resolveRoutePolicy(path: string): TierRoutePolicy | null {
-	for (const policy of STRICT_TIER_ROUTE_POLICIES) {
+	for (const policy of strictTierRoutePolicies) {
 		if (pathMatchesPrefix(path, policy.routePrefix)) {
 			return policy;
 		}
