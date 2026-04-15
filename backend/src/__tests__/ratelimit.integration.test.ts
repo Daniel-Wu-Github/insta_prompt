@@ -241,6 +241,8 @@ if (!integrationConfig) {
 	});
 
 	describe("rate limit integration: protected and public matrices", () => {
+			const FAST_FAILURE_UPPER_BOUND_MS = 4500;
+
 		it("enforces free-tier daily boundary at 29 -> 30 -> 31 with deterministic headers and envelope", async () => {
 			const responses: Response[] = [];
 			for (let count = 1; count <= 31; count += 1) {
@@ -368,5 +370,65 @@ if (!integrationConfig) {
 			expect(body.error.code).toBe("RATE_LIMIT_UNAVAILABLE");
 			expect(body.error.message).toBe("Rate limit service unavailable");
 		});
+
+			it("returns deterministic 503 RATE_LIMIT_UNAVAILABLE when protected Redis quota calls hang", async () => {
+				__setRateLimitRedisClientForTests({
+					async incr() {
+						return await new Promise<number>(() => {
+							// intentionally unresolved to simulate a hanging Redis command
+						});
+					},
+					async expireat() {
+						return 1;
+					},
+					async expire() {
+						return 1;
+					},
+					async ttl() {
+						return 60;
+					},
+				});
+
+				const startedAt = Date.now();
+				const response = await postSegment(freeUser.accessToken);
+				const durationMs = Date.now() - startedAt;
+				const body = (await response.json()) as ErrorBody;
+
+				expect(response.status).toBe(503);
+				expect(body.error.code).toBe("RATE_LIMIT_UNAVAILABLE");
+				expect(body.error.message).toBe("Rate limit service unavailable");
+				expect(durationMs).toBeLessThan(FAST_FAILURE_UPPER_BOUND_MS);
+			});
+
+			it("returns deterministic 503 RATE_LIMIT_UNAVAILABLE when /auth/token Redis quota calls hang", async () => {
+				__setRateLimitRedisClientForTests({
+					async incr() {
+						return await new Promise<number>(() => {
+							// intentionally unresolved to simulate a hanging Redis command
+						});
+					},
+					async expireat() {
+						return 1;
+					},
+					async expire() {
+						return 1;
+					},
+					async ttl() {
+						return 60;
+					},
+				});
+
+				const startedAt = Date.now();
+				const response = await postAuthToken("not-a-real-refresh-token", {
+					"fly-client-ip": "198.51.100.12",
+				});
+				const durationMs = Date.now() - startedAt;
+				const body = (await response.json()) as ErrorBody;
+
+				expect(response.status).toBe(503);
+				expect(body.error.code).toBe("RATE_LIMIT_UNAVAILABLE");
+				expect(body.error.message).toBe("Rate limit service unavailable");
+				expect(durationMs).toBeLessThan(FAST_FAILURE_UPPER_BOUND_MS);
+			});
 	});
 }

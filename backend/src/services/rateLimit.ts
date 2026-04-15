@@ -4,6 +4,11 @@ import { Redis as IORedis } from "ioredis";
 export const FREE_DAILY_LIMIT = 30;
 export const AUTH_TOKEN_IP_LIMIT = 20;
 export const AUTH_TOKEN_IP_WINDOW_SECONDS = 60;
+const DEFAULT_REDIS_CONNECT_TIMEOUT_MS = 2000;
+const DEFAULT_REDIS_COMMAND_TIMEOUT_MS = 2000;
+
+const REDIS_CONNECT_TIMEOUT_MS = readPositiveIntEnv("RATE_LIMIT_REDIS_CONNECT_TIMEOUT_MS", DEFAULT_REDIS_CONNECT_TIMEOUT_MS);
+const REDIS_COMMAND_TIMEOUT_MS = readPositiveIntEnv("RATE_LIMIT_REDIS_COMMAND_TIMEOUT_MS", DEFAULT_REDIS_COMMAND_TIMEOUT_MS);
 
 type RateLimitRedisClient = {
 	incr: (key: string) => Promise<number>;
@@ -45,6 +50,38 @@ export type AuthTokenIpQuotaResult = AuthTokenIpQuotaSuccess | RateLimitUnavaila
 let cachedRedisClient: RateLimitRedisClient | null | undefined;
 let testOverrideRedisClient: RateLimitRedisClient | null | undefined;
 
+function readPositiveIntEnv(name: string, fallback: number): number {
+	const raw = process.env[name];
+	if (!raw) {
+		return fallback;
+	}
+
+	const parsed = Number.parseInt(raw, 10);
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		return fallback;
+	}
+
+	return parsed;
+}
+
+function withRedisTimeout<T>(operation: Promise<T>, operationName: string): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timeoutId = setTimeout(() => {
+			reject(new Error(`Redis ${operationName} timed out after ${REDIS_COMMAND_TIMEOUT_MS}ms`));
+		}, REDIS_COMMAND_TIMEOUT_MS);
+
+		operation
+			.then((value) => {
+				clearTimeout(timeoutId);
+				resolve(value);
+			})
+			.catch((error: unknown) => {
+				clearTimeout(timeoutId);
+				reject(error);
+			});
+	});
+}
+
 function getNextUtcMidnightEpochSeconds(now: Date): number {
 	return Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) / 1000);
 }
@@ -58,7 +95,11 @@ function buildAuthTokenIpQuotaKey(clientIp: string): string {
 }
 
 function createLocalRedisClient(redisUrl: string): RateLimitRedisClient {
-	const redis = new IORedis(redisUrl);
+	const redis = new IORedis(redisUrl, {
+		connectTimeout: REDIS_CONNECT_TIMEOUT_MS,
+		commandTimeout: REDIS_COMMAND_TIMEOUT_MS,
+		maxRetriesPerRequest: 1,
+	});
 
 	return {
 		async incr(key) {
@@ -179,9 +220,9 @@ export async function consumeDailyFreeQuota(userId: string, now = new Date()): P
 	const reset = getNextUtcMidnightEpochSeconds(now);
 
 	try {
-		const used = await redis.incr(key);
+		const used = await withRedisTimeout(redis.incr(key), "incr");
 		if (used === 1) {
-			await redis.expireat(key, reset);
+			await withRedisTimeout(redis.expireat(key, reset), "expireat");
 		}
 
 		const remaining = Math.max(0, FREE_DAILY_LIMIT - used);
@@ -211,15 +252,15 @@ export async function consumeAuthTokenIpQuota(clientIp: string, now = new Date()
 	let reset = nowSeconds + AUTH_TOKEN_IP_WINDOW_SECONDS;
 
 	try {
-		const used = await redis.incr(key);
+		const used = await withRedisTimeout(redis.incr(key), "incr");
 		if (used === 1) {
-			await redis.expire(key, AUTH_TOKEN_IP_WINDOW_SECONDS);
+			await withRedisTimeout(redis.expire(key, AUTH_TOKEN_IP_WINDOW_SECONDS), "expire");
 		} else {
-			const ttl = await redis.ttl(key);
+			const ttl = await withRedisTimeout(redis.ttl(key), "ttl");
 			if (typeof ttl === "number" && ttl > 0) {
 				reset = nowSeconds + ttl;
 			} else {
-				await redis.expire(key, AUTH_TOKEN_IP_WINDOW_SECONDS);
+				await withRedisTimeout(redis.expire(key, AUTH_TOKEN_IP_WINDOW_SECONDS), "expire");
 			}
 		}
 

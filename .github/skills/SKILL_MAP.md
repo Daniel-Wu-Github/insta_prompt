@@ -14,10 +14,11 @@ All agents must do these steps before using or editing skills:
 2. Load [repo-workflow](repo-workflow/SKILL.md).
 3. Load [scope-creep-guard](scope-creep-guard/SKILL.md) for every task before planning or edits.
 4. For documentation maintenance, load [documentation-cohesion](documentation-cohesion/SKILL.md).
-5. For Step 2 enforcement work, load [rate-limiting-tier-enforcement](rate-limiting-tier-enforcement/SKILL.md).
-6. For Step 3 routing and prompt orchestration, load [llm-router-and-model-selection](llm-router-and-model-selection/SKILL.md) and [system-prompt-assembly](system-prompt-assembly/SKILL.md).
-7. For Step 4-5 clause and extension workflow work, load [canonical-clause-ordering](canonical-clause-ordering/SKILL.md), [clause-state-management](clause-state-management/SKILL.md), [mv3-extension-boundaries](mv3-extension-boundaries/SKILL.md), and [sse-streaming-bridge](sse-streaming-bridge/SKILL.md).
-8. Add cross-cutting skills as needed in this order:
+5. For manual testing guide authoring, load [manual-testing-guides](manual-testing-guides/SKILL.md).
+6. For Step 2 enforcement work, load [rate-limiting-tier-enforcement](rate-limiting-tier-enforcement/SKILL.md).
+7. For Step 3 routing and prompt orchestration, load [llm-router-and-model-selection](llm-router-and-model-selection/SKILL.md) and [system-prompt-assembly](system-prompt-assembly/SKILL.md).
+8. For Step 4-5 clause and extension workflow work, load [canonical-clause-ordering](canonical-clause-ordering/SKILL.md), [clause-state-management](clause-state-management/SKILL.md), [mv3-extension-boundaries](mv3-extension-boundaries/SKILL.md), and [sse-streaming-bridge](sse-streaming-bridge/SKILL.md).
+9. Add cross-cutting skills as needed in this order:
   1. [skill-map-governance](skill-map-governance/SKILL.md)
   2. [verification-gate](verification-gate/SKILL.md)
   3. [workflow-logging](workflow-logging/SKILL.md)
@@ -33,6 +34,7 @@ All agents must do these steps before using or editing skills:
 | repo-workflow | [repo-workflow/SKILL.md](repo-workflow/SKILL.md) | Maintain instruction and workflow surfaces | Any customization or workflow maintenance task |
 | scope-creep-guard | [scope-creep-guard/SKILL.md](scope-creep-guard/SKILL.md) | Enforce explicit phase boundaries and prevent out-of-scope edits | Every task, before planning or edits |
 | documentation-cohesion | [documentation-cohesion/SKILL.md](documentation-cohesion/SKILL.md) | Ensure fixes integrate naturally and remain readable by humans and AI agents | Creating or refining planning docs, taskboards, prompts, or specification documents |
+| manual-testing-guides | [manual-testing-guides/SKILL.md](manual-testing-guides/SKILL.md) | Author reproducible manual testing guides with setup, sunny/rainy paths, and recovery steps | Creating or revising manual testing guides, runbooks, or validation checklists |
 | rate-limiting-tier-enforcement | [rate-limiting-tier-enforcement/SKILL.md](rate-limiting-tier-enforcement/SKILL.md) | Enforce Step 2 quota and tier gate behavior with deterministic contracts | Step 2 backend middleware and public-endpoint abuse-control work |
 | llm-router-and-model-selection | [llm-router-and-model-selection/SKILL.md](llm-router-and-model-selection/SKILL.md) | Build deterministic tier/mode/callType model routing behavior | Step 3 backend model-routing implementation and tests |
 | system-prompt-assembly | [system-prompt-assembly/SKILL.md](system-prompt-assembly/SKILL.md) | Build goal-type prompt factories and bind assembly behavior | Step 3 prompt-template and assembly implementation work |
@@ -75,6 +77,7 @@ skillMap:
     - repo-workflow
     - scope-creep-guard
     - documentation-cohesion
+    - manual-testing-guides
     - rate-limiting-tier-enforcement
     - llm-router-and-model-selection
     - system-prompt-assembly
@@ -98,6 +101,9 @@ skillMap:
       type: safety-governance
     - name: documentation-cohesion
       path: .github/skills/documentation-cohesion/SKILL.md
+      type: documentation-quality
+    - name: manual-testing-guides
+      path: .github/skills/manual-testing-guides/SKILL.md
       type: documentation-quality
     - name: rate-limiting-tier-enforcement
       path: .github/skills/rate-limiting-tier-enforcement/SKILL.md
