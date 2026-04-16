@@ -2,6 +2,8 @@
 
 This is the tactical workboard for Step 2 in [v1_overarching_plan.md](../../agent_plans/v1_overarching_plan.md). The goal is to convert Step 1 auth context into enforceable limits and access gates that Step 3-5 can build on safely.
 
+Status note (main branch): Step 2 enforcement foundations are implemented. Checklist items in this file are preserved as historical planning artifacts and are not a live completion tracker.
+
 Step 2 is done when the repo has:
 
 1. Redis-backed daily quota enforcement for free-tier usage on protected LLM routes.

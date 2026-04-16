@@ -2,6 +2,12 @@
 
 > Full system architecture for PromptCompiler.
 
+Implementation status (main branch):
+
+- Step 1 and Step 2 backend foundations are active: Supabase auth context, protected-route middleware order (`auth -> ratelimit -> tier`), and `/auth/token` IP abuse protection.
+- `/segment`, `/enhance`, and `/bind` currently run deterministic Step 0 placeholder business behavior behind those foundations.
+- Extension runtime is still bootstrap-level: keepalive background alarm, minimal content-script bootstrap, and popup settings persisted in `chrome.storage.local`.
+
 ---
 
 ## System Overview
@@ -72,7 +78,7 @@ Content Script     → Reads/writes DOM, renders ghost text, handles hotkeys
 Background SW      → Makes all API calls (no CSP restrictions)
                    → Manages per-tab state in chrome.storage.session
                    → Gets killed after ~30s idle — use chrome.alarms keepalive
-                   ↕ chrome.storage.sync
+                   ↕ chrome.storage.local (current popup settings storage)
 Popup              → React UI for mode toggle, project selector, account status
 ```
 
@@ -106,6 +112,8 @@ Protected request (not `/auth/token`) → Auth (JWT validation)
 
 `/auth/token` is public and remains outside the protected middleware chain; Step 2 adds explicit IP-based rate limiting for this endpoint, with IP extraction from trusted proxy headers on Fly.io deployments.
 
+Current Step 0-2 runtime note: the protected routes currently keep placeholder business logic; full model-routing/orchestration behavior starts in Step 3+.
+
 ---
 
 ## Database Layer
@@ -126,10 +134,13 @@ enhancement_history id, user_id, project_id, raw_input, final_prompt, mode, mode
 ### Redis Keys
 
 ```
-rate:daily:{user_id}        → int, TTL 24h (daily enhancement count)
-session:{user_id}           → JSON, TTL 7d (cached user record)
-pending:{tab_id}            → JSON, TTL 30m (in-flight section state)
+rate:daily:{user_id}             → int, reset at next UTC midnight (daily enhancement count)
+rate:auth-token-ip:{encoded_ip}  → int, 60s window (public /auth/token abuse protection)
+session:{user_id}                → JSON, TTL 7d (planned cache surface)
+pending:{tab_id}                 → JSON, TTL 30m (planned in-flight state)
 ```
+
+Current Step 0-2 runtime note: `rate:daily:*` and `rate:auth-token-ip:*` are active; `session:*` and `pending:*` remain planned surfaces.
 
 ---
 
@@ -150,9 +161,11 @@ See [`LLM_ROUTING.md`](LLM_ROUTING.md) for full routing logic.
   → log to enhancement_history
 ```
 
+Current Step 0-2 runtime note: `/enhance` currently validates payloads and returns deterministic placeholder streaming text; model selection starts in Step 3+.
+
 ### Prompt Assembly
 
-The system prompt changes per `goal_type` and `mode`. Each combination has a specific instruction template stored in `backend/src/services/prompts/`.
+Step 3+ target: the system prompt changes per `goal_type` and `mode`, with provider-agnostic template factories in backend service-layer modules.
 
 ---
 

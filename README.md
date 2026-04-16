@@ -47,7 +47,7 @@ promptcompiler/
 ├── backend/            # API server (Bun + Hono + TypeScript)
 │   └── src/
 │       ├── routes/     # /enhance  /segment  /bind  /auth  /projects
-│       ├── services/   # llm.ts  context.ts  auth.ts  ratelimit.ts
+│       ├── services/   # llm.ts  context.ts  supabase.ts  rateLimit.ts
 │       └── middleware/ # auth.ts  ratelimit.ts  tier.ts
 │
 ├── web/                # Account dashboard (React + Vite)
@@ -65,13 +65,13 @@ promptcompiler/
 | Layer | Tech |
 |---|---|
 | Extension build | [WXT](https://wxt.dev) + TypeScript |
-| Extension popup | React 18 + Vite |
+| Extension popup | React 19 + Vite |
 | Backend runtime | Bun + [Hono](https://hono.dev) |
 | Auth + DB | Supabase (Postgres + Auth + pgvector) |
 | Cache | Redis (Upstash) |
 | LLM — free tier | Groq (Llama 3.3 70B) |
 | LLM — pro tier | Anthropic Claude (Haiku / Sonnet) |
-| Dashboard | React 18 + Vite |
+| Dashboard | React 19 + Vite |
 | Deploy | Fly.io (backend) + Vercel (web dashboard) |
 
 ---
@@ -149,10 +149,15 @@ bash scripts/smoke-tests.sh
 # Backend tests and typing
 cd backend && bun test && npm run typecheck
 
+# Strict integration gate (fails fast if integration env is missing)
+cd backend && npm run test:integration
+
 # Extension and web type/build checks
 cd ../extension && npm run typecheck && npm run build
 cd ../web && npm run typecheck && npm run build
 ```
+
+The strict integration gate requires local Supabase/Redis env exports (for example `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ANON_KEY`, `JWT_SECRET`, and `REDIS_URL`).
 
 ### Step 0 Behavior Note
 

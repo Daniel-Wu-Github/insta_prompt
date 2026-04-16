@@ -171,12 +171,12 @@ How to run: execute in Terminal B after env export.
 
 ```bash
 cd /root/insta_prompt/backend
-bun test src/__tests__/auth.integration.test.ts src/__tests__/routes.validation.test.ts
+REQUIRE_INTEGRATION_ENV=1 bun test src/__tests__/auth.integration.test.ts src/__tests__/routes.validation.test.ts
 ```
 
 Sunny day expected:
 
-1. Suite passes with `13 pass` and `0 fail`.
+1. Targeted Step 1 suites pass with `0 fail` (exact pass count may change as tests are added).
 2. Integration tests confirm:
 	- profile bootstrap trigger creates a `free` profile row.
 	- protected routes return deterministic 401 for missing/invalid/expired tokens.
@@ -187,7 +187,7 @@ Sunny day expected:
 
 Rainy day expected:
 
-1. If integration test says it is skipped, env vars are missing from the shell.
+1. If integration env vars are missing from the shell, the run fails fast with an explicit missing-env error (no silent skip).
 2. If expected auth/validation envelopes are replaced by `503`, Redis is down or `REDIS_URL` is missing.
 3. If test run errors before execution, local Supabase is likely down.
 4. If RLS/auth assertions fail, run DB reset, ensure Redis is up, rerun env export, then rerun this matrix.
@@ -446,12 +446,13 @@ How to run: execute in Terminal B after env export.
 
 ```bash
 cd /root/insta_prompt/backend
+npm run test:integration
 bun test
 ```
 
 Sunny day expected:
 
-1. Suite passes with `30 pass` and `0 fail`.
+1. Step 2 suite pass summary reports `0 fail` (exact pass count may change as tests are added).
 2. Integration tests confirm:
 	- free-tier protected-route boundary is deterministic at requests `29 -> 30 -> 31`.
 	- concurrent near-boundary protected requests stay deterministic.
@@ -464,7 +465,7 @@ Sunny day expected:
 
 Rainy day expected:
 
-1. If integration tests say they are skipped, env vars are missing from the shell.
+1. If integration env vars are missing from the shell, `npm run test:integration` fails fast with an explicit missing-env error (no silent skip).
 2. If rate-limit integration fails early, Redis is likely down or `REDIS_URL` is missing/incorrect.
 3. If envelope/header assertions fail, Step 2 middleware behavior may have drifted.
 4. Recovery: restore Redis + Supabase, rerun env export, then rerun `bun test`.

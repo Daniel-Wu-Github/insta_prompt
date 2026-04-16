@@ -2,6 +2,8 @@
 
 This is the tactical workboard for Step 1 in [v1_overarching_plan.md](../../agent_plans/v1_overarching_plan.md). The goal is to turn the Step 0 scaffold into a trustworthy identity and persistence layer that later routing, tier, and extension flows can rely on.
 
+Status note (main branch): Step 1 runtime foundations are implemented. Checklist items in this file are preserved as historical planning artifacts and are not a live completion tracker.
+
 ## 1.0 Resolve Review Feedback
 
 Goal: make the data/auth mechanics explicit before the implementation slices start.

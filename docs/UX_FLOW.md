@@ -2,13 +2,18 @@
 
 > The complete interaction model for PromptCompiler's clause-segmentation UX.
 
+Status note:
+
+- Current Step 0-2 extension runtime is bootstrap-level (popup settings, background keepalive, content-script bootstrap).
+- The interaction sequence below is the target Step 5+ UX flow.
+
 ---
 
 ## Core Concept: The Prompt Compiler
 
 PromptCompiler treats your casual input as **source code** that gets compiled into a structured prompt. The process is visible and controllable — you can see each clause being classified, preview its expansion, and accept or skip sections individually before a final assembly pass.
 
-The key design principle: **nothing is replaced in the text box until you explicitly commit**. The compilation is non-destructive until `Cmd+Enter`.
+The key design principle: **nothing is replaced in the text box until you explicitly commit**. The compilation is non-destructive until `Enter` after the binding preview.
 
 ---
 
@@ -127,7 +132,7 @@ The panel appears as a 320px card anchored to the bottom-right of the target inp
 The user types clauses in any order. PromptCompiler remaps them to the canonical slot order that LLMs respond best to:
 
 ```
-[context] → [tech_stack] → [constraints] → [actions] → [output_format] → [edge_cases]
+[context] → [tech_stack] → [constraint] → [action] → [output_format] → [edge_case]
 ```
 
 The underlines show **where text sits in the original input**. The binding pass assembles in **canonical order** regardless. The user never needs to think about this — it happens silently.
@@ -148,6 +153,8 @@ The binding pass output streams in as ghost text. The user reviews it, then pres
 ---
 
 ## Sites That Work
+
+Target compatibility matrix (post Step 5 implementation):
 
 | Site | Input Type | Status |
 |---|---|---|

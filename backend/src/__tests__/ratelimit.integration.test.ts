@@ -57,6 +57,30 @@ function envName(...parts: string[]): string {
 	return parts.join("_");
 }
 
+type IntegrationEnvRequirement = {
+	label: string;
+	envNames: string[];
+};
+
+const REQUIRE_INTEGRATION_ENV = process.env.REQUIRE_INTEGRATION_ENV === "1";
+
+const INTEGRATION_ENV_REQUIREMENTS: IntegrationEnvRequirement[] = [
+	{ label: "SUPABASE_URL (or API_URL)", envNames: ["SUPABASE_URL", "API_URL"] },
+	{
+		label: "SUPABASE_SERVICE_KEY (or SERVICE_ROLE_KEY)",
+		envNames: [envName("SUPABASE", "SERVICE", "KEY"), envName("SERVICE", "ROLE", "KEY")],
+	},
+	{
+		label: "SUPABASE_ANON_KEY (or ANON_KEY or PUBLISHABLE_KEY)",
+		envNames: [envName("SUPABASE", "ANON", "KEY"), envName("ANON", "KEY"), envName("PUBLISHABLE", "KEY")],
+	},
+	{ label: "REDIS_URL", envNames: ["REDIS_URL"] },
+];
+
+function getMissingIntegrationEnvLabels(): string[] {
+	return INTEGRATION_ENV_REQUIREMENTS.filter(({ envNames }) => !firstNonEmptyEnv(...envNames)).map(({ label }) => label);
+}
+
 function resolveIntegrationConfig(): IntegrationConfig | null {
 	const supabaseUrl = firstNonEmptyEnv("SUPABASE_URL", "API_URL");
 	const serviceRoleKey = firstNonEmptyEnv(envName("SUPABASE", "SERVICE", "KEY"), envName("SERVICE", "ROLE", "KEY"));
@@ -185,10 +209,17 @@ async function postAuthToken(refreshToken: string, extraHeaders: Record<string, 
 }
 
 const integrationConfig = resolveIntegrationConfig();
+const missingIntegrationEnvLabels = getMissingIntegrationEnvLabels();
 
 if (!integrationConfig) {
 	describe("rate limit integration (local Redis + Supabase harness)", () => {
-		it("skips when local Redis/Supabase integration env is not configured", () => {
+		it(REQUIRE_INTEGRATION_ENV ? "fails when required integration env is missing" : "skips when local Redis/Supabase integration env is not configured", () => {
+			if (REQUIRE_INTEGRATION_ENV) {
+				throw new Error(
+					`REQUIRE_INTEGRATION_ENV=1 was set, but integration env is missing: ${missingIntegrationEnvLabels.join(", ")}`,
+				);
+			}
+
 			expect(true).toBe(true);
 		});
 	});
@@ -369,6 +400,38 @@ if (!integrationConfig) {
 			expect(response.status).toBe(503);
 			expect(body.error.code).toBe("RATE_LIMIT_UNAVAILABLE");
 			expect(body.error.message).toBe("Rate limit service unavailable");
+		});
+
+		it("repairs daily quota expiry when the initial EXPIREAT call does not stick", async () => {
+			let used = 0;
+			let expireAtCalls = 0;
+			let ttlCalls = 0;
+
+			__setRateLimitRedisClientForTests({
+				async incr() {
+					used += 1;
+					return used;
+				},
+				async expireat() {
+					expireAtCalls += 1;
+					return expireAtCalls === 1 ? 0 : 1;
+				},
+				async expire() {
+					return 1;
+				},
+				async ttl() {
+					ttlCalls += 1;
+					return -1;
+				},
+			});
+
+			const firstResponse = await postSegment(freeUser.accessToken);
+			const secondResponse = await postSegment(freeUser.accessToken);
+
+			expect(firstResponse.status).toBe(200);
+			expect(secondResponse.status).toBe(200);
+			expect(expireAtCalls).toBe(2);
+			expect(ttlCalls).toBe(1);
 		});
 
 			it("returns deterministic 503 RATE_LIMIT_UNAVAILABLE when protected Redis quota calls hang", async () => {

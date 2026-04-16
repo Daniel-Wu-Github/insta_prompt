@@ -137,7 +137,10 @@ Step 1 RLS intent:
 
 ## Redis Key Layout
 
-All Redis via Upstash (serverless Redis, no persistent connection needed from Bun).
+Redis client resolution in backend:
+
+- Use `REDIS_URL` first when present (local/dev runtime via `ioredis`).
+- Otherwise use hosted Upstash credentials (`UPSTASH_REDIS_URL` + `UPSTASH_REDIS_TOKEN`).
 
 ```
 rate:daily:{user_id}
@@ -145,15 +148,20 @@ rate:daily:{user_id}
   TTL: seconds until midnight UTC
   description: daily enhancement count for rate limiting
 
+rate:auth-token-ip:{encoded_ip}
+  type: string (integer counter)
+  TTL: 60 seconds
+  description: public /auth/token IP abuse-protection window
+
 session:{user_id}
   type: string (JSON)
   TTL: 7 days
-  description: cached user record (tier, limits) to avoid Supabase round-trips
+  description: planned cached user record (tier, limits) to avoid Supabase round-trips
 
 pending:{tab_id}:{section_id}
   type: string (JSON)
   TTL: 30 minutes
-  description: in-flight enhancement state (survives SW restarts)
+  description: planned in-flight enhancement state (survives SW restarts)
 ```
 
 ---
@@ -167,8 +175,8 @@ pending:{tab_id}:{section_id}
 | Projects + context (v2) | Supabase Postgres | Relational, co-located with user data |
 | Context embeddings (v2) | Supabase pgvector | Same DB, no separate vector store needed at v1 scale |
 | Enhancement history | Supabase Postgres | Queryable, user-owned |
-| Rate limit counters | Upstash Redis | Atomic INCR, sub-ms, TTL-native |
-| Session cache | Upstash Redis | Avoid Supabase round-trips on every request |
-| Extension settings (mode, project) | chrome.storage.sync | Persists across devices, no server round-trip |
-| Per-tab clause state | chrome.storage.session | Survives SW restarts, cleared on browser close |
-| JWT (extension) | chrome.storage.session | Secure, not localStorage |
+| Rate limit counters | Redis (local via `REDIS_URL` or hosted Upstash) | Atomic INCR, sub-ms, TTL-native |
+| Session cache | Upstash Redis | Planned cache to avoid Supabase round-trips on every request |
+| Extension settings (mode, project) | chrome.storage.local | Current popup setting persistence surface |
+| Per-tab clause state | chrome.storage.session (planned) | Planned state surface that survives SW restarts and clears on browser close |
+| JWT (extension) | chrome.storage.session (planned) | Planned extension session surface; avoid localStorage |

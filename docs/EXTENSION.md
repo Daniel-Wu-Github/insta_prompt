@@ -1,351 +1,100 @@
 # Chrome Extension
 
-> MV3 deep-dive: process model, content script, background service worker, state machine.
+> MV3 process boundaries plus current implementation status.
 
 ---
 
-## Process Model (Manifest V3)
+## Current Status (Step 0-2)
 
-Three completely isolated JS environments. They cannot share memory — all communication goes through `chrome.runtime` message passing or `chrome.storage`.
+The extension is currently a bootstrap surface, not the full clause UX runtime.
 
-```
-CONTENT SCRIPT (per tab)
-  - Reads/writes page DOM
-  - Detects textarea / contenteditable inputs
-  - Renders ghost text overlay + underlines
-  - Handles Tab / Cmd+Enter / Esc hotkeys
-  - CANNOT make cross-origin fetch (blocked by page CSP)
-  ↕  chrome.runtime.connect() → Port (for streaming)
-  ↕  chrome.runtime.sendMessage() (for one-shot messages)
+- Manifest permissions: `storage`, `alarms`
+- Manifest host permissions: `<all_urls>`
+- Background service worker: keepalive alarm (`0.4` minutes / `24s`) only
+- Content script: bootstrap registration and debug log
+- Popup: React UI for mode/project controls and account CTA
+- Popup settings storage: `chrome.storage.local` key `promptcompiler.settings`
 
-BACKGROUND SERVICE WORKER (one shared instance)
-  - Makes all fetch calls to the PromptCompiler API
-  - Streams SSE responses back to content script via Port
-  - Manages per-tab clause state in chrome.storage.session
-  - Holds JWT in chrome.storage.session
-  - Wakes on chrome.alarms keepalive every 24s (avoids 30s kill)
+Current extension files:
 
-POPUP (spawns on icon click, dies on close)
-  - React + Vite bundle
-  - Mode toggle: Efficiency / Balanced / Detailed
-  - Project selector (v2)
-  - Account status + upgrade CTA
-  - Reads/writes settings via chrome.storage.sync
-```
+- `extension/src/background/index.ts`
+- `extension/src/content/index.ts`
+- `extension/src/popup/App.tsx`
+- `extension/src/popup/hooks/useSettings.ts`
 
 ---
 
-## Manifest
+## Current Manifest Snapshot
 
 ```json
 {
   "manifest_version": 3,
   "name": "PromptCompiler",
-  "version": "1.0.0",
-  "description": "Compile vibe-coding notes into structured AI prompts",
-  "permissions": [
-    "storage",
-    "alarms",
-    "activeTab"
-  ],
-  "host_permissions": [
-    "https://api.promptcompiler.dev/*"
-  ],
-  "background": {
-    "service_worker": "background.js",
-    "type": "module"
-  },
-  "content_scripts": [{
-    "matches": ["<all_urls>"],
-    "js": ["content_script.js"],
-    "run_at": "document_idle"
-  }],
-  "action": {
-    "default_popup": "popup.html",
-    "default_icon": "icons/icon48.png"
-  }
-}
-```
-
-`host_permissions` is what allows the service worker to call the API. Without it, even the SW is blocked.
-
----
-
-## Content Script
-
-### Input Detection
-
-```typescript
-// Attach to all textareas and contenteditables, including dynamically added ones
-const observer = new MutationObserver(() => attachToInputs());
-observer.observe(document.body, { subtree: true, childList: true });
-
-function attachToInputs() {
-  const inputs = [
-    ...document.querySelectorAll('textarea'),
-    ...document.querySelectorAll('[contenteditable="true"]'),
-    ...document.querySelectorAll('[contenteditable="plaintext-only"]'),
-  ];
-  inputs.forEach(el => {
-    if ((el as any).__pc_attached) return;
-    (el as any).__pc_attached = true;
-    el.addEventListener('input', handleInput);
-    el.addEventListener('keydown', handleHotkey);
-    el.addEventListener('focus', handleFocus);
-    el.addEventListener('blur', handleBlur);
-  });
-}
-```
-
-The `__pc_attached` flag prevents double-attaching when React/Angular re-renders the same element.
-
-### Ghost Text Rendering
-
-Ghost text is a `position: fixed` overlay div placed at the caret position. It never touches the textarea value — it floats on top.
-
-```typescript
-// Create once, reposition on every input event
-const ghostEl = document.createElement('div');
-ghostEl.id = 'pc-ghost-overlay';
-Object.assign(ghostEl.style, {
-  position: 'fixed',
-  pointerEvents: 'none',
-  zIndex: '2147483647',
-  color: 'rgba(128, 128, 128, 0.55)',
-  whiteSpace: 'pre-wrap',
-  fontFamily: 'inherit',
-  fontSize: 'inherit',
-  lineHeight: 'inherit',
-});
-document.body.appendChild(ghostEl);
-```
-
-For textarea caret position, use the `textarea-caret-position` library (npm package). For contenteditable, use `window.getSelection().getRangeAt(0).getBoundingClientRect()`.
-
-### Underline Rendering (Mirror Overlay Technique)
-
-You cannot style partial text inside a `<textarea>`. The solution: a mirror `<div>` positioned pixel-perfectly behind the textarea (with matching CSS) containing `<mark>` spans for each clause.
-
-```typescript
-function createMirrorEl(targetEl: HTMLTextAreaElement): HTMLDivElement {
-  const mirror = document.createElement('div');
-  const styles = window.getComputedStyle(targetEl);
-  // Copy all relevant CSS to mirror
-  ['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing',
-   'padding','borderWidth','width','height','overflowY','wordWrap',
-   'whiteSpace','boxSizing'].forEach(prop => {
-    mirror.style[prop as any] = styles[prop as any];
-  });
-  Object.assign(mirror.style, {
-    position: 'absolute',
-    top: '0', left: '0',
-    pointerEvents: 'none',
-    color: 'transparent',       // hide the text, show only underlines
-    background: 'transparent',
-    zIndex: '2147483646',
-  });
-  return mirror;
-}
-
-function renderUnderlines(sections: Section[]) {
-  // Build HTML: each section wrapped in a colored <mark> span
-  const html = sections.map(s =>
-    `<mark style="
-      background: transparent;
-      text-decoration: underline;
-      text-decoration-color: ${GOAL_TYPE_COLORS[s.goalType]};
-      text-decoration-thickness: ${s.confidence >= 0.85 ? '2px' : '1px'};
-      text-decoration-style: ${s.confidence >= 0.85 ? 'solid' : 'dashed'};
-    ">${s.text}</mark>`
-  ).join('');
-  mirrorEl.innerHTML = html;
-}
-```
-
-### Hotkey Handler
-
-```typescript
-function handleHotkey(e: KeyboardEvent) {
-  const state = getCurrentTabState();
-
-  // Tab — accept oldest unaccepted section
-  if (e.key === 'Tab' && !e.shiftKey && state.status === 'PREVIEWING') {
-    e.preventDefault();
-    acceptNextSection();
-    return;
-  }
-
-  // Shift+Tab — skip current section
-  if (e.key === 'Tab' && e.shiftKey) {
-    e.preventDefault();
-    skipCurrentSection();
-    return;
-  }
-
-  // Cmd+Enter — trigger binding pass
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-    if (state.status === 'ACCEPTING' && state.acceptedSections.length > 0) {
-      e.preventDefault();
-      triggerBindingPass();
-    }
-    return;
-  }
-
-  // Enter — commit bound prompt to DOM
-  if (e.key === 'Enter' && state.status === 'BINDING_COMPLETE') {
-    e.preventDefault();
-    commitToDom(state.boundPrompt);
-    return;
-  }
-
-  // Esc — dismiss
-  if (e.key === 'Escape') {
-    dismissAll();
-    return;
-  }
+  "description": "Step 0 bootstrap extension surface for PromptCompiler.",
+  "version": "0.1.0",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["<all_urls>"]
 }
 ```
 
 ---
 
-## Background Service Worker
+## MV3 Process Boundaries (Required Architecture)
 
-### Keepalive (Critical — MV3)
+These boundaries are architectural invariants even while features are staged:
 
-Chrome kills the SW after ~30s idle. Use alarms to wake it periodically:
+```
+Content Script (per tab)
+  - DOM detection, overlays, hotkeys
+  - Never owns provider credentials
+  - Communicates via runtime messaging/storage
 
-```typescript
-// On install
-chrome.alarms.create('keepalive', { periodInMinutes: 0.4 }); // every 24s
-chrome.alarms.onAlarm.addListener(() => { /* no-op wake */ });
+Background Service Worker (shared)
+  - Owns backend API calls and streaming proxy behavior
+  - Owns auth/session handoff and per-tab orchestration state
+  - Handles MV3 lifecycle and keepalive concerns
+
+Popup (ephemeral UI)
+  - Owns user-facing settings and account controls
+  - Reads/writes extension settings storage
 ```
 
-### Streaming Proxy
-
-Content scripts open a long-lived Port to stream tokens back in real time:
-
-```typescript
-const activeRequests = new Map<number, AbortController>();
-
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== 'pc-stream') return;
-
-  port.onMessage.addListener(async (msg: PortMessage) => {
-    if (msg.type === 'ENHANCE') {
-      const ctrl = new AbortController();
-      activeRequests.set(msg.tabId, ctrl);
-
-      try {
-        const token = await getStoredToken();
-        const res = await fetch('https://api.promptcompiler.dev/enhance', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(msg.payload),
-          signal: ctrl.signal,
-        });
-
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) { port.postMessage({ type: 'DONE', tabId: msg.tabId }); break; }
-          port.postMessage({ type: 'TOKEN', data: decoder.decode(value), tabId: msg.tabId });
-        }
-      } catch (e: any) {
-        if (e.name !== 'AbortError') port.postMessage({ type: 'ERROR', tabId: msg.tabId });
-      } finally {
-        activeRequests.delete(msg.tabId);
-      }
-    }
-
-    if (msg.type === 'CANCEL') {
-      activeRequests.get(msg.tabId)?.abort();
-    }
-  });
-});
-```
-
-### State Storage Schema
-
-All state lives in `chrome.storage.session` (survives navigation, cleared on browser close):
-
-```typescript
-interface TabState {
-  tabId: number;
-  status: 'IDLE' | 'TYPING' | 'SEGMENTING' | 'PREVIEWING' | 'ACCEPTING' | 'BINDING' | 'BINDING_COMPLETE';
-  rawText: string;
-  sections: Section[];
-  acceptedIds: string[];
-  boundPrompt: string | null;
-}
-
-interface Section {
-  id: string;
-  text: string;
-  goalType: GoalType;
-  canonicalOrder: number;
-  confidence: number;
-  dependsOn: string[];
-  expansion: string;
-  status: 'idle' | 'streaming' | 'ready' | 'accepted' | 'stale';
-  color: string;
-}
-```
+No direct provider calls from content script or popup are allowed.
 
 ---
 
-## Popup (React)
+## Target Runtime (Step 5+)
 
-Built with React 18 + Vite via WXT's popup entry point.
+Planned Step 5+ behavior:
 
-```
-popup/
-├── App.tsx
-├── components/
-│   ├── ModeToggle.tsx      # Efficiency / Balanced / Detailed pills
-│   ├── ProjectSelector.tsx # Dropdown for active project (v2)
-│   ├── AccountStatus.tsx   # Tier badge + daily usage meter
-│   └── UpgradeCTA.tsx      # Show when free tier hits limit
-└── hooks/
-    └── useSettings.ts      # chrome.storage.sync r/w
-```
+- Content script detects active text inputs and manages underlines/ghost text/hotkeys.
+- Background service worker proxies `/segment`, `/enhance`, and `/bind` through backend APIs.
+- Background streams SSE token events to content script over runtime ports.
+- Tab and section state follows shared contracts (`TabStatus`, `SectionStatus`) from `shared/contracts/domain.ts`.
+- `/auth/token` session exchange remains backend-mediated; extension stores only app-consumable session state.
 
-Settings written to `chrome.storage.sync` so they persist across devices.
+Target storage split:
+
+- Popup settings: `chrome.storage.local` (current) unless a future migration to sync is explicitly approved.
+- Runtime tab/session state: `chrome.storage.session` (planned).
 
 ---
 
-## Build Setup (WXT)
+## Build and Run
 
 ```bash
 cd extension
-bun install
-bun run dev    # Opens Chrome with extension hot-reloaded
-bun run build  # Production bundle → .output/chrome-mv3/
+npm install
+npm run dev
 ```
 
-```typescript
-// wxt.config.ts
-import { defineConfig } from 'wxt';
-export default defineConfig({
-  extensionEntrypoints: {
-    background: './src/background/index.ts',
-    'content-scripts/main': './src/content/index.ts',
-    popup: './src/popup/index.html',
-  },
-  vite: () => ({
-    // Vite config for popup React build
-  }),
-});
-```
+For WSL/manual popup loading details, use the guide in `docs/agent_plans/v1_testing_notes.md`.
 
 ---
 
-## Known Problem Sites
+## Source Of Truth Links
 
-| Site | Problem | Status |
-|---|---|---|
-| Google Docs | Canvas rendering — no DOM text | ❌ Skip v1 |
-| Notion | React re-renders clobber attached listeners | ✅ Fix: MutationObserver re-attach |
-| Shadow DOM inputs | `querySelector` can't pierce | ⚠️ Fallback to floating panel |
-| CSP-strict enterprise apps | Inline style injection blocked | ⚠️ Fallback to floating panel |
-| ChatGPT | Shadow DOM on input but pierced in content scripts | ✅ Works |
+- `docs/ARCHITECTURE.md`
+- `docs/UX_FLOW.md`
+- `docs/CLAUSE_PIPELINE.md`
+- `docs/BACKEND_API.md`

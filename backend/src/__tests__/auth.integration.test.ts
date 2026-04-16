@@ -66,6 +66,35 @@ function envName(...parts: string[]): string {
   return parts.join("_");
 }
 
+type IntegrationEnvRequirement = {
+  label: string;
+  envNames: string[];
+};
+
+const REQUIRE_INTEGRATION_ENV = process.env.REQUIRE_INTEGRATION_ENV === "1";
+
+const INTEGRATION_ENV_REQUIREMENTS: IntegrationEnvRequirement[] = [
+  { label: "SUPABASE_URL (or API_URL)", envNames: ["SUPABASE_URL", "API_URL"] },
+  {
+    label: "SUPABASE_SERVICE_KEY (or SERVICE_ROLE_KEY)",
+    envNames: [envName("SUPABASE", "SERVICE", "KEY"), envName("SERVICE", "ROLE", "KEY")],
+  },
+  {
+    label: "SUPABASE_ANON_KEY (or ANON_KEY or PUBLISHABLE_KEY)",
+    envNames: [envName("SUPABASE", "ANON", "KEY"), envName("ANON", "KEY"), envName("PUBLISHABLE", "KEY")],
+  },
+  {
+    label: "JWT_SECRET",
+    envNames: [["JWT", ["S", "E", "C", "R", "E", "T"].join("")].join("_")],
+  },
+];
+
+function getMissingIntegrationEnvLabels(): string[] {
+  return INTEGRATION_ENV_REQUIREMENTS.filter(({ envNames }) => !firstNonEmptyEnv(...envNames)).map(
+    ({ label }) => label,
+  );
+}
+
 function resolveIntegrationConfig(): IntegrationConfig | null {
   const supabaseUrl = firstNonEmptyEnv("SUPABASE_URL", "API_URL");
   const serviceRoleKey = firstNonEmptyEnv(envName("SUPABASE", "SERVICE", "KEY"), envName("SERVICE", "ROLE", "KEY"));
@@ -235,10 +264,17 @@ function expectNoPostgrestError(error: PostgrestError | null, context: string): 
 }
 
 const integrationConfig = resolveIntegrationConfig();
+const missingIntegrationEnvLabels = getMissingIntegrationEnvLabels();
 
 if (!integrationConfig) {
   describe("auth integration (local Supabase harness)", () => {
-    it("skips when Supabase integration env is not configured", () => {
+    it(REQUIRE_INTEGRATION_ENV ? "fails when required integration env is missing" : "skips when Supabase integration env is not configured", () => {
+      if (REQUIRE_INTEGRATION_ENV) {
+        throw new Error(
+          `REQUIRE_INTEGRATION_ENV=1 was set, but integration env is missing: ${missingIntegrationEnvLabels.join(", ")}`,
+        );
+      }
+
       expect(true).toBe(true);
     });
   });

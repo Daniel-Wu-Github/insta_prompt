@@ -2,11 +2,16 @@
 
 > The 8-step process that transforms raw user input into a fully structured AI prompt.
 
+Status note:
+
+- Step 0-2 currently provides deterministic placeholder backend behavior with stable request/response contracts.
+- Step 3+ introduces semantic classification and production model-routing behavior.
+
 ---
 
 ## Overview
 
-The clause pipeline is the intellectual core of PromptCompiler. It runs partially on the client (steps 1-2, 4, 6, 8) and partially on the backend (steps 3, 5, 7). Client-side steps are instant; backend steps involve LLM calls.
+The clause pipeline is the intellectual core of PromptCompiler. It runs partially on the client (steps 1-2, 4, 6, 8) and partially on the backend (steps 3, 5, 7). Client-side steps are instant. In Step 0-2, backend steps return placeholders; in Step 3+, backend steps involve production LLM orchestration.
 
 ```
 User types → [1] Syntactic split → [2] Debounce gate
@@ -74,9 +79,11 @@ function handleInput(text: string) {
 ---
 
 ## Step 3 — Semantic Classification (POST /segment)
-**Location:** Backend → Groq Llama 3.1 8B | **Cost:** ~$0 (free tier) | **Latency:** ~40ms
+**Location:** Backend | **Cost/latency:** placeholder in Step 0-2, model-based in Step 3+
 
-Sends draft segments to a small, fast model that returns structured JSON classifying each clause.
+Current Step 0-2 behavior: request validation plus deterministic placeholder classification.
+
+Target Step 3+ behavior: send draft segments to a small, fast model that returns structured JSON classifying each clause.
 
 ### Request
 ```json
@@ -94,7 +101,7 @@ Sends draft segments to a small, fast model that returns structured JSON classif
       "id": "s1",
       "text": "build a dark mode toggle",
       "goal_type": "action",
-      "canonical_order": 3,
+      "canonical_order": 4,
       "confidence": 0.95,
       "depends_on": []
     },
@@ -110,7 +117,7 @@ Sends draft segments to a small, fast model that returns structured JSON classif
       "id": "s3",
       "text": "deploy to vercel",
       "goal_type": "output_format",
-      "canonical_order": 4,
+      "canonical_order": 5,
       "confidence": 0.82,
       "depends_on": ["s1"]
     }
@@ -153,6 +160,8 @@ Cleans up the classified sections before expansion.
 
 Each section is expanded independently in parallel. Expansions stream back in real time, populating hover previews before the user even looks at them.
 
+Current Step 0-2 behavior: request validation plus deterministic placeholder streaming output.
+
 ### Request (per section)
 ```json
 {
@@ -165,7 +174,7 @@ Each section is expanded independently in parallel. Expansions stream back in re
     { "id": "s2", "text": "use react", "goal_type": "tech_stack" }
   ],
   "mode": "balanced",
-  "project_context": null
+  "project_id": null
 }
 ```
 
@@ -204,13 +213,15 @@ section.element.style.textDecoration = 'underline dotted'; // change underline s
 
 Triggered by `Cmd+Enter`. All accepted expansions are sent in **canonical order** (by `canonical_order` field, not the order the user accepted them) to a single LLM call.
 
+Current Step 0-2 behavior: deterministic assembly that sorts by `canonical_order` and joins section expansions.
+
 ### Request
 ```json
 {
   "sections": [
     { "canonical_order": 2, "goal_type": "tech_stack", "expansion": "React 18 with TypeScript..." },
-    { "canonical_order": 3, "goal_type": "action", "expansion": "Implement a dark/light mode toggle..." },
-    { "canonical_order": 4, "goal_type": "output_format", "expansion": "Deploy configuration for Vercel..." }
+    { "canonical_order": 4, "goal_type": "action", "expansion": "Implement a dark/light mode toggle..." },
+    { "canonical_order": 5, "goal_type": "output_format", "expansion": "Deploy configuration for Vercel..." }
   ],
   "mode": "balanced"
 }
@@ -262,7 +273,7 @@ SEGMENTING   Debounce fired, /segment call in flight
 PREVIEWING   Sections classified, expansions streaming in background
 ACCEPTING    User is tabbing through sections
 BINDING      Cmd+Enter pressed, /bind in flight
-COMMITTED    Enter pressed, DOM updated, state reset
+BINDING_COMPLETE Bind output is ready; Enter will commit and reset state to IDLE
 ```
 
 Any edit to the raw text while in ACCEPTING or BINDING resets to TYPING and re-triggers the pipeline from step 2.

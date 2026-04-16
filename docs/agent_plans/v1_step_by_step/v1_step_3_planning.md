@@ -22,7 +22,8 @@ The following decisions are now locked for implementation and must not be re-ope
 |---|---|---|---|
 | Routing key contract | Model selection key is `{callType, tier, mode}` and resolves through one deterministic router table in `backend/src/services/llm.ts`. | Prevents route-specific ad hoc branching and keeps Step 4-6 integration deterministic. | 3.3 router implementation, 3.7 matrix tests |
 | Segment model invariant | `/segment` always routes to the cheapest fast classifier path regardless of mode and tier. | Segment is classification-only and must remain cost/latency optimized. | 3.3 routing matrix, Step 4 `/segment` integration |
-| Tier/provider routing guard | Free generation routes are Groq-only, pro routes are mode-sensitive Anthropic paths, and BYOK routes are explicit user-provider paths. | Preserves Step 2 tier assumptions and prevents unauthorized paid-model drift. | 3.3 router matrix, 3.7 policy tests |
+| Tier/provider routing guard | Free generation routes are Groq-only, pro routes are mode-sensitive Anthropic paths, and BYOK routes use user-owned credentials and user-configured provider/model settings without changing the route contract. | Preserves Step 2 tier assumptions and prevents unauthorized paid-model drift. | 3.3 router matrix, 3.7 policy tests |
+| BYOK route contract | BYOK keeps the same request/response envelopes as managed tiers; only credential source and selected provider/model differ. | Prevents accidental endpoint or payload drift while leaving routing deterministic. | 3.3–3.6 handoff helpers, 3.7 contract tests |
 | Mode token-budget policy | Token budgets are mode-bound (`efficiency`, `balanced`, `detailed`) and are not tier-bound. | Keeps verbosity control deterministic and decoupled from tier entitlement. | 3.3 budget helper, 3.4 templates, 3.7 tests |
 | Prompt-factory contract | Prompt templates are pure deterministic factories per goal type plus bind; route handlers do not inline prompt text. | Prevents route-level duplication and keeps deterministic prompt quality checks possible. | 3.4 prompt modules, 3.6 handoff helpers |
 | Sibling-context policy | `/enhance` prompt assembly injects sibling context only when present, with explicit formatting and bounded size semantics. | Preserves quality gains without unbounded prompt growth or hidden context leakage. | 3.4 template serializer, Step 5 route orchestration |
@@ -121,6 +122,8 @@ Planning rule:
 1. Implement router logic in `backend/src/services/llm.ts`.
 2. Keep `selectModel` side-effect free.
 3. Unknown combinations must return deterministic failure behavior.
+4. Keep routing key semantics anchored to `{callType, tier, mode}` while allowing optional resolved BYOK config input (`preferredProvider`, `preferredModel`) to be passed into `selectModel`.
+5. `selectModel` must not perform DB/network calls or payload-hint inference; missing BYOK config maps to deterministic safe failure behavior.
 
 ### Decision D2: Segment path remains fixed to low-cost classifier model
 
@@ -202,9 +205,10 @@ Rationale:
 
 Planning rule:
 
-1. Groq and Anthropic adapters emit normalized token/error events.
+1. Groq and Anthropic adapters emit normalized token/error events as structured objects through an async iterable interface.
 2. Adapter contract maps provider-specific errors to backend-safe error envelopes.
 3. Keep envelope compatibility with `token | done | error` contract.
+4. Adapters do not emit raw SSE strings; SSE string serialization remains at Step 5/6 route boundaries.
 
 ### Decision D8: Retry/backoff behavior targets transient failures only
 
@@ -216,9 +220,10 @@ Rationale:
 
 Planning rule:
 
-1. Retry on retryable provider failures (timeout, 429, retryable 5xx).
-2. Keep bounded retry attempts with deterministic backoff schedule.
-3. Non-retryable errors fail fast with normalized mapping.
+1. Retry only on request timeout, connection reset, HTTP 429, HTTP 502, HTTP 503, and HTTP 504.
+2. Use bounded exponential backoff with a 3-attempt cap, 100ms initial delay, doubling on each retry, and a 5s max delay cap.
+3. Do not retry HTTP 400, 401, 403, 404, or 500; fail fast with normalized mapping.
+4. Apply the same policy across Groq and Anthropic adapters unless a later source-of-truth doc changes it.
 
 ## File-Level Plan for Remaining Step 3 Slices
 
@@ -232,7 +237,7 @@ Dependencies: Step 2 tier context assumptions and routing policy docs must be st
 
 Execution order constraint:
 
-1. Lock route-key and model-config types first.
+1. Lock route-key, optional resolved BYOK config input, and model-config types first.
 2. Implement route matrix next.
 3. Add mode-budget helper and negative-path handling.
 4. Add exhaustive matrix tests before moving forward.
@@ -265,7 +270,8 @@ Execution order constraint:
 1. Define provider-agnostic adapter interface first.
 2. Implement Groq and Anthropic adapters against that interface.
 3. Add deterministic error mapping and retry/backoff.
-4. Add resilience tests for retryable and non-retryable paths.
+4. Keep adapter output object-based via async iterable; do not emit raw SSE strings from adapters.
+5. Add resilience tests for retryable and non-retryable paths.
 
 ### 3.6 Step 4-6 service handoff helpers
 
@@ -280,6 +286,7 @@ Execution order constraint:
 1. Expose stable service entrypoints for route consumers.
 2. Keep route handlers thin and free of embedded template logic.
 3. Preserve Step boundary by deferring production route behavior.
+4. Route-file edits are compile-safe only: imports, route registration, and typed signatures. Do not add request validation, prompt assembly, provider calls, error mapping, retry logic, or business logic to `/segment`, `/enhance`, or `/bind` in this step.
 
 ### 3.7 Test matrix and resilience hardening
 
@@ -294,7 +301,10 @@ Test boundary rule:
 1. Cover full `callType x tier x mode` matrix and unsupported combinations.
 2. Cover prompt determinism and sibling-context injection behavior.
 3. Cover adapter retry/backoff and normalized error mapping.
-4. Keep tests deterministic and network-isolated (no live provider dependency).
+4. Cover retryable provider failures separately for Groq and Anthropic: timeout, connection reset, HTTP 429, HTTP 502, HTTP 503, and HTTP 504.
+5. Cover non-retryable provider failures separately for Groq and Anthropic: HTTP 400, 401, 403, 404, and 500.
+6. Cover retry exhaustion with deterministic mocks only.
+7. Keep tests deterministic and network-isolated (no live provider dependency).
 
 ### 3.8 Final review and handoff
 

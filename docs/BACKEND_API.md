@@ -8,6 +8,12 @@ Step scope note:
 - Step 2 adds rate-limit and tier-enforcement behavior.
 - Step 3+ implements full `/segment`, `/enhance`, and `/bind` model-routing behavior.
 
+Current implementation snapshot (main, Step 0-2):
+
+- `/segment`, `/enhance`, and `/bind` currently keep deterministic placeholder business behavior after validation and middleware checks.
+- `/segment` maps each input segment to `goal_type = action`, `canonical_order = 4`, and `confidence = 0.5`.
+- `/enhance` and `/bind` currently stream tokenized placeholder output in the standard SSE envelope.
+
 ---
 
 ## Stack
@@ -36,8 +42,14 @@ Step scope note:
 | GET | `/projects` | v2-ready | Schema and contracts may exist before full v2 behavior |
 | POST | `/projects/:id/context` | v2-ready | Schema and contracts may exist before full v2 behavior |
 
+BYOK does not introduce alternate request or response shapes for `/segment`, `/enhance`, or `/bind`. The same endpoint contracts apply across free, pro, and BYOK; only the backend provider/model source selected after auth, rate-limit, and tier checks changes.
+
+Step 3 service boundary contract: route handlers pass resolved BYOK preferences into the pure model-router surface and serialize SSE at the transport boundary. Provider adapters emit normalized object events and do not emit raw SSE strings directly.
+
 ### POST `/enhance`
 Expand a single classified section. Returns SSE stream.
+
+Current Step 0-2 behavior: validates the request and streams a deterministic placeholder expansion.
 
 **Request**
 ```json
@@ -67,6 +79,8 @@ data: {"type":"done"}
 ### POST `/segment`
 Classify raw text segments into sections with goal_type, canonical_order, and confidence.
 
+Current Step 0-2 behavior: deterministic placeholder classifier.
+
 **Request**
 ```json
 {
@@ -79,9 +93,9 @@ Classify raw text segments into sections with goal_type, canonical_order, and co
 ```json
 {
   "sections": [
-    { "id": "s1", "text": "build a dark mode toggle", "goal_type": "action", "canonical_order": 4, "confidence": 0.95, "depends_on": [] },
-    { "id": "s2", "text": "use react", "goal_type": "tech_stack", "canonical_order": 2, "confidence": 0.98, "depends_on": [] },
-    { "id": "s3", "text": "deploy to vercel", "goal_type": "output_format", "canonical_order": 5, "confidence": 0.82, "depends_on": ["s1"] }
+    { "id": "s1", "text": "build a dark mode toggle", "goal_type": "action", "canonical_order": 4, "confidence": 0.5, "depends_on": [] },
+    { "id": "s2", "text": "use react", "goal_type": "action", "canonical_order": 4, "confidence": 0.5, "depends_on": [] },
+    { "id": "s3", "text": "deploy to vercel", "goal_type": "action", "canonical_order": 4, "confidence": 0.5, "depends_on": [] }
   ]
 }
 ```
@@ -111,8 +125,6 @@ Refresh a Supabase session and return the verified token plus app context. Calle
 
 Route class: public endpoint (no Authorization header required).
 
-`[TODO: Step 2 IP-based rate limiter uses trusted proxy headers (fly-client-ip / x-forwarded-for) and keeps success-path headers minimal]`
-
 **Request**
 ```json
 {
@@ -134,6 +146,9 @@ Route class: public endpoint (no Authorization header required).
 
 **Behavior**
 - Require a non-empty `refresh_token` request field; return `400` for missing/empty values before any Supabase call.
+- Apply a Step 2 IP limiter (`20 requests / 60 seconds`) keyed by trusted proxy IP (`fly-client-ip`, fallback `x-forwarded-for`).
+- Return `429` with `Retry-After` when the IP limiter is exceeded.
+- Keep successful and throttled `/auth/token` responses free of `X-RateLimit-*` headers.
 - Use `supabase.auth.refreshSession()` server-side to refresh the Supabase session.
 - Verify the refreshed access token with `supabase.auth.getUser()` before returning a response.
 - Rely on the `auth.users` trigger to create the `profiles` row on first signup.
@@ -158,7 +173,7 @@ Accept chunked file content + embedding for a project's repo context. (v2)
 Every protected request (not `/auth/token`) →
   1. CORS headers (allow extension origin)
   2. Auth middleware — verify Supabase JWT, extract user_id + tier (Step 1 context population)
-  3. Rate limit middleware — Redis INCR on rate:daily:{user_id}, TTL 24h (Step 2 enforcement)
+  3. Rate limit middleware — Redis INCR on rate:daily:{user_id}, reset at next UTC midnight with missing-TTL self-heal (Step 2 enforcement)
   4. Tier middleware — enforce tier eligibility policy from verified auth context (401/403); model routing remains in Step 3
   5. Route handler
 ```
@@ -167,21 +182,11 @@ Every protected request (not `/auth/token`) →
 
 For Step 2 IP-based abuse controls on `/auth/token`, extract client IP from trusted proxy headers (`fly-client-ip`, fallback `x-forwarded-for`) rather than raw socket IP.
 
-```typescript
-// backend/src/middleware/auth.ts
-export const authMiddleware = async (c: Context, next: Next) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '');
-  if (!token) return c.json({ error: 'Unauthorized' }, 401);
+Auth context source of truth:
 
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return c.json({ error: 'Unauthorized' }, 401);
-
-  const tier = await resolveProfileTier(data.user.id); // read from profiles-backed app metadata
-  c.set('userId', data.user.id);
-  c.set('tier', tier ?? 'free');
-  await next();
-};
-```
+- `authMiddleware` validates `Authorization: Bearer <token>` and verifies the token against Supabase.
+- On success, middleware sets `userId` and `tier` in request context for downstream middlewares.
+- Unauthorized requests return deterministic `401` envelopes.
 
 ---
 
@@ -193,7 +198,10 @@ export const authMiddleware = async (c: Context, next: Next) => {
 | Pro | Unlimited | Haiku + Sonnet + Groq |
 | BYOK | Unlimited | Any (user's key) |
 
-Redis key: `rate:daily:{user_id}` — INCR on each call, TTL set to end of UTC day.
+Redis keys:
+
+- `rate:daily:{user_id}` — free-tier protected-route quota, reset to next UTC midnight.
+- `rate:auth-token-ip:{encoded_ip}` — public `/auth/token` IP quota, `20` requests per `60` seconds.
 
 ---
 
@@ -209,6 +217,10 @@ ANTHROPIC_API_KEY=
 GROQ_API_KEY=
 
 # Redis
+# local/dev (preferred when set)
+REDIS_URL=
+
+# hosted
 UPSTASH_REDIS_URL=
 UPSTASH_REDIS_TOKEN=
 
@@ -232,14 +244,11 @@ backend/
 │   │   ├── auth.ts           # POST /auth/token
 │   │   └── projects.ts       # GET/POST /projects (v2)
 │   ├── services/
-│   │   ├── llm.ts            # LLM client + model router
-│   │   ├── prompts/          # System prompt templates per goal_type + mode
-│   │   │   ├── action.ts
-│   │   │   ├── constraint.ts
-│   │   │   ├── tech_stack.ts
-│   │   │   └── ...
-│   │   ├── context.ts        # Project context retrieval (v2)
-│   │   └── history.ts        # Write to enhancement_history table
+│   │   ├── context.ts        # Project context lookup (v2-ready placeholder)
+│   │   ├── history.ts        # Enhancement history helpers (v2-ready)
+│   │   ├── llm.ts            # LLM router/adapter surface (Step 3+)
+│   │   ├── rateLimit.ts      # Redis quota primitives (daily + auth-token IP)
+│   │   └── supabase.ts       # Supabase auth/session verification
 │   └── middleware/
 │       ├── auth.ts
 │       ├── ratelimit.ts

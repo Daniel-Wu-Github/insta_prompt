@@ -1,9 +1,46 @@
 # Integration Audit: Steps 0-2
 
 ## Outcome
-Step 0, Step 1, and Step 2 are mostly integrated correctly, but not flawless yet. One substantive runtime risk remains in the daily quota expiry path, and there are multiple documentation mismatches that could mislead implementation and testing.
+Historical baseline outcome from the original audit pass (pre-remediation): Step 0, Step 1, and Step 2 were mostly integrated correctly, but not flawless yet. One substantive runtime risk remained in the daily quota expiry path, and there were multiple documentation mismatches.
 
-## Findings
+## Pass 4 Closure Update (2026-04-15)
+
+This audit was the pre-remediation baseline. Passes 1-4 have now been executed.
+
+### Resolved Since Baseline
+
+1. Daily quota expiry self-heal gap is resolved.
+Evidence: [backend/src/services/rateLimit.ts](../../../backend/src/services/rateLimit.ts#L213), [backend/src/__tests__/rateLimit.service.test.ts](../../../backend/src/__tests__/rateLimit.service.test.ts#L14), [backend/src/__tests__/ratelimit.integration.test.ts](../../../backend/src/__tests__/ratelimit.integration.test.ts#L402).
+
+2. Core Step 0-2 contract-doc drift is reconciled for backend, architecture, clause pipeline, UX flow, extension, and data model docs.
+Evidence: [docs/BACKEND_API.md](../../BACKEND_API.md#L11), [docs/ARCHITECTURE.md](../../ARCHITECTURE.md#L5), [docs/CLAUSE_PIPELINE.md](../../CLAUSE_PIPELINE.md#L5), [docs/UX_FLOW.md](../../UX_FLOW.md#L5), [docs/EXTENSION.md](../../EXTENSION.md#L5), [docs/DATA_MODELS.md](../../DATA_MODELS.md#L139).
+
+3. Integration false-green risk now has a strict gate path.
+Evidence: [backend/package.json](../../../backend/package.json#L9), [backend/src/__tests__/auth.integration.test.ts](../../../backend/src/__tests__/auth.integration.test.ts#L74), [backend/src/__tests__/ratelimit.integration.test.ts](../../../backend/src/__tests__/ratelimit.integration.test.ts#L65), [docs/agent_plans/v1_testing_notes.md](../../v1_testing_notes.md#L174).
+
+4. Historical workboard ambiguity is reduced by explicit status notes in Step 1 and Step 2 tactical docs.
+Evidence: [docs/agent_plans/v1_step_by_step/v1_step_1.md](../../v1_step_by_step/v1_step_1.md#L5), [docs/agent_plans/v1_step_by_step/v1_step_2.md](../../v1_step_by_step/v1_step_2.md#L5).
+
+### Verification Executed In Pass 4
+
+1. Strict integration gate with local harness env passed.
+Command: `cd backend && npm run test:integration`
+Result: 18 pass, 0 fail.
+
+2. Full backend test matrix with local Supabase/Redis env passed.
+Command: `cd backend && npm test`
+Result: 32 pass, 0 fail.
+
+3. Backend typecheck passed.
+Command: `cd backend && npm run typecheck`
+Result: 0 type errors.
+
+### Residual / Deferred
+
+1. Existing Step 3 planning/workflow docs and commit-log updates already present in the working tree were intentionally not modified as part of the Step 0-2 remediation pass.
+2. CI wiring for mandatory strict integration gate remains a follow-up concern outside this pass.
+
+## Historical Baseline Findings (Pre-remediation)
 
 ### High
 
@@ -70,7 +107,7 @@ Evidence: [backend/src/__tests__/auth.integration.test.ts](../../../backend/src/
 3. Ran workspace diagnostics queries for backend and shared contracts; no immediate compile or lint diagnostics were reported.
 4. Did not execute runtime tests in this pass, so behavior assertions come from static code and test inspection.
 
-## Residual Risk And Next Steps
+## Historical Residual Risk And Next Steps (Pre-remediation)
 
 1. Fix the daily quota TTL self-heal gap in [backend/src/services/rateLimit.ts](../../../backend/src/services/rateLimit.ts#L224) and add a regression test that simulates `incr` success plus `expireat` failure.
 2. Reconcile contract docs first in [docs/CLAUSE_PIPELINE.md](../../CLAUSE_PIPELINE.md#L168), [docs/UX_FLOW.md](../../UX_FLOW.md#L11), [docs/BACKEND_API.md](../../BACKEND_API.md#L114), and [docs/EXTENSION.md](../../EXTENSION.md#L33).

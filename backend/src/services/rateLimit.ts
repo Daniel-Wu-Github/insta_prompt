@@ -210,6 +210,17 @@ function epochSeconds(now: Date): number {
 	return Math.floor(now.getTime() / 1000);
 }
 
+async function ensureDailyQuotaExpiryIfMissing(
+	redis: RateLimitRedisClient,
+	key: string,
+	reset: number,
+): Promise<void> {
+	const ttl = await withRedisTimeout(redis.ttl(key), "ttl");
+	if (typeof ttl !== "number" || ttl <= 0) {
+		await withRedisTimeout(redis.expireat(key, reset), "expireat");
+	}
+}
+
 export async function consumeDailyFreeQuota(userId: string, now = new Date()): Promise<DailyQuotaResult> {
 	const redis = resolveRedisClient();
 	if (!redis) {
@@ -223,6 +234,8 @@ export async function consumeDailyFreeQuota(userId: string, now = new Date()): P
 		const used = await withRedisTimeout(redis.incr(key), "incr");
 		if (used === 1) {
 			await withRedisTimeout(redis.expireat(key, reset), "expireat");
+		} else {
+			await ensureDailyQuotaExpiryIfMissing(redis, key, reset);
 		}
 
 		const remaining = Math.max(0, FREE_DAILY_LIMIT - used);

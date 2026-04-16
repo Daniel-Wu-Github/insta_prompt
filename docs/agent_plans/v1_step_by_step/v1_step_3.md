@@ -241,7 +241,8 @@ Goal: make model selection deterministic and testable before route handlers cons
 - [ ] Keep `/segment` pinned to the cheapest fast classifier path.
 - [ ] Keep free-tier generation routes on Groq-only paths.
 - [ ] Keep pro-tier routing mode-sensitive (`efficiency` vs `balanced`/`detailed`).
-- [ ] Keep BYOK routing explicit and deterministic.
+- [ ] Keep BYOK routing explicit and deterministic without changing the request/response shape.
+- [ ] Keep `selectModel` pure by accepting optional resolved `byokConfig` input (`preferredProvider`, `preferredModel`) instead of DB/network calls or payload-hint inference.
 - [ ] Add explicit handling for unknown/unsupported route keys.
 - [ ] Add route-matrix tests that cover all supported combinations and key negative paths.
 
@@ -265,7 +266,9 @@ Requirements:
 - /segment always resolves to the fast low-cost classifier path
 - free tier generation routes resolve to Groq-only models
 - pro tier routes are mode-aware
-- BYOK route is explicit and deterministic
+- BYOK route is explicit and deterministic without changing the request/response shape
+- `selectModel` remains pure and accepts optional resolved `byokConfig` input (`preferredProvider`, `preferredModel`)
+- no DB/network calls or payload-hint inference inside `selectModel`
 - unknown combinations map to deterministic safe behavior
 - no network calls or provider-client logic inside pure model-selection function
 
@@ -329,8 +332,9 @@ Goal: normalize provider-specific streaming behavior behind one backend service 
 - [ ] Add Groq streaming adapter surface with normalized token/error emission.
 - [ ] Add Anthropic streaming adapter surface with normalized token/error emission.
 - [ ] Define one adapter interface that Step 5 and Step 6 route handlers can reuse.
+- [ ] Require adapters to emit structured stream events via async iterable output, not raw SSE strings.
 - [ ] Add deterministic mapping from provider errors to backend-safe error codes/messages.
-- [ ] Add retry/backoff behavior for transient provider failures (timeouts, 429, retryable 5xx).
+- [ ] Add retry/backoff behavior for transient provider failures: timeout, connection reset, HTTP 429, HTTP 502, HTTP 503, and HTTP 504 with bounded exponential backoff.
 - [ ] Keep BYOK path explicitly separated from managed provider credentials.
 - [ ] Keep SSE envelope compatibility with `token | done | error` contracts.
 
@@ -352,7 +356,11 @@ Allowed files:
 
 Requirements:
 - Groq and Anthropic adapters normalize streaming into shared token/error semantics
+- adapters emit object events through async iterable output; they do not emit raw SSE strings
 - deterministic error mapping and retry/backoff for transient failures
+- bounded exponential backoff with a 3-attempt cap, 100ms initial delay, doubling on each retry, and a 5s max delay cap
+- retry only on request timeout, connection reset, HTTP 429, HTTP 502, HTTP 503, and HTTP 504
+- do not retry HTTP 400, 401, 403, 404, or 500
 - keep provider keys and network calls backend-only
 - do not implement Step 5 /enhance route orchestration yet
 - do not implement Step 6 /bind route orchestration yet
@@ -374,7 +382,8 @@ Goal: expose stable helper APIs that later route steps can consume without rewri
 - [ ] Add explicit service entrypoints for selecting models by route context.
 - [ ] Add explicit service entrypoints for enhance-template assembly and bind-template assembly.
 - [ ] Ensure bind helper contract expects canonical ordering semantics.
-- [ ] Keep route handlers thin and unchanged unless a minimal wiring shim is needed for compile safety.
+- [ ] Keep route handlers thin and unchanged except for compile-safe wiring.
+- [ ] For route files, allow only imports, route registration, and typed signatures. Do not add request validation, prompt assembly, provider calls, error mapping, retry logic, or business logic in `/segment`, `/enhance`, or `/bind`.
 - [ ] Keep production route behavior deferred to Step 4-6 implementation slices.
 
 Copilot session:
@@ -395,6 +404,8 @@ Allowed files:
 Requirements:
 - expose stable helper APIs for Step 4-6 routes
 - preserve canonical bind-order expectations in helper contracts
+- route files may only receive compile-safe wiring: imports, route registration, and typed signatures
+- do not add request validation, prompt assembly, provider calls, error mapping, retry logic, or business logic to /segment, /enhance, or /bind
 - do not implement full /segment, /enhance, or /bind production behavior in this step
 
 Stop when service-layer contracts are stable and tested.
@@ -416,6 +427,9 @@ Goal: prove Step 3 service behavior before route implementation starts.
 - [ ] Add tests for sibling-context injection behavior.
 - [ ] Add tests for provider adapter retry/backoff behavior.
 - [ ] Add tests for normalized provider error mapping.
+- [ ] Cover retryable provider failures separately for Groq and Anthropic: timeout, connection reset, HTTP 429, HTTP 502, HTTP 503, and HTTP 504.
+- [ ] Cover non-retryable provider failures separately for Groq and Anthropic: HTTP 400, 401, 403, 404, and 500.
+- [ ] Cover retry exhaustion with deterministic mocks.
 - [ ] Keep tests network-isolated and deterministic (no live provider dependency).
 
 Copilot session:
@@ -433,6 +447,9 @@ Cover:
 - prompt-factory determinism by goal_type and mode
 - sibling-context injection behavior
 - provider adapter retry/backoff and error normalization
+- retryable provider failures: timeout, connection reset, HTTP 429, HTTP 502, HTTP 503, and HTTP 504
+- non-retryable provider failures: HTTP 400, 401, 403, 404, and 500
+- retry exhaustion with deterministic mocks
 
 Do not add Step 4-6 route behavior assertions.
 ```
