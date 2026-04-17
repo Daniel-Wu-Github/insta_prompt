@@ -480,3 +480,21 @@
 	- Fulfillment: Delivers the requested Pass 4 execution with end-to-end verification and written closure.
 	- Deviation: None.
 
+## Entry 023 - 2026-04-16 - Recorded Step 3 Rainy-Path Validation
+
+- Task: Manually validate Step 3 rainy-day error handling and record the results.
+- What the agent did: Reran the Step 3 unit matrix and manual probes for Groq missing key, Groq malformed stream, Anthropic retry exhaustion, and BYOK missing-config fallback after the interruption; then captured the observations in the testing notes.
+- How the agent did it: Used bun test plus bun -e probes against the local provider adapters and router selection, then updated the Step 3 notes section in docs/agent_plans/v1_testing_notes.md.
+- Files edited:
+	- docs/agent_plans/v1_testing_notes.md
+	- logging/progress_log.md
+- Verification:
+	- Step 3 unit matrix passed with 30 pass and 0 fail.
+	- Groq missing-key probe emitted PROVIDER_KEY_MISSING with retryable false.
+	- Groq malformed-stream probe emitted PROVIDER_INVALID_RESPONSE with retryable false.
+	- Anthropic retry-exhaustion probe ran 3 attempts and ended with PROVIDER_UNAVAILABLE, retryable true, status 503.
+	- BYOK missing-config probe returned provider user and model byok-config-missing.
+- Task alignment:
+	- Fulfillment: Records the requested rainy-path validation results and keeps the testing guide current.
+	- Deviation: None.
+

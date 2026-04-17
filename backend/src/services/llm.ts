@@ -1,6 +1,28 @@
 import type { Mode, Tier } from "../../../shared/contracts";
+import type { GoalType } from "../../../shared/contracts";
+
+import {
+	bindPrompt,
+	canonicalizeBindSections,
+	createGoalPrompt,
+	type BindPromptSection,
+	type PromptSibling,
+} from "./prompts";
 
 export * from "./providers";
+export {
+	bindPrompt,
+	CANONICAL_BIND_SLOT_ORDER,
+	canonicalizeBindSections,
+	canonicalSlotForGoalType,
+	createGoalPrompt,
+	goalPromptFactories,
+	type BindPromptInput,
+	type BindPromptSection,
+	type GoalPromptFactory,
+	type GoalPromptInput,
+	type PromptSibling,
+} from "./prompts";
 
 export type CallType = "segment" | "enhance" | "bind";
 
@@ -22,6 +44,39 @@ export type ModelConfig = {
 	provider: ModelProvider;
 	model: string;
 	maxTokens: number;
+};
+
+export type EnhanceTemplateInput = {
+	goalType: GoalType;
+	sectionText: string;
+	mode: Mode;
+	siblings?: PromptSibling[] | null;
+};
+
+export type BindTemplateInput = {
+	mode: Mode;
+	sections: BindPromptSection[];
+};
+
+export type EnhanceServiceHandoffInput = {
+	route: RouteKey & { callType: "enhance" };
+	template: EnhanceTemplateInput;
+};
+
+export type BindServiceHandoffInput = {
+	route: RouteKey & { callType: "bind" };
+	template: BindTemplateInput;
+};
+
+export type EnhanceServiceHandoff = {
+	model: ModelConfig;
+	prompt: string;
+};
+
+export type BindServiceHandoff = {
+	model: ModelConfig;
+	prompt: string;
+	canonicalSections: BindPromptSection[];
 };
 
 export const MODE_TOKEN_BUDGETS: Record<Mode, number> = {
@@ -85,6 +140,43 @@ function resolveByokModel(byokConfig?: ByokConfig | null): string {
 
 function isGenerationCallType(callType: CallType | string): callType is Exclude<CallType, "segment"> {
 	return callType === "enhance" || callType === "bind";
+}
+
+export function assembleEnhanceTemplate(input: EnhanceTemplateInput): string {
+	return createGoalPrompt(input.goalType, {
+		sectionText: input.sectionText,
+		mode: input.mode,
+		siblings: input.siblings ?? [],
+	});
+}
+
+export function assembleBindTemplate(input: BindTemplateInput): { prompt: string; canonicalSections: BindPromptSection[] } {
+	const canonicalSections = canonicalizeBindSections(input.sections);
+
+	return {
+		prompt: bindPrompt({
+			mode: input.mode,
+			sections: canonicalSections,
+		}),
+		canonicalSections,
+	};
+}
+
+export function prepareEnhanceServiceHandoff(input: EnhanceServiceHandoffInput): EnhanceServiceHandoff {
+	return {
+		model: selectModel(input.route),
+		prompt: assembleEnhanceTemplate(input.template),
+	};
+}
+
+export function prepareBindServiceHandoff(input: BindServiceHandoffInput): BindServiceHandoff {
+	const assembled = assembleBindTemplate(input.template);
+
+	return {
+		model: selectModel(input.route),
+		prompt: assembled.prompt,
+		canonicalSections: assembled.canonicalSections,
+	};
 }
 
 export function selectModel({ callType, tier, mode, byokConfig }: RouteKey): ModelConfig {

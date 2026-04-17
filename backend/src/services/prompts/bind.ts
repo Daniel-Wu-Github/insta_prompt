@@ -29,6 +29,10 @@ function normalizeText(text: string): string {
 	return text.replace(WHITESPACE_RE, " ").trim();
 }
 
+export function canonicalSlotForGoalType(goalType: GoalType): number {
+	return CANONICAL_SLOT_INDEX[goalType];
+}
+
 function truncateText(text: string, maxChars: number): string {
 	if (text.length <= maxChars) {
 		return text;
@@ -42,7 +46,7 @@ function truncateText(text: string, maxChars: number): string {
 }
 
 function canonicalSort(a: BindPromptSection, b: BindPromptSection): number {
-	const byGoalType = CANONICAL_SLOT_INDEX[a.goal_type] - CANONICAL_SLOT_INDEX[b.goal_type];
+	const byGoalType = canonicalSlotForGoalType(a.goal_type) - canonicalSlotForGoalType(b.goal_type);
 	if (byGoalType !== 0) {
 		return byGoalType;
 	}
@@ -58,22 +62,28 @@ function formatCanonicalOrderLine(): string {
 	return CANONICAL_BIND_SLOT_ORDER.map((goalType) => `${CANONICAL_SLOT_INDEX[goalType]}. ${goalType}`).join(" -> ");
 }
 
+export function canonicalizeBindSections(sections: readonly BindPromptSection[]): BindPromptSection[] {
+	return sections
+		.map((section) => {
+			return {
+				canonical_order: canonicalSlotForGoalType(section.goal_type),
+				goal_type: section.goal_type,
+				expansion: normalizeText(section.expansion),
+			};
+		})
+		.filter((section) => section.expansion.length > 0)
+		.sort(canonicalSort);
+}
+
 export function serializeBindSections(sections: readonly BindPromptSection[]): string {
 	if (sections.length === 0) {
 		return "- (no sections provided)";
 	}
 
-	const lines = sections
-		.slice()
-		.sort(canonicalSort)
+	const lines = canonicalizeBindSections(sections)
 		.map((section) => {
-			const normalized = normalizeText(section.expansion);
-			if (normalized.length === 0) {
-				return "";
-			}
-
-			const bounded = truncateText(normalized, MAX_SECTION_EXPANSION_CHARS);
-			const canonicalSlot = CANONICAL_SLOT_INDEX[section.goal_type];
+			const bounded = truncateText(section.expansion, MAX_SECTION_EXPANSION_CHARS);
+			const canonicalSlot = canonicalSlotForGoalType(section.goal_type);
 			return `- [slot ${canonicalSlot} | ${section.goal_type}] ${bounded}`;
 		})
 		.filter((line) => line.length > 0);

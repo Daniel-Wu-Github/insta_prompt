@@ -10,6 +10,7 @@ import {
 	goalPromptFactories,
 	serializeSiblingContext,
 } from "../services/prompts";
+import { selectModel } from "../services/llm";
 
 const GOAL_TYPES: GoalType[] = [
 	"context",
@@ -26,6 +27,12 @@ const EXPECTED_MODE_SNIPPETS: Record<Mode, string> = {
 	efficiency: "Keep the output concise: one compact paragraph.",
 	balanced: "Use a structured response with 2-3 short sections.",
 	detailed: "Produce a comprehensive, highly specific prompt fragment.",
+};
+
+const EXPECTED_MODE_TOKEN_BUDGETS: Record<Mode, number> = {
+	efficiency: 150,
+	balanced: 500,
+	detailed: 1000,
 };
 
 describe("prompt factories", () => {
@@ -58,6 +65,13 @@ describe("prompt factories", () => {
 				expect(first).toContain(EXPECTED_MODE_SNIPPETS[mode]);
 				expect(first.toLowerCase()).not.toContain("anthropic");
 				expect(first.toLowerCase()).not.toContain("groq");
+
+				const selected = selectModel({
+					callType: "enhance",
+					tier: "free",
+					mode,
+				});
+				expect(selected.maxTokens).toBe(EXPECTED_MODE_TOKEN_BUDGETS[mode]);
 			}
 		}
 	});

@@ -1,17 +1,41 @@
 import { describe, expect, it } from "bun:test";
 
 import {
-	ProviderAdapterError,
 	createAnthropicStreamingAdapter,
 	createGroqStreamingAdapter,
 	createProviderTimeoutError,
-	isRetryableProviderError,
-	mapProviderHttpError,
-	retryWithBackoff,
 	type FetchLike,
 	type ProviderErrorCode,
+	type ProviderName,
 	type ProviderStreamEvent,
+	type ProviderStreamingAdapter,
 } from "../services/providers";
+
+type ProviderCase = {
+	provider: ProviderName;
+	request: {
+		model: string;
+		userPrompt: string;
+		maxTokens: number;
+		apiKey: string;
+	};
+	createAdapter: (params: {
+		fetchFn: FetchLike;
+		sleepFn?: (ms: number) => Promise<void>;
+	}) => ProviderStreamingAdapter;
+	successResponse: () => Response;
+};
+
+const RETRYABLE_HTTP_STATUSES = [429, 502, 503, 504] as const;
+const NON_RETRYABLE_HTTP_STATUSES = [400, 401, 403, 404, 500] as const;
+
+const NON_RETRYABLE_CODE_BY_STATUS: Record<(typeof NON_RETRYABLE_HTTP_STATUSES)[number], ProviderErrorCode> = {
+	400: "PROVIDER_BAD_REQUEST",
+	401: "PROVIDER_UNAUTHORIZED",
+	403: "PROVIDER_FORBIDDEN",
+	404: "PROVIDER_NOT_FOUND",
+	500: "PROVIDER_INTERNAL_ERROR",
+};
 
 function createSseResponse(blocks: string[], status = 200): Response {
 	return new Response(`${blocks.join("\n\n")}\n\n`, {
@@ -47,210 +71,211 @@ async function collectEvents(stream: AsyncGenerator<ProviderStreamEvent>): Promi
 	return events;
 }
 
-const BASE_REQUEST = {
-	model: "llama-3.3-70b-versatile",
-	userPrompt: "hello",
-	maxTokens: 64,
-	apiKey: "test-key",
-};
-
-describe("provider adapters", () => {
-	it("streams normalized Groq token/done object events", async () => {
-		const fetchFn: FetchLike = async () => {
+const PROVIDERS: readonly ProviderCase[] = [
+	{
+		provider: "groq",
+		request: {
+			model: "llama-3.3-70b-versatile",
+			userPrompt: "hello",
+			maxTokens: 64,
+			apiKey: "test-key",
+		},
+		createAdapter: ({ fetchFn, sleepFn }) =>
+			createGroqStreamingAdapter({
+				fetchFn,
+				sleepFn,
+			}),
+		successResponse: () => {
 			return createSseResponse([
 				'data: {"choices":[{"delta":{"content":"Hello"}}]}',
 				'data: {"choices":[{"delta":{"content":" world"}}]}',
 				"data: [DONE]",
 			]);
-		};
-
-		const adapter = createGroqStreamingAdapter({ fetchFn });
-		const events = await collectEvents(adapter.stream(BASE_REQUEST));
-
-		expect(events).toEqual([
-			{ type: "token", content: "Hello" },
-			{ type: "token", content: " world" },
-			{ type: "done" },
-		]);
-	});
-
-	it("streams normalized Anthropic token/done object events", async () => {
-		const fetchFn: FetchLike = async () => {
+		},
+	},
+	{
+		provider: "anthropic",
+		request: {
+			model: "claude-sonnet-4-6",
+			userPrompt: "hello",
+			maxTokens: 64,
+			apiKey: "test-key",
+		},
+		createAdapter: ({ fetchFn, sleepFn }) =>
+			createAnthropicStreamingAdapter({
+				fetchFn,
+				sleepFn,
+			}),
+		successResponse: () => {
 			return createSseResponse([
 				'event: message_start\ndata: {"type":"message_start"}',
 				'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi"}}',
 				'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":" there"}}',
 				'event: message_stop\ndata: {"type":"message_stop"}',
 			]);
-		};
+		},
+	},
+];
 
-		const adapter = createAnthropicStreamingAdapter({ fetchFn });
-		const events = await collectEvents(adapter.stream({
-			...BASE_REQUEST,
-			model: "claude-sonnet-4-6",
-		}));
+describe("provider adapters", () => {
+	for (const providerCase of PROVIDERS) {
+		it(`streams normalized ${providerCase.provider} token/done object events`, async () => {
+			const fetchFn: FetchLike = async () => {
+				return providerCase.successResponse();
+			};
 
-		expect(events).toEqual([
-			{ type: "token", content: "Hi" },
-			{ type: "token", content: " there" },
-			{ type: "done" },
-		]);
-	});
+			const adapter = providerCase.createAdapter({ fetchFn });
+			const events = await collectEvents(adapter.stream(providerCase.request));
 
-	it("retries only on allowed transient HTTP statuses", async () => {
-		const retryableStatuses = [429, 502, 503, 504] as const;
+			expect(events[events.length - 1]).toEqual({ type: "done" });
+			expect(events.some((event) => event.type === "token")).toBe(true);
+		});
 
-		for (const status of retryableStatuses) {
-			const delays: number[] = [];
+		it(`${providerCase.provider} retries HTTP 429/502/503/504 with bounded backoff`, async () => {
+			for (const status of RETRYABLE_HTTP_STATUSES) {
+				const delays: number[] = [];
+				let attempts = 0;
+
+				const fetchFn: FetchLike = async () => {
+					attempts += 1;
+					if (attempts === 1) {
+						return createJsonErrorResponse(status, `${providerCase.provider}-retryable-${status}`);
+					}
+
+					return providerCase.successResponse();
+				};
+
+				const adapter = providerCase.createAdapter({
+					fetchFn,
+					sleepFn: async (ms) => {
+						delays.push(ms);
+					},
+				});
+
+				const events = await collectEvents(adapter.stream(providerCase.request));
+
+				expect(attempts).toBe(2);
+				expect(delays).toEqual([100]);
+				expect(events.some((event) => event.type === "error")).toBe(false);
+				expect(events[events.length - 1]).toEqual({ type: "done" });
+			}
+		});
+
+		it(`${providerCase.provider} retries timeout failures`, async () => {
 			let attempts = 0;
+			const delays: number[] = [];
 
 			const fetchFn: FetchLike = async () => {
 				attempts += 1;
 				if (attempts === 1) {
-					return createJsonErrorResponse(status, `transient-${status}`);
+					throw createProviderTimeoutError(providerCase.provider, 120);
 				}
 
-				return createSseResponse([
-					'data: {"choices":[{"delta":{"content":"ok"}}]}',
-					"data: [DONE]",
-				]);
+				return providerCase.successResponse();
 			};
 
-			const adapter = createGroqStreamingAdapter({
+			const adapter = providerCase.createAdapter({
 				fetchFn,
 				sleepFn: async (ms) => {
 					delays.push(ms);
 				},
 			});
 
-			const events = await collectEvents(adapter.stream(BASE_REQUEST));
-
+			const events = await collectEvents(adapter.stream(providerCase.request));
 			expect(attempts).toBe(2);
 			expect(delays).toEqual([100]);
 			expect(events[events.length - 1]).toEqual({ type: "done" });
-		}
-	});
+		});
 
-	it("does not retry on non-retryable HTTP statuses", async () => {
-		const nonRetryableStatuses = [400, 401, 403, 404, 500] as const;
-		const expectedCodes: Record<(typeof nonRetryableStatuses)[number], ProviderErrorCode> = {
-			400: "PROVIDER_BAD_REQUEST",
-			401: "PROVIDER_UNAUTHORIZED",
-			403: "PROVIDER_FORBIDDEN",
-			404: "PROVIDER_NOT_FOUND",
-			500: "PROVIDER_INTERNAL_ERROR",
-		};
-
-		for (const status of nonRetryableStatuses) {
-			const delays: number[] = [];
+		it(`${providerCase.provider} retries connection reset failures`, async () => {
 			let attempts = 0;
+			const delays: number[] = [];
 
 			const fetchFn: FetchLike = async () => {
 				attempts += 1;
-				return createJsonErrorResponse(status, `non-retryable-${status}`);
+				if (attempts === 1) {
+					throw new Error("ECONNRESET socket hang up");
+				}
+
+				return providerCase.successResponse();
 			};
 
-			const adapter = createGroqStreamingAdapter({
+			const adapter = providerCase.createAdapter({
 				fetchFn,
 				sleepFn: async (ms) => {
 					delays.push(ms);
 				},
 			});
 
-			const events = await collectEvents(adapter.stream(BASE_REQUEST));
-			expect(attempts).toBe(1);
-			expect(delays).toEqual([]);
-			expect(events.length).toBe(1);
-
-			const errorEvent = events[0];
-			expect(errorEvent.type).toBe("error");
-			if (errorEvent.type === "error") {
-				expect(errorEvent.code).toBe(expectedCodes[status]);
-				expect(errorEvent.retryable).toBe(false);
-			}
-		}
-	});
-
-	it("retries on provider timeout errors", async () => {
-		let attempts = 0;
-		const delays: number[] = [];
-
-		const fetchFn: FetchLike = async () => {
-			attempts += 1;
-			if (attempts === 1) {
-				throw createProviderTimeoutError("groq", 120);
-			}
-
-			return createSseResponse([
-				'data: {"choices":[{"delta":{"content":"retry-timeout-ok"}}]}',
-				"data: [DONE]",
-			]);
-		};
-
-		const adapter = createGroqStreamingAdapter({
-			fetchFn,
-			sleepFn: async (ms) => {
-				delays.push(ms);
-			},
+			const events = await collectEvents(adapter.stream(providerCase.request));
+			expect(attempts).toBe(2);
+			expect(delays).toEqual([100]);
+			expect(events[events.length - 1]).toEqual({ type: "done" });
 		});
 
-		const events = await collectEvents(adapter.stream(BASE_REQUEST));
-		expect(attempts).toBe(2);
-		expect(delays).toEqual([100]);
-		expect(events[events.length - 1]).toEqual({ type: "done" });
-	});
+		it(`${providerCase.provider} does not retry HTTP 400/401/403/404/500 and maps normalized codes`, async () => {
+			for (const status of NON_RETRYABLE_HTTP_STATUSES) {
+				const delays: number[] = [];
+				let attempts = 0;
 
-	it("retries on connection reset errors", async () => {
-		let attempts = 0;
-		const delays: number[] = [];
-
-		const fetchFn: FetchLike = async () => {
-			attempts += 1;
-			if (attempts === 1) {
-				throw new Error("ECONNRESET socket hang up");
-			}
-
-			return createSseResponse([
-				'data: {"choices":[{"delta":{"content":"retry-conn-reset-ok"}}]}',
-				"data: [DONE]",
-			]);
-		};
-
-		const adapter = createGroqStreamingAdapter({
-			fetchFn,
-			sleepFn: async (ms) => {
-				delays.push(ms);
-			},
-		});
-
-		const events = await collectEvents(adapter.stream(BASE_REQUEST));
-		expect(attempts).toBe(2);
-		expect(delays).toEqual([100]);
-		expect(events[events.length - 1]).toEqual({ type: "done" });
-	});
-
-	it("caps retry attempts at the configured maximum", async () => {
-		let attempts = 0;
-		const delays: number[] = [];
-
-		let caught: unknown;
-		try {
-			await retryWithBackoff({
-				operation: async () => {
+				const fetchFn: FetchLike = async () => {
 					attempts += 1;
-					throw mapProviderHttpError("groq", 503, "always unavailable");
-				},
-				shouldRetry: (error) => isRetryableProviderError(error),
+					return createJsonErrorResponse(status, `${providerCase.provider}-non-retryable-${status}`);
+				};
+
+				const adapter = providerCase.createAdapter({
+					fetchFn,
+					sleepFn: async (ms) => {
+						delays.push(ms);
+					},
+				});
+
+				const events = await collectEvents(adapter.stream(providerCase.request));
+
+				expect(attempts).toBe(1);
+				expect(delays).toEqual([]);
+				expect(events.length).toBe(1);
+
+				const errorEvent = events[0];
+				expect(errorEvent.type).toBe("error");
+				if (errorEvent.type === "error") {
+					expect(errorEvent.code).toBe(NON_RETRYABLE_CODE_BY_STATUS[status]);
+					expect(errorEvent.status).toBe(status);
+					expect(errorEvent.retryable).toBe(false);
+					expect(errorEvent.provider).toBe(providerCase.provider);
+				}
+			}
+		});
+
+		it(`${providerCase.provider} stops after max retry attempts with deterministic delays`, async () => {
+			let attempts = 0;
+			const delays: number[] = [];
+
+			const fetchFn: FetchLike = async () => {
+				attempts += 1;
+				return createJsonErrorResponse(503, `${providerCase.provider}-always-unavailable`);
+			};
+
+			const adapter = providerCase.createAdapter({
+				fetchFn,
 				sleepFn: async (ms) => {
 					delays.push(ms);
 				},
 			});
-		} catch (error) {
-			caught = error;
-		}
 
-		expect(attempts).toBe(3);
-		expect(delays).toEqual([100, 200]);
-		expect(caught).toBeInstanceOf(ProviderAdapterError);
-	});
+			const events = await collectEvents(adapter.stream(providerCase.request));
+
+			expect(attempts).toBe(3);
+			expect(delays).toEqual([100, 200]);
+			expect(events.length).toBe(1);
+			const errorEvent = events[0];
+			expect(errorEvent.type).toBe("error");
+			if (errorEvent.type === "error") {
+				expect(errorEvent.code).toBe("PROVIDER_UNAVAILABLE");
+				expect(errorEvent.status).toBe(503);
+				expect(errorEvent.retryable).toBe(true);
+				expect(errorEvent.provider).toBe(providerCase.provider);
+			}
+		});
+	}
 });

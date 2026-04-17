@@ -43,7 +43,7 @@ Current main-branch note: Step 1 auth and protected-route checks run through the
 1. Terminal A: repo root for Supabase commands.
 2. Terminal B: backend folder for env export and test runs.
 
-### Step 1 - Preflight
+### Test 1.1 - Preflight
 
 How to run: run from the repo root before touching Supabase or backend tests.
 
@@ -65,7 +65,7 @@ Rainy day expected:
 1. Missing Docker or Bun causes command-not-found or version errors.
 2. Fix by installing the missing dependency, then rerun preflight.
 
-### Step 1 - Start and Reset Local Supabase
+### Test 1.2 - Start and Reset Local Supabase
 
 How to run: execute in Terminal A. This gives you a clean local state, healthy Redis, and reapplies Step 1 migrations.
 
@@ -99,7 +99,7 @@ npx supabase start
 npx supabase db reset --yes --no-seed
 ```
 
-### Step 1 - Export Local Env Vars For Integration Tests
+### Test 1.3 - Export Local Env Vars For Integration Tests
 
 How to run: execute in Terminal B before `bun test`. Repeat this in every new shell session.
 
@@ -136,7 +136,7 @@ Rainy day expected:
 2. If Redis is down, env export can still succeed but Step 1 auth/protected-route checks can return `503`.
 3. Recovery: start Supabase and Redis first, then rerun this export block.
 
-### Step 1 - Verify Schema Invariants Manually
+### Test 1.4 - Verify Schema Invariants Manually
 
 How to run: execute in Terminal A after reset.
 
@@ -165,7 +165,7 @@ Rainy day expected:
 2. Wrong policy counts indicate RLS migration drift.
 3. Recovery: rerun `npx supabase db reset --yes --no-seed` and repeat checks.
 
-### Step 1 - Run Auth and RLS Test Matrix
+### Test 1.5 - Run Auth and RLS Test Matrix
 
 How to run: execute in Terminal B after env export.
 
@@ -192,7 +192,7 @@ Rainy day expected:
 3. If test run errors before execution, local Supabase is likely down.
 4. If RLS/auth assertions fail, run DB reset, ensure Redis is up, rerun env export, then rerun this matrix.
 
-### Step 1 - Studio Bootstrap Verification
+### Test 1.6 - Studio Bootstrap Verification
 
 How to run: manual verification that the auth.users trigger actually fires in real Supabase.
 
@@ -217,7 +217,7 @@ Rainy day expected:
 2. Row exists but `tier` is NULL or not `'free'`.
 3. Recovery: run `npx supabase db reset --yes --no-seed` to reapply the trigger, then try again.
 
-### Step 1 - Manual cURL Check for /auth/token
+### Test 1.7 - Manual cURL Check for /auth/token
 
 How to run: start the backend server and make a raw HTTP request to verify request validation works end-to-end.
 
@@ -268,7 +268,7 @@ Rainy day expected:
 	- If Redis is down: run `cd /root/insta_prompt && docker compose up -d redis`
 	- If validation is missing: check `backend/src/routes/auth.ts` and `backend/src/lib/validation.ts` for refresh_token schema
 
-### Optional Rainy Day Drill
+### Test 1.8 (Optional) - Rainy Day Drill
 
 How to run: this intentionally creates a failure mode so you can practice recovery.
 
@@ -324,7 +324,7 @@ Use this guide to validate Step 2 end-to-end with real local Supabase and Redis 
 2. Terminal B: backend folder for env export and test runs.
 3. Terminal C: backend folder for manual server and cURL checks.
 
-### Step 2 - Preflight
+### Test 2.1 - Preflight
 
 How to run: run from repo root before touching Redis, Supabase, or backend tests.
 
@@ -346,7 +346,7 @@ Rainy day expected:
 1. Missing Docker, Bun, or the Supabase CLI causes command-not-found or version errors.
 2. Fix the missing dependency, then rerun preflight.
 
-### Step 2 - Start Redis and Reset Local Supabase
+### Test 2.2 - Start Redis and Reset Local Supabase
 
 How to run: execute in Terminal A. This gives you a clean Supabase state and healthy local Redis.
 
@@ -380,7 +380,7 @@ npx supabase start
 npx supabase db reset --yes --no-seed
 ```
 
-### Step 2 - Export Local Env Vars For Integration Tests
+### Test 2.3 - Export Local Env Vars For Integration Tests
 
 How to run: execute in Terminal B before `bun test`. Repeat this in every new shell session.
 
@@ -413,7 +413,7 @@ Rainy day expected:
 2. If Redis is down, env export can still succeed but Step 2 integration tests will fail or return `503` envelopes.
 3. Recovery: start Supabase and Redis first, then rerun this export block.
 
-### Step 2 - Verify Enforcement Invariants Manually
+### Test 2.4 - Verify Enforcement Invariants Manually
 
 How to run: execute in Terminal A after setup/reset.
 
@@ -440,7 +440,7 @@ Rainy day expected:
 2. Missing constants or middleware-order lines indicate implementation drift.
 3. Recovery: restart Redis/Supabase and rerun this check block.
 
-### Step 2 - Run Rate/Tier/Auth-Token Test Matrix
+### Test 2.5 - Run Rate/Tier/Auth-Token Test Matrix
 
 How to run: execute in Terminal B after env export.
 
@@ -470,7 +470,7 @@ Rainy day expected:
 3. If envelope/header assertions fail, Step 2 middleware behavior may have drifted.
 4. Recovery: restore Redis + Supabase, rerun env export, then rerun `bun test`.
 
-### Step 2 - Manual cURL Check for Protected `/segment` Daily Free-Tier Cap
+### Test 2.6 - Manual cURL Check for Protected `/segment` Daily Free-Tier Cap
 
 How to run: start backend server, mint a disposable free-tier user token, send repeated protected-route calls, and check the Redis TTL after request 30.
 
@@ -541,7 +541,7 @@ Rainy day expected:
 	 - Rerun env export and token mint commands in Terminal C2
 	 - Check `backend/src/index.ts`, `backend/src/middleware/ratelimit.ts`, and `backend/src/services/rateLimit.ts`
 
-### Step 2 - Optional Race Condition Check for Atomic Quota Increments
+### Test 2.7 (Optional) - Race Condition Check for Atomic Quota Increments
 
 How to run: rerun the token mint block above to create a fresh free-tier user, warm the user to request 29, then fire a small burst of concurrent requests.
 
@@ -570,7 +570,7 @@ Sunny day expected:
 2. The concurrent burst produces exactly one `200` and four `429` responses.
 3. More than one `200` in the burst indicates the rate-limit increment is not atomic.
 
-### Step 2 - Manual cURL Check for Public `/auth/token` IP Limiter and Header Policy
+### Test 2.8 - Manual cURL Check for Public `/auth/token` IP Limiter and Header Policy
 
 How to run: reuse `REFRESH_JWT` from Terminal C2, then validate both success path and burst-throttle path.
 
@@ -613,7 +613,7 @@ Rainy day expected:
 	 - Re-check trusted IP extraction and throttle handling in `backend/src/routes/auth.ts`
 	 - Re-check limiter logic in `backend/src/services/rateLimit.ts`
 
-### Optional Rainy Day Drill
+### Test 2.9 (Optional) - Rainy Day Drill
 
 How to run: intentionally stop Redis to validate deterministic unavailable behavior.
 
@@ -657,3 +657,223 @@ Use this section to log your own observations while running the guide:
 - Sunny path result: Passed end-to-end (preflight, Redis + Supabase setup/reset, env export, invariant checks, `bun test`, manual `/segment` boundary + TTL, optional race burst, manual `/auth/token` limiter).
 - Rainy path result: Passed stop-Redis drill; both `/segment` and `/auth/token` returned fast deterministic `503 RATE_LIMIT_UNAVAILABLE` with no cURL timeout.
 - Bugs found: None
+
+## Step 3 Manual Testing Guide (LLM Service and Prompt Template System)
+
+Use this guide to validate Step 3 service-layer behavior end-to-end with deterministic local tests and CLI probes.
+
+### What This Covers
+
+1. Backend Step 3 preflight for deterministic local testing.
+2. Model-router matrix, BYOK injection, and mode-token invariants.
+3. Prompt-factory, sibling-context, and canonical bind-order invariants.
+4. Provider adapter retry/backoff, object-shaped stream events, and normalized-error invariants.
+5. Step 3 unit matrix for router, prompt factories, provider adapters, and handoff helpers.
+6. Manual CLI probes for sunny and rainy Step 3 service behavior.
+7. Route-leakage guards that keep Step 4-6 business logic out of `backend/src/routes/*.ts`.
+
+### Terminal Setup
+
+1. Terminal A: backend folder for source checks and Step 3 unit tests.
+2. Terminal B: backend folder for optional CLI probes and rainy-day drills.
+
+### Test 3.1 - Preflight
+
+How to run: run from the backend folder before Step 3 checks.
+
+```bash
+cd /root/insta_prompt/backend
+bun --version
+node --version
+npm --version
+```
+
+Sunny day expected:
+
+1. All commands print a version.
+2. No command-not-found errors.
+
+Rainy day expected:
+
+1. Missing Bun/Node/npm causes command-not-found or version errors.
+2. Fix missing dependencies, then rerun preflight.
+
+### Test 3.2 - Verify Router, Mode-Budget, and Route-Leakage Invariants Manually
+
+How to run: execute from repo root and confirm the deterministic route matrix constants plus thin route wrappers.
+
+```bash
+cd /root/insta_prompt
+grep -e "MODE_TOKEN_BUDGETS" -e "efficiency: 150" -e "balanced: 500" -e "detailed: 1000" backend/src/services/llm.ts
+grep -e "SEGMENT_CLASSIFIER_MODEL" -e "llama-3.1-8b-instant" backend/src/services/llm.ts
+grep -e "FREE_GENERATION_MODEL" -e "llama-3.3-70b-versatile" backend/src/services/llm.ts
+grep -e "PRO_GENERATION_MODELS" -e "claude-haiku-4-5-20251001" -e "claude-sonnet-4-6" backend/src/services/llm.ts
+grep -e "resolveByokProvider" -e "resolveByokModel" -e "byok-config-missing" backend/src/services/llm.ts
+if grep -n -E 'readJsonBody|parseWithSchema|streamFromEvents|fetchProjectContext|selectModel|prepareEnhanceServiceHandoff|prepareBindServiceHandoff' backend/src/routes/segment.ts backend/src/routes/enhance.ts backend/src/routes/bind.ts; then
+	echo "Route leakage found"
+else
+	echo "Route files stay thin"
+fi
+```
+
+Sunny day expected:
+
+1. Mode token budgets are explicitly `150 / 500 / 1000`.
+2. Segment model is pinned to Groq `llama-3.1-8b-instant`.
+3. Free generation model is Groq `llama-3.3-70b-versatile`.
+4. Pro generation models include Anthropic `claude-haiku-4-5-20251001` and `claude-sonnet-4-6`.
+5. BYOK resolver helpers and deterministic missing-config fallback are present.
+6. Route leakage trap prints `Route files stay thin` and no route wrapper contains business-logic keywords.
+
+Rainy day expected:
+
+1. Missing constants or model IDs indicate router drift.
+2. If the leakage trap prints matches, route business logic leaked too early into `backend/src/routes/*.ts`; move it back into services and rerun Test 3.5.
+3. Recovery: re-check `backend/src/services/llm.ts` against `backend/src/__tests__/llm.router.test.ts` and rerun Test 3.5.
+
+### Test 3.3 - Verify Prompt Factory and Canonical Bind Invariants Manually
+
+How to run: execute from repo root and confirm prompt-factory coverage and canonical bind behavior.
+
+```bash
+cd /root/insta_prompt
+grep -e "goalPromptFactories" -e "context:" -e "tech_stack:" -e "constraint:" -e "action:" -e "output_format:" -e "edge_case:" backend/src/services/prompts/index.ts
+grep -e "CANONICAL_BIND_SLOT_ORDER" -e "context" -e "tech_stack" -e "constraint" -e "action" -e "output_format" -e "edge_case" backend/src/services/prompts/bind.ts
+grep -e "SIBLING_CONTEXT_LIMITS" -e "MAX_SIBLINGS: 5" -e "MAX_TEXT_CHARS_PER_SIBLING: 180" -e "MAX_TOTAL_SERIALIZED_CHARS: 700" backend/src/services/prompts/siblings.ts
+```
+
+Sunny day expected:
+
+1. All six goal-type factories are present in `goalPromptFactories`.
+2. Bind module encodes canonical order `context -> tech_stack -> constraint -> action -> output_format -> edge_case`.
+3. Sibling-context limits show deterministic caps (`5`, `180`, `700`).
+
+Rainy day expected:
+
+1. Missing goal-type factory or canonical order entry indicates prompt-surface drift.
+2. Missing sibling caps indicates unbounded prompt-growth risk.
+3. Recovery: align `backend/src/services/prompts/**` with `backend/src/__tests__/prompt.factories.test.ts` and rerun Test 3.5.
+
+### Test 3.4 - Verify Provider Adapter Retry and Error Invariants Manually
+
+How to run: execute from repo root and confirm shared retry policy and normalized error mapping.
+
+```bash
+cd /root/insta_prompt
+grep -e "maxAttempts: 3" -e "initialDelayMs: 100" -e "backoffMultiplier: 2" -e "maxDelayMs: 5000" backend/src/services/providers/retry.ts
+grep -e "DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS = 30_000" -e "retryWithBackoff" backend/src/services/providers/http.ts
+grep -e "PROVIDER_RATE_LIMITED" -e "PROVIDER_BAD_GATEWAY" -e "PROVIDER_UNAVAILABLE" -e "PROVIDER_GATEWAY_TIMEOUT" -e "PROVIDER_BAD_REQUEST" -e "PROVIDER_UNAUTHORIZED" -e "PROVIDER_FORBIDDEN" -e "PROVIDER_NOT_FOUND" -e "PROVIDER_INTERNAL_ERROR" backend/src/services/providers/errors.ts
+```
+
+Sunny day expected:
+
+1. Retry policy is `3` attempts with `100ms` initial delay and exponential backoff capped at `5000ms`.
+2. Provider request timeout default is `30000ms`.
+3. Retryable and non-retryable normalized error codes are both explicitly mapped.
+
+Rainy day expected:
+
+1. Missing retry constants or error-code mappings indicates adapter-policy drift.
+2. Recovery: align `backend/src/services/providers/**` with `backend/src/__tests__/provider.adapters.test.ts` and rerun Test 3.5.
+
+### Test 3.5 - Run Step 3 Unit Test Matrix
+
+How to run: execute from backend folder. This matrix is network-isolated and does not require live provider calls.
+
+```bash
+cd /root/insta_prompt/backend
+bun test src/__tests__/llm.router.test.ts src/__tests__/prompt.factories.test.ts src/__tests__/provider.adapters.test.ts src/__tests__/llm.handoff.test.ts
+```
+
+Sunny day expected:
+
+1. Step 3 suite reports `0 fail` (current baseline on main: `30 pass`, `0 fail`).
+2. Router tests confirm deterministic `callType x tier x mode` selection and BYOK fallback behavior.
+3. Prompt tests confirm deterministic goal templates, sibling-context behavior, and canonical bind ordering.
+4. Provider tests confirm normalized `token | done | error` events, transient retry behavior, and deterministic error mapping.
+5. Handoff tests confirm deterministic enhance/bind helper assembly.
+
+Rainy day expected:
+
+1. Any failing suite indicates Step 3 contract drift.
+2. Recovery: fix the failing service area first, then rerun this matrix before proceeding to manual probes.
+
+### Test 3.6 - Manual CLI Probe for Step 3 Handoff Helpers
+
+How to run: execute from backend folder to manually verify router and handoff outputs. This also proves the router honors an injected BYOK config object instead of inferring BYOK state from the database.
+
+```bash
+cd /root/insta_prompt/backend
+bun -e 'import { selectModel, prepareEnhanceServiceHandoff, prepareBindServiceHandoff } from "./src/services/llm.ts"; const segmentModel = selectModel({ callType: "segment", tier: "pro", mode: "detailed" }); const byok = selectModel({ callType: "enhance", tier: "byok", mode: "detailed", byokConfig: { preferredProvider: "openai", preferredModel: "gpt-4o" } }); const enhance = prepareEnhanceServiceHandoff({ route: { callType: "enhance", tier: "pro", mode: "efficiency" }, template: { goalType: "action", sectionText: "Build keyboard-accessible dark mode toggle.", mode: "efficiency", siblings: [{ id: "s2", goal_type: "tech_stack", text: "Use React and TypeScript." }] } }); const bind = prepareBindServiceHandoff({ route: { callType: "bind", tier: "free", mode: "balanced" }, template: { mode: "balanced", sections: [{ canonical_order: 6, goal_type: "edge_case", expansion: "Handle empty state." }, { canonical_order: 1, goal_type: "context", expansion: "Internal admin dashboard." }] } }); console.log("segment_model", JSON.stringify(segmentModel)); console.log("byok_model", JSON.stringify(byok)); console.log("enhance_model", JSON.stringify(enhance.model)); console.log("enhance_has_goal", enhance.prompt.includes("Goal type: action")); console.log("bind_order", bind.canonicalSections.map((s) => s.goal_type).join(",")); console.log("bind_has_canonical_line", bind.prompt.includes("Canonical slot order (must be enforced exactly):"));'
+```
+
+Sunny day expected:
+
+1. `segment_model` prints Groq `llama-3.1-8b-instant` with `maxTokens: 500`.
+2. `byok_model` prints OpenAI `gpt-4o` with `maxTokens: 1000`, proving the injected BYOK config is honored.
+3. `enhance_model` prints Anthropic `claude-haiku-4-5-20251001` with `maxTokens: 150`.
+4. `enhance_has_goal` prints `true`.
+5. `bind_order` prints `context,edge_case`.
+6. `bind_has_canonical_line` prints `true`.
+
+Rainy day expected:
+
+1. Import/runtime failures indicate service-export or typing drift.
+2. A missing or mismatched `byok_model` output means the router is not honoring injected BYOK preferences.
+3. Output mismatches in the other values indicate router or handoff assembly drift.
+4. Recovery: run Test 3.5, then inspect `backend/src/services/llm.ts` and `backend/src/services/prompts/**`.
+
+### Test 3.7 (Optional) - Adapter Object Shape and Failure Drills
+
+How to run: execute from backend folder to validate deterministic adapter output shape and failure behavior without live provider traffic.
+
+1. Sunny-day object-shape drill:
+
+```bash
+cd /root/insta_prompt/backend
+bun -e 'import { createGroqStreamingAdapter } from "./src/services/providers/index.ts"; const body = `data: {"choices":[{"delta":{"content":"Hello"}}]}
+
+data: [DONE]
+
+`; const adapter = createGroqStreamingAdapter({ fetchFn: async () => new Response(body, { headers: { "Content-Type": "text/event-stream" } }), sleepFn: async () => {} }); for await (const event of adapter.stream({ model: "llama-3.3-70b-versatile", userPrompt: "hello", maxTokens: 32, apiKey: "test-key" })) { console.log("is_object", typeof event === "object" && event !== null); console.log("has_type", "type" in event); if (event.type === "done") break; }'
+```
+
+Sunny day expected:
+
+1. `is_object` prints `true` for each yielded event.
+2. `has_type` prints `true` for each yielded event.
+3. If either check prints `false`, the adapter is not yielding JavaScript objects and Step 5 transport will break.
+
+2. Missing-key drill:
+
+```bash
+cd /root/insta_prompt/backend
+bun -e 'import { createGroqStreamingAdapter } from "./src/services/providers/index.ts"; const adapter = createGroqStreamingAdapter(); const stream = adapter.stream({ model: "llama-3.3-70b-versatile", userPrompt: "hello", maxTokens: 32, apiKey: "" }); for await (const event of stream) { console.log(JSON.stringify(event)); break; }'
+```
+
+3. Retry-exhaustion drill:
+
+```bash
+cd /root/insta_prompt/backend
+bun -e 'import { createAnthropicStreamingAdapter } from "./src/services/providers/index.ts"; let calls = 0; const adapter = createAnthropicStreamingAdapter({ fetchFn: async () => { calls += 1; return new Response(JSON.stringify({ error: { message: "forced-503" } }), { status: 503, headers: { "Content-Type": "application/json" } }); }, sleepFn: async () => {} }); let finalEvent = null; for await (const event of adapter.stream({ model: "claude-sonnet-4-6", userPrompt: "hello", maxTokens: 16, apiKey: "test-key" })) { finalEvent = event; } console.log("attempts", calls); console.log("final", JSON.stringify(finalEvent));'
+```
+
+Sunny day expected:
+
+1. Missing-key drill emits one error event with `code: PROVIDER_KEY_MISSING` and `retryable: false`.
+2. Retry-exhaustion drill prints `attempts 3`.
+3. Retry-exhaustion final event is `PROVIDER_UNAVAILABLE` with `retryable: true` and `status: 503`.
+
+Rainy day expected:
+
+1. More/less than three attempts indicates retry-policy drift.
+2. Missing or mismatched error fields indicates normalization drift.
+3. Recovery: inspect `backend/src/services/providers/retry.ts`, `backend/src/services/providers/http.ts`, and `backend/src/services/providers/errors.ts`, then rerun Tests 3.4 and 3.5.
+
+## Step 3 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date: 2026-04-16
+- Sunny path result: Step 3 unit matrix passed with 30 pass, 0 fail.
+- Rainy path result: Groq missing-key returned PROVIDER_KEY_MISSING; Groq malformed stream returned PROVIDER_INVALID_RESPONSE; Anthropic forced 503 retried exactly 3 times and returned PROVIDER_UNAVAILABLE with status 503; BYOK missing config returned the safe fallback provider user / model byok-config-missing.
+- Bugs found: None.

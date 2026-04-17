@@ -9,7 +9,13 @@ import { outputFormatPrompt } from "./output_format";
 import { techStackPrompt } from "./tech_stack";
 import type { GoalPromptFactoryMap, GoalPromptInput } from "./types";
 
-export { bindPrompt, CANONICAL_BIND_SLOT_ORDER, serializeBindSections } from "./bind";
+export {
+	bindPrompt,
+	CANONICAL_BIND_SLOT_ORDER,
+	canonicalizeBindSections,
+	canonicalSlotForGoalType,
+	serializeBindSections,
+} from "./bind";
 export { BIND_MODE_INSTRUCTIONS, ENHANCE_MODE_INSTRUCTIONS } from "./mode";
 export { SIBLING_CONTEXT_LIMITS, serializeSiblingContext } from "./siblings";
 export type {
