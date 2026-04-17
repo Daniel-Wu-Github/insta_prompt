@@ -79,35 +79,25 @@ Planning rule:
 4. No Step 2 rate-limit or tier policy changes.
 5. No v2 project context retrieval behavior changes.
 
-## 4.2 Copilot Workflow Surface Plan
+## 4.2 Planning Surface and Documentation Boundary
 
 ### Numbering convention
 
 1. Taskboard execution numbering (`4.x`) lives in `docs/agent_plans/v1_step_by_step/v1_step_4.md`.
-2. This planning blueprint uses decision labels (`D1..D8`) and file-level slices for dependency mapping.
-3. If numbering appears to overlap, treat the taskboard as execution order and this blueprint as design lock.
+2. This planning blueprint uses decision labels (`D1..D8`) plus file-level slices for dependency mapping.
+3. If numbering appears to overlap, treat the taskboard as execution order and this blueprint as decision lock.
 
-### Always-on instruction surfaces (confirmed)
+### Planning-only rule for this pass
 
-1. `.github/copilot-instructions.md`
-2. `.github/skills/SKILL_MAP.md`
-3. `.github/skills/*/SKILL.md` (loaded per task classification)
+1. This file is the scope-lock and contract-alignment reference for Step 4.
+2. Session choreography, prompt recipes, and approval preferences are intentionally excluded from this doc.
+3. Execution workflow details live in the Step 4 taskboard and repository-wide agent instructions.
 
-### Reusable prompt surfaces (recommended)
+### Documentation consistency targets
 
-1. `.github/prompts/step4-plan-review.prompt.md` for planning/review-only passes.
-2. `.github/prompts/step4-build-slice.prompt.md` for narrow implementation slices (4.3-4.7).
-
-### One-off prompt rule
-
-Keep one-off prompts in chat when they are tied to a single classification parser edge case or a temporary latency experiment. Promote to `.github/prompts/` only after the pattern repeats.
-
-### Session and approval strategy for Step 4
-
-1. Planning and review sessions are read-only by default.
-2. One editing session per classification cluster (`routeHandlers`, new segment helper module, tests).
-3. Default approvals while classification normalization behavior is still changing.
-4. Bypass approvals only for mechanical edits after test matrix stabilizes.
+1. Keep `/segment` contract language aligned across planning, taskboard, and source-of-truth docs.
+2. Keep requirements at contract level (`what must be true`), not algorithm level (`how to implement`).
+3. Keep Step 5/6 deferments explicit so Step 4 implementation does not absorb downstream behavior.
 
 ## Design Decisions for Step 4 Execution
 
@@ -163,9 +153,9 @@ Rationale:
 
 Planning rule:
 
-1. Generate IDs from normalized segment text with deterministic tie-break handling for duplicates.
-2. Keep ID generation independent from provider-returned ordering metadata.
-3. Preserve stable IDs for unchanged segment text across adjacent calls.
+1. Emit deterministic IDs for unchanged normalized sections across adjacent calls.
+2. Keep ID assignment independent from provider-returned ordering metadata.
+3. Ensure duplicate/ambiguous text still yields unique, stable per-section IDs within a response.
 
 ### Decision D5: Dependency references are sanitized server-side
 
@@ -302,7 +292,7 @@ Test boundary rule:
 5. Cover ID stability for unchanged segment text and duplicate-text tie breaks.
 6. Cover dependency sanitization (unknown IDs, self refs, cycles).
 7. Cover degraded fallback path with deterministic schema-valid output.
-8. Add a deterministic warm-path latency assertion using mocks/stubs to keep classification processing in low tens of milliseconds.
+8. Add deterministic mock/stub processing-overhead checks to catch route-local regression (not a production latency SLA).
 
 ### 4.8 Final review and handoff
 
@@ -369,7 +359,7 @@ Slice stop conditions (for execution pass):
 3. Slice 3 stop: response output is canonical, stable-ID-safe, and schema-valid.
 4. Slice 4 stop: provider faults return deterministic fallback classification output.
 5. Slice 5 stop: Step 4 behavior is covered by contract and edge-case tests.
-6. Slice 6 stop: warm-path latency assertions pass with deterministic test harness.
+6. Slice 6 stop: determinism and processing-overhead regression checks pass with deterministic test harness.
 7. Slice 7 stop: Step 4 acceptance criteria map cleanly to code and tests with no Step 5/6 bleed.
 
 Stop condition for this planning pass:
@@ -387,4 +377,4 @@ Step 4 planning/design tasks are complete when:
 3. Classification normalization decisions are locked.
 4. Test boundaries and handoff stop conditions are explicit.
 
-Status: Complete for 4.1 and 4.2.
+Status: Planning complete; runtime execution remains deferred to Phase F slices.

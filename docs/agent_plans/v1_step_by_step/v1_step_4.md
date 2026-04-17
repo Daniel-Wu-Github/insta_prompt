@@ -12,124 +12,6 @@ Step 4 is done when the repo has:
 6. Tests for malformed, ambiguous, and minimal segment sets.
 7. No Step 5 `/enhance` SSE orchestration or Step 6 `/bind` route behavior leakage.
 
-## How To Vibe Code Step 4 In VS Code
-
-Use GitHub Copilot Chat like a small production team, not like a single giant chatbot.
-
-### Recommended session layout
-
-Use 3 chat sessions, but only 2 should be active at the same time.
-
-1. Plan session: one session, local Plan agent, read-only.
-2. Build session: one session, local Agent, edit and run tools.
-3. Review session: one session, local Ask agent, read-only audit and debugging.
-
-For Step 4, do not run more than one editing agent on the segment-classification cluster at once. Stable-ID and dependency normalization logic are cross-cutting and easy to desynchronize.
-
-If you want the simplest possible setup, use only 2 sessions:
-
-1. Plan or Ask for analysis.
-2. Agent for implementation.
-
-Add the Review session only when the first `/segment` slice is complete and you need a clean diff audit.
-
-### Which Copilot mode to use for each phase
-
-1. Plan agent: build the Step 4 taskboard, lock scope, and sequence dependencies.
-2. Ask agent: inspect current placeholder route behavior and source-of-truth alignment.
-3. Agent: implement classification orchestration, normalization, fallback logic, and tests.
-
-For a first-time vibe coder, keep permissions conservative.
-
-1. Use Default Approvals while normalization and fallback behavior are still changing.
-2. Use Bypass Approvals only for mechanical edits after test behavior is stable.
-3. Avoid Autopilot on Step 4 unless the slice is tiny and file scope is narrow.
-
-### Prompt pattern that works best
-
-Use short prompts with five parts:
-
-1. Goal.
-2. Context.
-3. Allowed files.
-4. Constraints.
-5. Exit condition.
-
-Good prompts are specific enough that the agent can finish without guessing. Bad prompts ask for all Step 4 behavior in one shot.
-
-Example planning prompt:
-
-```text
-Read [docs/ARCHITECTURE.md](../../ARCHITECTURE.md), [docs/BACKEND_API.md](../../BACKEND_API.md), [docs/CLAUSE_PIPELINE.md](../../CLAUSE_PIPELINE.md), [docs/LLM_ROUTING.md](../../LLM_ROUTING.md), and [docs/agent_plans/v1_step_by_step/v1_step_3.md](./v1_step_3.md).
-
-Create a Step 4 taskboard only.
-
-Output format:
-- task
-- files touched
-- dependencies
-- acceptance criteria
-- risk
-
-Do not edit files.
-```
-
-Example build prompt:
-
-```text
-Implement only Step 4.3 and Step 4.4.
-
-Allowed files:
-- backend/src/services/routeHandlers.ts
-- backend/src/services/segment.ts (new helper allowed)
-- backend/src/services/prompts/segment.ts (new helper allowed)
-- backend/src/__tests__/**
-
-Constraints:
-- keep changes minimal
-- do not change /enhance or /bind behavior
-- keep /segment output schema-valid and canonical
-- stop when this slice is complete
-
-If a design choice is ambiguous, pick the smallest safe option and explain the tradeoff.
-```
-
-Example review prompt:
-
-```text
-Review #changes against the Step 4 acceptance criteria.
-
-Find:
-- taxonomy normalization gaps
-- stable-id regressions
-- dependency graph safety bugs
-- fallback behavior drift
-- scope leakage into Step 5-6 routes
-- test gaps
-
-Do not edit files.
-```
-
-### Best-practice rules to follow every time
-
-1. Start a fresh session when moving from planning to implementation.
-2. Fork a session if you want to compare two normalization strategies without polluting the build thread.
-3. Keep one active builder session per segment-classification cluster.
-4. Use `#codebase` when you want broad repository reasoning.
-5. Use `#changes` when you want a diff audit.
-6. Use `#problems` when you want deterministic error fixes.
-7. Use checkpoints before risky route-handler refactors.
-8. Save reusable prompts only after one successful end-to-end Step 4 run.
-9. Keep always-on instructions concise and avoid duplicate rules.
-
-### What not to do
-
-1. Do not combine planning, implementation, and review in one giant prompt.
-2. Do not keep more than 3 active sessions for Step 4.
-3. Do not let two builder sessions edit `segment` route surfaces simultaneously.
-4. Do not implement Step 5-6 route business behavior while doing Step 4.
-5. Do not skip tests for malformed/ambiguous/minimal inputs.
-
 ## Step 4 Taskboard
 
 ### 4.0 Readiness and dependency lock
@@ -141,25 +23,6 @@ Goal: ensure Step 3 service contracts and Step 2 middleware assumptions are stab
 - [ ] Confirm current `/segment` behavior is still deterministic placeholder logic and safe to replace.
 - [ ] Confirm shared schema surfaces (`segmentRequestSchema`, `segmentResponseSchema`) are current.
 - [ ] Confirm runtime file ownership and deferred Step 5-6 boundaries are explicit.
-
-Copilot session:
-
-- Plan agent first.
-- Ask agent if route or schema assumptions look stale.
-
-Prompt:
-
-```text
-Validate Step 4 readiness against current middleware, schema, and Step 3 service surfaces.
-
-Report only:
-- what is ready
-- what is missing
-- what can cause /segment drift
-- what runtime prerequisites are still unlocked
-
-Do not edit files.
-```
 
 Done when:
 
@@ -176,63 +39,31 @@ Goal: make Step 4 boundaries explicit before coding.
 - [ ] Lock explicit out-of-scope boundaries for Step 5-6 route behavior.
 - [ ] Record file-level ownership for route handlers, segment helpers, and tests.
 
-Copilot session:
-
-- Plan agent first.
-- Ask agent with `#codebase` only for repository-specific ambiguity.
-
-Prompt:
-
-```text
-You are planning Step 4 only.
-
-Return a file-level taskboard for /segment production classification.
-Do not include /enhance or /bind route orchestration.
-Do not edit files.
-```
-
 Done when:
 
 1. Scope is clear in one paragraph.
 2. File ownership is explicit.
 3. Out-of-scope constraints are explicit.
 
-### 4.2 Set up the Step 4 workflow surface
+### 4.2 Confirm implementation surface and deferments
 
-Goal: keep classification work repeatable and low-noise.
+Goal: keep Step 4 focused on classifier route behavior and contract alignment.
 
-- [ ] Confirm always-on instruction surfaces are concise and non-conflicting.
-- [ ] Decide whether reusable Step 4 prompts should be added for segment slices.
-- [ ] Keep skill loading minimal: scope guard, canonical-clause-ordering, and verification gate.
-- [ ] Preserve source-of-truth references in prompts to avoid taxonomy/canonical-order drift.
-- [ ] Document runtime-deferred route files so Step 4 does not absorb Step 5-6 behavior.
-
-Copilot session:
-
-- Ask agent for workspace instruction audit.
-- Plan agent only if prompt surfaces need updates.
-
-Prompt:
-
-```text
-Inspect current workflow instructions and suggest the smallest prompt set needed for Step 4.
-
-Focus on /segment classification safety constraints.
-Keep /enhance and /bind orchestration out of scope.
-```
-
-Done when:
-
-1. Reusable prompt strategy is clear.
-2. Instruction overlap is controlled.
-3. Step 4 prompts can execute without re-explaining architecture rules.
-4. Step 5-6 route behavior remains deferred.
+- [ ] Confirm only `/segment` implementation surfaces are in scope for Step 4 runtime changes.
+- [ ] Confirm Step 5/6 route orchestration and transport behaviors remain deferred.
+- [ ] Confirm test surfaces are scoped to Step 4 classifier behavior only.
 
 Runtime-deferred route implementation files for Step 4:
 
 1. `backend/src/routes/enhance.ts` production orchestration behavior (Step 5).
 2. `backend/src/routes/bind.ts` production orchestration/history behavior (Step 6).
 3. Step 5/6 streaming transport behavior in `backend/src/lib/sse.ts` beyond `/segment` needs.
+
+Done when:
+
+1. File touch surface is explicit and narrow.
+2. Deferred Step 5/6 behavior is explicit.
+3. Taskboard scope is implementation-ready.
 
 ### 4.3 Implement `/segment` classification orchestration
 
@@ -245,31 +76,12 @@ Goal: replace placeholder classification with production route-level orchestrati
 - [ ] Invoke provider completion path and parse structured JSON output.
 - [ ] Keep `/segment` response transport as JSON only (no SSE).
 
-Copilot session:
+Allowed files for this slice:
 
-- Agent session.
-- Keep scope on route handler + segment helper files only.
-
-Prompt:
-
-```text
-Implement Step 4.3 /segment classification orchestration.
-
-Allowed files:
-- backend/src/services/routeHandlers.ts
-- backend/src/services/segment.ts (new helper allowed)
-- backend/src/services/prompts/segment.ts (new helper allowed)
-- backend/src/services/providers/** (only if non-stream classification helper is needed)
-
-Requirements:
-- preserve request validation semantics
-- route model selection through selectModel(callType=segment)
-- parse provider output into typed intermediate objects
-- keep /segment response JSON (no SSE)
-- do not change /enhance or /bind behavior
-
-Stop when /segment has production classification orchestration and remains compile-safe.
-```
+- `backend/src/services/routeHandlers.ts`
+- `backend/src/services/segment.ts` (new helper allowed)
+- `backend/src/services/prompts/segment.ts` (new helper allowed)
+- `backend/src/services/providers/**` (only if non-stream classification helper is needed)
 
 Done when:
 
@@ -289,32 +101,12 @@ Goal: produce deterministic section objects that are safe for downstream UX and 
 - [ ] Remove self-dependencies, duplicates, and cycle-causing edges.
 - [ ] Re-validate final payload against `segmentResponseSchema` before return.
 
-Copilot session:
+Allowed files for this slice:
 
-- Agent session.
-- Ask session only for canonical-order sanity checks.
-
-Prompt:
-
-```text
-Implement Step 4.4 normalization for /segment outputs.
-
-Allowed files:
-- backend/src/services/segment.ts
-- backend/src/services/routeHandlers.ts
-- backend/src/lib/schemas.ts (if output constraints need tightening)
-- shared/contracts/** (only if canonical-map typing must be centralized)
-
-Requirements:
-- only allowed goal_type values in final output
-- canonical_order derived from shared canonical map
-- deterministic stable IDs for unchanged segment text
-- confidence bounded to [0,1] with fallback defaults
-- depends_on sanitized to valid non-cyclic references
-- final response schema validation before return
-
-Stop when normalized output is deterministic and schema-valid.
-```
+- `backend/src/services/segment.ts`
+- `backend/src/services/routeHandlers.ts`
+- `backend/src/lib/schemas.ts` (if output constraints need tightening)
+- `shared/contracts/**` (only if canonical-map typing must be centralized)
 
 Done when:
 
@@ -332,29 +124,11 @@ Goal: keep `/segment` usable under provider/parse failures without breaking cont
 - [ ] Keep malformed request behavior unchanged (validation errors stay deterministic).
 - [ ] Keep provider internals out of client-facing response envelopes.
 
-Copilot session:
+Allowed files for this slice:
 
-- Agent session.
-- Review session for fallback-path audit.
-
-Prompt:
-
-```text
-Implement Step 4.5 deterministic fallback behavior for /segment.
-
-Allowed files:
-- backend/src/services/segment.ts
-- backend/src/services/routeHandlers.ts
-- backend/src/lib/http.ts or backend/src/lib/errors.ts (only if shared helpers are needed)
-
-Requirements:
-- provider and parse failures degrade to deterministic schema-valid fallback output
-- fallback keeps canonical fields and stable IDs
-- malformed requests still return validation envelopes
-- do not modify /enhance or /bind behavior
-
-Stop when fallback behavior is deterministic and testable.
-```
+- `backend/src/services/segment.ts`
+- `backend/src/services/routeHandlers.ts`
+- `backend/src/lib/http.ts` or `backend/src/lib/errors.ts` (only if shared helpers are needed)
 
 Done when:
 
@@ -375,98 +149,36 @@ Goal: prove `/segment` behavior across valid, malformed, ambiguous, and degraded
 - [ ] Add tests for dependency sanitization (`unknown`, `self`, `cycle`).
 - [ ] Add tests for deterministic fallback output under provider/parse failures.
 
-Copilot session:
-
-- Review session first, then Agent for edits.
-
-Prompt:
-
-```text
-Expand Step 4 tests for /segment classification behavior.
-
-Cover:
-- malformed payload handling
-- minimal and ambiguous segment sets
-- taxonomy normalization and canonical-order derivation
-- confidence bounds and default behavior
-- stable ID behavior for unchanged and duplicate-text segments
-- dependency graph sanitization
-- fallback behavior when provider output is invalid or unavailable
-
-Do not add Step 5-6 route behavior assertions.
-```
-
 Done when:
 
 1. `/segment` contract behavior is regression-resistant.
 2. Normalization and fallback logic are fully test-covered.
 3. Step boundary with Step 5-6 remains intact.
 
-### 4.7 Add latency and determinism checks
+### 4.7 Add determinism and processing-overhead checks
 
-Goal: verify Step 4 still meets the fast-classification expectation on warm path.
+Goal: guard Step 4 classifier determinism and catch local processing regressions with network-isolated tests.
 
-- [ ] Add deterministic warm-path latency assertions using mocked provider responses.
-- [ ] Verify `/segment` processing overhead (excluding network) stays in low tens of milliseconds.
+- [ ] Add deterministic mock/stub checks for warm-path route-local processing overhead.
 - [ ] Verify repeated identical requests produce deterministic output shape and stable IDs.
-- [ ] Keep latency checks isolated from external provider/network variability.
-
-Copilot session:
-
-- Agent session with focused benchmarking/tests.
-
-Prompt:
-
-```text
-Implement Step 4.7 latency and determinism checks for /segment.
-
-Allowed files:
-- backend/src/__tests__/**
-- backend/src/services/segment.ts (only if deterministic timing hooks are needed)
-
-Requirements:
-- use deterministic mocks/stubs (no live provider dependency)
-- validate warm-path processing remains low-latency
-- validate repeated identical inputs produce deterministic outputs
-
-Stop when latency and determinism checks are reliable in CI.
-```
+- [ ] Keep checks isolated from external provider/network variability.
+- [ ] Document this check as a regression guard, not a production latency SLA.
 
 Done when:
 
-1. Step 4 latency expectations are test-anchored.
-2. Determinism guarantees are explicit and measurable.
-3. Tests remain stable and network-isolated.
+1. Determinism guarantees are explicit and measurable.
+2. Processing-overhead regression checks are test-anchored with deterministic harnesses.
+3. Checks are CI-stable and network-isolated.
 
 ### 4.8 Final review and handoff
 
-Goal: ensure Step 4 is complete and Step 5 can begin without reopening classification decisions.
+Goal: ensure Step 4 is complete and Step 5 can begin without reopening classifier decisions.
 
 - [ ] Review diff against Step 4 acceptance criteria.
 - [ ] Confirm `/segment` output schema validity across happy and degraded paths.
 - [ ] Confirm no Step 5-6 route behavior landed early.
 - [ ] Confirm tests cover taxonomy, canonical order, IDs, dependencies, and fallback behavior.
 - [ ] Update progress logs and note deferred Step 5 concerns.
-
-Copilot session:
-
-- Review session (read-only Ask or Agent).
-
-Prompt:
-
-```text
-Review Step 4 work against the taskboard.
-
-Find:
-- classification contract regressions
-- canonical-order drift
-- ID/dependency safety bugs
-- fallback determinism gaps
-- missing tests
-- scope leakage into Step 5-6 routes
-
-Do not edit files.
-```
 
 Done when:
 
@@ -494,7 +206,7 @@ Do not start Step 5 until all of these are true:
 3. Stable merge-safe IDs are emitted for client state tracking.
 4. Malformed/ambiguous/minimal input tests pass.
 5. Fallback behavior preserves schema validity under provider faults.
-6. Warm-path latency checks pass with deterministic harness.
+6. Determinism and processing-overhead regression checks pass with deterministic harness.
 7. No Step 5-6 route behavior was implemented early.
 
 ## Short Version You Can Remember
@@ -504,4 +216,4 @@ Do not start Step 5 until all of these are true:
 3. Normalize output into canonical taxonomy/ordering with stable IDs.
 4. Sanitize dependencies and confidence deterministically.
 5. Add deterministic fallback and broad test coverage.
-6. Hand off to Step 5 only after latency and contract checks are clean.
+6. Hand off to Step 5 only after determinism and regression checks are clean.

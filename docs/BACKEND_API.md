@@ -81,6 +81,9 @@ Classify raw text segments into sections with goal_type, canonical_order, and co
 
 Current Step 0-2 behavior: deterministic placeholder classifier.
 
+Step 4 contract note: endpoint transport and JSON shape stay the same while placeholder classifier internals are replaced.
+Backend normalization responsibilities in Step 4: emit only `context`, `tech_stack`, `constraint`, `action`, `output_format`, `edge_case`, and derive `canonical_order` from normalized `goal_type`.
+
 **Request**
 ```json
 {

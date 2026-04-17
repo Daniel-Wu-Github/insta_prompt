@@ -136,6 +136,8 @@ Target Step 3+ behavior: send draft segments to a small, fast model that returns
 | `output_format` | Shape of desired output | 5 |
 | `edge_case` | Corner cases to handle | 6 |
 
+Normalization rule: only the six taxonomy values above are valid for downstream use. Noisy or unknown classifier labels are normalized server-side before canonical-order derivation and client state handling.
+
 ---
 
 ## Step 4 — Merge + Minimum Length Check

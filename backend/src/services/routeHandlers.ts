@@ -1,13 +1,18 @@
 import type { Context } from "hono";
 
+import type { Tier } from "../../../shared/contracts";
 import type { StreamEvent } from "../../../shared/contracts";
 import { readJsonBody, validationErrorResponse, zodValidationErrorResponse } from "../lib/http";
 import { bindRequestSchema, enhanceRequestSchema, segmentRequestSchema, segmentResponseSchema } from "../lib/schemas";
 import { streamFromEvents } from "../lib/sse";
 import { parseWithSchema } from "../lib/validation";
 import { fetchProjectContext } from "./context";
-
-const ACTION_ORDER = 4;
+import { selectModel } from "./llm";
+import {
+	classifySegmentsFromStreamingAdapter,
+	normalizeIncomingSegments,
+	normalizeSegmentClassificationIntermediate,
+} from "./segment";
 
 function toTokenEvents(text: string): StreamEvent[] {
 	const events: StreamEvent[] = text
@@ -30,16 +35,24 @@ export async function segmentRouteHandler(c: Context) {
 		return zodValidationErrorResponse(c, parsed.error);
 	}
 
-	const response = {
-		sections: parsed.data.segments.map((segment, index) => ({
-			id: `s${index + 1}`,
-			text: segment,
-			goal_type: "action" as const,
-			canonical_order: ACTION_ORDER,
-			confidence: 0.5,
-			depends_on: [] as string[],
-		})),
-	};
+	const normalizedSegments = normalizeIncomingSegments(parsed.data.segments);
+	if (normalizedSegments.length === 0) {
+		return validationErrorResponse(c, "segments must include at least one non-empty string");
+	}
+
+	const model = selectModel({
+		callType: "segment",
+		tier: c.get("tier") as Tier,
+		mode: parsed.data.mode,
+	});
+
+	const classifiedIntermediate = await classifySegmentsFromStreamingAdapter({
+		segments: normalizedSegments,
+		model,
+		signal: c.req.raw.signal,
+	});
+
+	const response = normalizeSegmentClassificationIntermediate(classifiedIntermediate);
 
 	const responseCheck = parseWithSchema(segmentResponseSchema, response);
 	if (!responseCheck.ok) {
