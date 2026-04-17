@@ -498,3 +498,19 @@
 	- Fulfillment: Records the requested rainy-path validation results and keeps the testing guide current.
 	- Deviation: None.
 
+## Entry 024 - 2026-04-16 - Reconciled Stale Step 2 Audit Note
+
+- Task: Resolve the remaining stale documentation note about auth-token IP limiting in the Step 0-2 integration audit.
+- What the agent did: Updated the integration audit so the historical baseline note now matches the live backend API docs and no longer claims the Step 2 IP limiter is still TODO.
+- How the agent did it: Re-read the live backend API contract and the audit wording, then patched only the stale audit item to reflect the current aligned state.
+- Files edited:
+	- docs/agent_plans/integration_audits/steps0-2.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed [docs/BACKEND_API.md](../docs/BACKEND_API.md) already documents the Step 2 IP limiter at the live route level.
+	- Confirmed the audit no longer claims auth-token IP limiting is still TODO.
+	- Confirmed `npx --yes supabase status -o env` returns local Supabase environment variables; the status output also reported stopped `imgproxy`, `edge_runtime`, and `pooler` services, so the harness was not treated as fully started in this pass.
+- Task alignment:
+	- Fulfillment: Removes the last stale Step 0-2 audit contradiction found in the focused pass.
+	- Deviation: None.
+

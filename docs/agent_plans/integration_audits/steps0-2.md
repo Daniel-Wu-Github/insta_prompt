@@ -54,9 +54,9 @@ Why this matters: the docs show `project_context` while runtime expects `project
 
 ### Medium
 
-3. Backend API docs still mark auth-token IP limiting as TODO even though it is implemented.
-Evidence: [docs/BACKEND_API.md](../../BACKEND_API.md#L114), [backend/src/routes/auth.ts](../../../backend/src/routes/auth.ts#L33), [backend/src/routes/auth.ts](../../../backend/src/routes/auth.ts#L47).
-Why this matters: this creates planning churn and incorrect readiness assessment for Step 2.
+3. Backend API docs now reflect the auth-token IP limiter; the stale TODO wording from the baseline has been removed.
+Evidence: [docs/BACKEND_API.md](../../BACKEND_API.md#L149), [backend/src/routes/auth.ts](../../../backend/src/routes/auth.ts#L33), [backend/src/routes/auth.ts](../../../backend/src/routes/auth.ts#L47).
+Why this matters: the baseline mismatch created planning churn and incorrect readiness assessment for Step 2; the current docs no longer do that.
 
 4. Rate-limit reset semantics are inconsistent across docs.
 Evidence: [docs/ARCHITECTURE.md](../../ARCHITECTURE.md#L129), [docs/BACKEND_API.md](../../BACKEND_API.md#L161), [docs/BACKEND_API.md](../../BACKEND_API.md#L196), [backend/src/services/rateLimit.ts](../../../backend/src/services/rateLimit.ts#L220), [backend/src/services/rateLimit.ts](../../../backend/src/services/rateLimit.ts#L225).
