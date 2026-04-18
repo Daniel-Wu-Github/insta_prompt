@@ -113,21 +113,22 @@ if [ -z "$STATUS_ENV" ]; then
 fi
 eval "$STATUS_ENV"
 export SUPABASE_URL="$API_URL"
-export SUPABASE_SERVICE_KEY="$SERVICE_ROLE_KEY"
 export REDIS_URL="redis://127.0.0.1:6379"
 set +a
-env | grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_KEY|ANON_KEY|JWT_SECRET|REDIS_URL)='
+env | grep -E '^(SUPABASE_URL|REDIS_URL)='
 ```
 
 OR USE ONE LINER:
 
 ```bash
-cd /root/insta_prompt/backend && set -a && STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')" && [ -n "$STATUS_ENV" ] && eval "$STATUS_ENV" && export SUPABASE_URL="$API_URL" SUPABASE_SERVICE_KEY="$SERVICE_ROLE_KEY" REDIS_URL="redis://127.0.0.1:6379" && set +a && env | grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_KEY|ANON_KEY|JWT_SECRET|REDIS_URL)='
+cd /root/insta_prompt/backend && set -a && STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')" && [ -n "$STATUS_ENV" ] && eval "$STATUS_ENV" && export SUPABASE_URL="$API_URL" REDIS_URL="redis://127.0.0.1:6379" && set +a && env | grep -E '^(SUPABASE_URL|REDIS_URL)='
 ```
+
+Before running this block, source your local helper outside the repo so any additional Supabase values are already available to the shell.
 
 Sunny day expected:
 
-1. Env print shows non-empty values for `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ANON_KEY`, `JWT_SECRET`, and `REDIS_URL`.
+1. Env print shows non-empty values for `SUPABASE_URL` and `REDIS_URL`.
 2. No command errors during `status`/`eval`, and the guard does not trigger.
 
 Rainy day expected:
@@ -233,7 +234,6 @@ if [ -z "$STATUS_ENV" ]; then
 fi
 eval "$STATUS_ENV"
 export SUPABASE_URL="$API_URL"
-export SUPABASE_SERVICE_KEY="$SERVICE_ROLE_KEY"
 export REDIS_URL="redis://127.0.0.1:6379"
 set +a
 bun run src/index.ts
@@ -390,21 +390,20 @@ set -a
 STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
 eval "$STATUS_ENV"
 export SUPABASE_URL="$API_URL"
-export SUPABASE_SERVICE_KEY="$SERVICE_ROLE_KEY"
 export REDIS_URL="redis://127.0.0.1:6379"
 set +a
-env | grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_KEY|ANON_KEY|JWT_SECRET|REDIS_URL)='
+env | grep -E '^(SUPABASE_URL|REDIS_URL)='
 ```
 
 OR USE ONE LINER:
 
 ```bash
-cd /root/insta_prompt/backend && set -a && STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')" && eval "$STATUS_ENV" && export SUPABASE_URL="$API_URL" SUPABASE_SERVICE_KEY="$SERVICE_ROLE_KEY" REDIS_URL="redis://127.0.0.1:6379" && set +a && env | grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_KEY|ANON_KEY|JWT_SECRET|REDIS_URL)='
+cd /root/insta_prompt/backend && set -a && STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')" && eval "$STATUS_ENV" && export SUPABASE_URL="$API_URL" REDIS_URL="redis://127.0.0.1:6379" && set +a && env | grep -E '^(SUPABASE_URL|REDIS_URL)='
 ```
 
 Sunny day expected:
 
-1. Env print shows non-empty values for `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ANON_KEY`, `JWT_SECRET`, and `REDIS_URL`.
+1. Env print shows non-empty values for `SUPABASE_URL` and `REDIS_URL`.
 2. No command errors during `status`/`eval`.
 
 Rainy day expected:
@@ -482,7 +481,6 @@ set -a
 STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
 eval "$STATUS_ENV"
 export SUPABASE_URL="$API_URL"
-export SUPABASE_SERVICE_KEY="$SERVICE_ROLE_KEY"
 export REDIS_URL="redis://127.0.0.1:6379"
 set +a
 bun run src/index.ts
@@ -500,24 +498,21 @@ eval "$STATUS_ENV"
 export SUPABASE_URL="$API_URL"
 set +a
 
-AUTH_LINES="$(bun -e 'import { createClient } from "@supabase/supabase-js"; const url = process.env.SUPABASE_URL ?? process.env.API_URL; const anon = process.env.ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? process.env.PUBLISHABLE_KEY; if (!url || !anon) throw new Error("Missing URL or anon key"); const supabase = createClient(url, anon, { auth: { autoRefreshToken: false, persistSession: false } }); const email = `step2-manual-${Date.now()}@example.com`; const passphrase = `Aa1-${Date.now()}-z`; const signUp = await supabase.auth.signUp({ email, password: passphrase }); if (signUp.error || !signUp.data.user) throw signUp.error ?? new Error("signup failed"); let session = signUp.data.session; if (!session) { const signIn = await supabase.auth.signInWithPassword({ email, password: passphrase }); if (signIn.error || !signIn.data.session) throw signIn.error ?? new Error("signin failed"); session = signIn.data.session; } console.log(session.access_token); console.log(session.refresh_token); console.log(signUp.data.user.id);')"
-AUTH_JWT="$(printf '%s\n' "$AUTH_LINES" | sed -n '1p')"
-REFRESH_JWT="$(printf '%s\n' "$AUTH_LINES" | sed -n '2p')"
-AUTH_USER_ID="$(printf '%s\n' "$AUTH_LINES" | sed -n '3p')"
+Before running the curl loop, export `LOCAL_ACCESS_VALUE`, `LOCAL_REFRESH_VALUE`, and `LOCAL_USER_ID` from a local helper or a shell session outside the repo. The token-minting one-liner is intentionally left out of the checked-in guide so secrets stay local.
 
 for i in $(seq 1 30); do
 	code=$(curl -s -o /tmp/step2_segment_$i.json -w "%{http_code}" \
 		-X POST http://localhost:3000/segment \
-		-H "Authorization: Bearer $AUTH_JWT" \
+		-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
 		-H "Content-Type: application/json" \
 		-d '{"segments":["build feature"],"mode":"balanced"}')
 	echo "segment_request_$i=$code"
 done
 
-docker exec promptcompiler-redis redis-cli TTL "rate:daily:$AUTH_USER_ID"
+docker exec promptcompiler-redis redis-cli TTL "rate:daily:$LOCAL_USER_ID"
 
 curl -i -X POST http://localhost:3000/segment \
-	-H "Authorization: Bearer $AUTH_JWT" \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
 	-H "Content-Type: application/json" \
 	-d '{"segments":["build feature"],"mode":"balanced"}'
 ```
@@ -549,7 +544,7 @@ How to run: rerun the token mint block above to create a fresh free-tier user, w
 for i in $(seq 1 29); do
 	curl -s -o /tmp/step2_segment_race_warm_$i.json -w "warmup_$i=%{http_code}\n" \
 		-X POST http://localhost:3000/segment \
-		-H "Authorization: Bearer $AUTH_JWT" \
+		-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
 		-H "Content-Type: application/json" \
 		-d '{"segments":["build feature"],"mode":"balanced"}'
 done
@@ -557,7 +552,7 @@ done
 for i in $(seq 1 5); do
 	curl -s -o /tmp/step2_segment_race_$i.json -w "burst_$i=%{http_code}\n" \
 		-X POST http://localhost:3000/segment \
-		-H "Authorization: Bearer $AUTH_JWT" \
+		-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
 		-H "Content-Type: application/json" \
 		-d '{"segments":["build feature"],"mode":"balanced"}' &
 done
@@ -572,13 +567,13 @@ Sunny day expected:
 
 ### Test 2.8 - Manual cURL Check for Public `/auth/token` IP Limiter and Header Policy
 
-How to run: reuse `REFRESH_JWT` from Terminal C2, then validate both success path and burst-throttle path.
+How to run: reuse `LOCAL_REFRESH_VALUE` from Terminal C2, then validate both success path and burst-throttle path.
 
 ```bash
 curl -i -X POST http://localhost:3000/auth/token \
 	-H "Content-Type: application/json" \
 	-H "fly-client-ip: 198.51.100.200" \
-	-d "{\"refresh_token\":\"$REFRESH_JWT\"}"
+	-d "{\"refresh_token\":\"$LOCAL_REFRESH_VALUE\"}"
 
 for i in $(seq 1 21); do
 	code=$(curl -s -o /tmp/step2_auth_burst_$i.json -w "%{http_code}" \
@@ -626,7 +621,7 @@ Then (from Terminal C2) run one protected route request and one `/auth/token` re
 
 ```bash
 curl -i -m 10 -X POST http://localhost:3000/segment \
-	-H "Authorization: Bearer $AUTH_JWT" \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
 	-H "Content-Type: application/json" \
 	-d '{"segments":["build feature"],"mode":"balanced"}'
 
@@ -877,3 +872,302 @@ Use this section to log your own observations while running the guide:
 - Sunny path result: Step 3 unit matrix passed with 30 pass, 0 fail.
 - Rainy path result: Groq missing-key returned PROVIDER_KEY_MISSING; Groq malformed stream returned PROVIDER_INVALID_RESPONSE; Anthropic forced 503 retried exactly 3 times and returned PROVIDER_UNAVAILABLE with status 503; BYOK missing config returned the safe fallback provider user / model byok-config-missing.
 - Bugs found: None.
+
+## Step 4 Manual Testing Guide (JSON Segment Classification)
+
+Use this guide to validate Step 4 `/segment` classification behavior end-to-end with local Supabase and Redis services. It aligns with [BACKEND_API.md](../BACKEND_API.md), [CLAUSE_PIPELINE.md](../CLAUSE_PIPELINE.md), and the Step 4 taskboard [v1_step_4.md](v1_step_by_step/v1_step_4.md).
+
+Current main-branch note: `/segment` still runs through auth, rate limit, and tier middleware before the classifier, so keep Redis running during live route checks.
+
+### What This Covers
+
+1. Local Supabase and Redis harness health.
+2. `/segment` request validation and JSON-only transport.
+3. Canonical goal-type normalization, stable IDs, confidence clamping, and dependency sanitization.
+4. Deterministic fallback behavior for malformed or unavailable provider output.
+5. Step 4 unit and route test matrix.
+6. Manual cURL checks for both valid and rainy-path requests.
+7. Route-leakage guards that keep Step 4 logic out of `backend/src/routes/*.ts`.
+
+### Terminal Setup
+
+1. Terminal A: repo root for Supabase and invariant checks.
+2. Terminal B: backend folder for env export and test runs.
+3. Terminal C: backend folder for the manual backend server and cURL probes.
+
+### Test 4.1 - Preflight
+
+How to run: run from the repo root before touching Supabase, Redis, or backend tests.
+
+```bash
+cd /root/insta_prompt
+docker --version
+docker compose version
+bun --version
+npx supabase --version
+```
+
+Sunny day expected:
+
+1. All commands print a version.
+2. No command-not-found errors.
+
+Rainy day expected:
+
+1. Missing Docker, Bun, or the Supabase CLI causes command-not-found or version errors.
+2. Fix the missing dependency, then rerun preflight.
+
+### Test 4.2 - Start and Reset Local Services
+
+How to run: execute in Terminal A. This gives you a clean Supabase state and healthy local Redis.
+
+```bash
+cd /root/insta_prompt
+docker compose up -d redis
+docker compose ps redis
+npx supabase start
+npx supabase db reset --yes --no-seed
+```
+
+Sunny day expected:
+
+1. `docker compose ps redis` shows `redis` as Up (healthy).
+2. Supabase starts and prints local URLs.
+3. Reset reapplies the local migrations needed for auth and protected routes.
+4. Notices like trigger missing on first apply or vector already exists are acceptable.
+
+Rainy day expected:
+
+1. If Docker is not running, Redis and Supabase start fail.
+2. If Supabase containers are stale, status/reset commands can fail with container health errors.
+3. If Redis is down, protected `/segment` checks can return `503` instead of the expected auth/validation envelopes.
+4. Recovery command sequence:
+
+```bash
+cd /root/insta_prompt
+docker compose down
+docker compose up -d redis
+npx supabase stop
+npx supabase start
+npx supabase db reset --yes --no-seed
+```
+
+### Test 4.3 - Export Local Env Vars For Integration Tests
+
+How to run: execute in Terminal B before `bun test`. Repeat this in every new shell session.
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+if [ -z "$STATUS_ENV" ]; then
+	echo "Supabase env export failed. Start Supabase and rerun this block." >&2
+	return 1 2>/dev/null || exit 1
+fi
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+export REDIS_URL="redis://127.0.0.1:6379"
+set +a
+env | grep -E '^(SUPABASE_URL|REDIS_URL)='
+```
+
+Optional: export a local provider credential in this shell if you want to exercise the live classifier path instead of the deterministic fallback path.
+
+Sunny day expected:
+
+1. Env print shows non-empty values for `SUPABASE_URL` and `REDIS_URL`.
+2. No command errors during `status`, `eval`, or export.
+
+Rainy day expected:
+
+1. If Supabase is not running, `npx supabase status -o env` fails with container-health errors and the block exits before `eval` or export.
+2. If Redis is down, live `/segment` checks can return `503`.
+3. If the local provider credential is missing, the live classifier path may fall back, but the response contract should still stay valid.
+
+### Test 4.4 - Verify Invariants Manually
+
+How to run: execute from repo root and confirm the deterministic Step 4 route and schema surfaces.
+
+```bash
+cd /root/insta_prompt
+grep -e "GOAL_TYPE_VALUES" -e "context" -e "tech_stack" -e "constraint" -e "action" -e "output_format" -e "edge_case" shared/contracts/domain.ts
+grep -e "segmentRequestSchema" -e "segmentResponseSchema" backend/src/lib/schemas.ts
+grep -e "SEGMENT_CLASSIFIER_MODEL" -e "canonicalSlotForGoalType" backend/src/services/llm.ts
+grep -e "GOAL_TYPE_NORMALIZATION_MAP" -e "deriveStableSectionId" -e "normalizeConfidence" -e "sanitizeDependencies" -e "createDeterministicSegmentFallbackIntermediate" backend/src/services/segment.ts
+grep -e "segmentRouteHandler" -e "normalizeSegmentClassificationIntermediate" -e "classifySegmentsFromStreamingAdapter" backend/src/services/routeHandlers.ts
+grep -e "auth -> ratelimit -> tier" -e 'PROTECTED_ROUTE_PREFIXES = ["/segment", "/enhance", "/bind", "/projects"]' backend/src/index.ts
+if grep -n -E 'readJsonBody|parseWithSchema|classifySegmentsFromStreamingAdapter|normalizeSegmentClassificationIntermediate|selectModel' backend/src/routes/segment.ts; then
+	echo "Route leakage found"
+else
+	echo "Route files stay thin"
+fi
+```
+
+Sunny day expected:
+
+1. The goal-type list matches the six canonical values.
+2. Segment request and response schemas are present.
+3. The segment classifier model stays pinned and the canonical-slot helper is present.
+4. Normalization helpers and fallback helpers are present in the segment service.
+5. `/segment` is still inside the protected middleware stack.
+6. The route wrapper stays thin.
+
+Rainy day expected:
+
+1. Missing canonical values, schemas, or helpers indicates contract drift.
+2. If route wrappers contain parsing, classification, or model-selection logic, Step 4 behavior has leaked out of the service layer.
+
+### Test 4.5 - Run the Test Matrix
+
+How to run: execute from the backend folder. This matrix is network-isolated and does not require a live Groq key.
+
+```bash
+cd /root/insta_prompt/backend
+bun test src/__tests__/segment.service.test.ts src/__tests__/segment.route.test.ts src/__tests__/routes.validation.test.ts src/__tests__/stress-tests.test.ts
+```
+
+Sunny day expected:
+
+1. Step 4 suites report `0 fail`.
+2. Segment service tests confirm taxonomy normalization, stable IDs, dependency sanitization, and deterministic fallback intermediates.
+3. Segment route tests confirm malformed JSON handling, whitespace-only segment rejection, normalized schema-valid output, fallback 200s, and warm-path determinism.
+4. Validation and stress tests confirm the protected-route auth ordering still rejects before payload validation.
+
+Rainy day expected:
+
+1. Any failing suite indicates Step 4 contract drift.
+2. Recovery: fix the failing service area first, then rerun this matrix before proceeding to manual cURL checks.
+
+### Test 4.6 - Manual End-to-End Check for `/segment`
+
+How to run: start the backend server and make one valid request plus one rainy-path validation request.
+
+Keep this check contract-based: a live Groq key should produce classified output, but missing or invalid provider credentials must still fall back to schema-valid JSON rather than failing the route.
+
+**Terminal C1** (start the server):
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+if [ -z "$STATUS_ENV" ]; then
+	echo "Supabase env export failed. Start Supabase and rerun this block." >&2
+	return 1 2>/dev/null || exit 1
+fi
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+export REDIS_URL="redis://127.0.0.1:6379"
+set +a
+bun run src/index.ts
+```
+
+Wait for output like `Server listening on http://0.0.0.0:3000` or the configured port.
+
+**Terminal C2** (in a new terminal, mint a disposable auth token and call `/segment`):
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+if [ -z "$STATUS_ENV" ]; then
+	echo "Supabase env export failed. Start Supabase and rerun this block." >&2
+	return 1 2>/dev/null || exit 1
+fi
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+set +a
+
+Before running the curl probes, export `LOCAL_ACCESS_VALUE` from a local helper or a shell session outside the repo. The minting one-liner is intentionally omitted here so the checked-in guide does not carry secret-bearing commands.
+
+curl -i -X POST http://localhost:3000/segment \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"segments":["build a dark mode toggle","use react","ship to vercel"],"mode":"balanced"}'
+
+curl -i -X POST http://localhost:3000/segment \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"segments":["fix bug", "fix bug"],"mode":"balanced"}'
+
+curl -i -X POST http://localhost:3000/segment \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"segments":["   ","\n\t"],"mode":"balanced"}'
+```
+
+Sunny day expected:
+
+1. The valid request returns `200`.
+2. The response body is JSON with a `sections` array.
+3. Every section has `id`, `text`, `goal_type`, `canonical_order`, `confidence`, and `depends_on`.
+4. If a section has dependencies, the `depends_on` array MUST contain the hashed string ids of the parent sections. It MUST NOT contain raw integer indices such as `[0]`, which would prove the translation step failed.
+5. The duplicate segment request MUST return two distinct, stable string ids, proving occurrence_count hashing is working, and neither id should be a raw array index.
+6. Every `goal_type` stays within the six canonical values from `shared/contracts/domain.ts`.
+7. Every `canonical_order` stays between `1` and `6`.
+8. Every `confidence` stays between `0` and `1`.
+9. If the local provider credential is present and valid, the live classifier path should still return the same contract shape.
+
+Rainy day expected:
+
+1. The whitespace-only request returns `400` with `VALIDATION_ERROR`.
+2. The validation message is `segments must include at least one non-empty string`.
+3. If the valid request returns `500`, schema validation failed and Step 4 output normalization regressed.
+4. If the valid request returns `503`, Redis is unavailable and the shared middleware stack needs recovery.
+5. If the valid request returns malformed JSON, `/segment` transport is broken.
+
+### Test 4.7 (Optional) - Rainy Day Drill
+
+How to run: intentionally stop Redis to validate the deterministic unavailable behavior.
+
+```bash
+cd /root/insta_prompt
+docker compose stop redis
+```
+
+Then rerun one protected `/segment` request from Terminal C2:
+
+```bash
+curl -i -m 10 -X POST http://localhost:3000/segment \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"segments":["build feature"],"mode":"balanced"}'
+```
+
+Rainy drill expected:
+
+1. The request returns deterministic `503` with `RATE_LIMIT_UNAVAILABLE` while Redis is stopped.
+2. The response fails fast rather than hanging.
+3. Recovery:
+
+```bash
+cd /root/insta_prompt
+docker compose up -d redis
+```
+
+Then rerun env export and the Step 4 test matrix.
+
+Provider fallback drill:
+
+How to run: keep Supabase and Redis up, but force the classifier to fail by injecting a garbage local provider credential in Terminal C1.
+
+```bash
+cd /root/insta_prompt/backend
+export LOCAL_PROVIDER_VALUE="force_fallback_invalid_value"
+bun run src/index.ts
+```
+
+Then rerun the valid `/segment` request from Terminal C2.
+
+Fallback contract expected:
+
+1. The request returns `200 OK`.
+2. Every section deterministically equals `goal_type: "context"`, `confidence: 0.1`, and `depends_on: []`.
+3. The response stays schema-valid and does not expose provider errors.
+
+## Step 4 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date: 2026-04-17
+- Sunny path result:
+- Rainy path result:
+- Bugs found:

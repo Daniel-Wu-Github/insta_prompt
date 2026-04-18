@@ -6,6 +6,7 @@ import { canonicalSlotForGoalType, type ModelConfig } from "./llm";
 import {
 	anthropicStreamingAdapter,
 	groqStreamingAdapter,
+	type ProviderName,
 	type ProviderStreamErrorEvent,
 	type ProviderStreamRequest,
 	type ProviderStreamingAdapter,
@@ -15,6 +16,9 @@ const DEFAULT_SEGMENT_CLASSIFIER_TEMPERATURE = 0;
 const DEFAULT_SEGMENT_CONFIDENCE = 0.5;
 const GOAL_TYPE_FALLBACK: GoalType = "action";
 const STABLE_SECTION_ID_HEX_LENGTH = 24;
+const SEGMENT_FAILURE_FALLBACK_GOAL_TYPE: GoalType = "context";
+const SEGMENT_FAILURE_FALLBACK_CANONICAL_ORDER = 1;
+const SEGMENT_FAILURE_FALLBACK_CONFIDENCE = 0.1;
 
 const dependencyIndexSchema = z.union([z.number().int(), z.string().regex(/^-?\d+$/)]);
 
@@ -49,13 +53,32 @@ type StreamAggregationResult = {
 	sawDoneEvent: boolean;
 };
 
-function pickStreamingAdapter(provider: string): ProviderStreamingAdapter {
-	if (provider === "groq") {
-		return groqStreamingAdapter;
-	}
+const DEFAULT_PROVIDER_STREAMING_ADAPTERS: Readonly<Record<ProviderName, ProviderStreamingAdapter>> = {
+	groq: groqStreamingAdapter,
+	anthropic: anthropicStreamingAdapter,
+};
 
-	if (provider === "anthropic") {
-		return anthropicStreamingAdapter;
+let providerAdapterOverridesForTests: Partial<Record<ProviderName, ProviderStreamingAdapter>> = {};
+
+export function __setSegmentProviderAdapterOverrideForTests(
+	provider: ProviderName,
+	adapter: ProviderStreamingAdapter,
+): void {
+	providerAdapterOverridesForTests[provider] = adapter;
+}
+
+export function __resetSegmentProviderAdapterOverridesForTests(): void {
+	providerAdapterOverridesForTests = {};
+}
+
+function pickStreamingAdapter(provider: string): ProviderStreamingAdapter {
+	if (provider === "groq" || provider === "anthropic") {
+		const overridden = providerAdapterOverridesForTests[provider];
+		if (overridden) {
+			return overridden;
+		}
+
+		return DEFAULT_PROVIDER_STREAMING_ADAPTERS[provider];
 	}
 
 	throw new Error(`Unsupported streaming provider for /segment classification: ${provider}`);
@@ -402,27 +425,54 @@ export function normalizeSegmentClassificationIntermediate(
 	};
 }
 
+function createDeterministicSegmentFallbackIntermediate(
+	segments: readonly string[],
+): SegmentClassificationIntermediate {
+	return {
+		sections: segments.map((segment) => {
+			return {
+				text: segment,
+				goal_type: SEGMENT_FAILURE_FALLBACK_GOAL_TYPE,
+				canonical_order: SEGMENT_FAILURE_FALLBACK_CANONICAL_ORDER,
+				confidence: SEGMENT_FAILURE_FALLBACK_CONFIDENCE,
+				depends_on: [],
+			};
+		}),
+	};
+}
+
 export async function classifySegmentsFromStreamingAdapter(params: {
 	segments: string[];
 	model: ModelConfig;
 	signal?: AbortSignal;
 }): Promise<SegmentClassificationIntermediate> {
 	const { model, segments, signal } = params;
-	const adapter = pickStreamingAdapter(model.provider);
-	const prompt = createSegmentClassificationPrompt(segments);
+	const fallbackIntermediate = createDeterministicSegmentFallbackIntermediate(segments);
 
-	const aggregated = await aggregateStreamingTokensToString(adapter, {
-		model: model.model,
-		userPrompt: prompt.userPrompt,
-		systemPrompt: prompt.systemPrompt,
-		maxTokens: model.maxTokens,
-		temperature: DEFAULT_SEGMENT_CLASSIFIER_TEMPERATURE,
-		signal,
-	});
+	let aggregated: StreamAggregationResult;
+	try {
+		const adapter = pickStreamingAdapter(model.provider);
+		const prompt = createSegmentClassificationPrompt(segments);
 
-	if (!aggregated.sawDoneEvent) {
-		throw new Error("Segment classifier stream ended before a done event.");
+		aggregated = await aggregateStreamingTokensToString(adapter, {
+			model: model.model,
+			userPrompt: prompt.userPrompt,
+			systemPrompt: prompt.systemPrompt,
+			maxTokens: model.maxTokens,
+			temperature: DEFAULT_SEGMENT_CLASSIFIER_TEMPERATURE,
+			signal,
+		});
+	} catch {
+		return fallbackIntermediate;
 	}
 
-	return parseSegmentIntermediateFromJson(aggregated.aggregatedText);
+	if (!aggregated.sawDoneEvent) {
+		return fallbackIntermediate;
+	}
+
+	try {
+		return parseSegmentIntermediateFromJson(aggregated.aggregatedText);
+	} catch {
+		return fallbackIntermediate;
+	}
 }
