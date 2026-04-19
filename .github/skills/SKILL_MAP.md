@@ -18,7 +18,8 @@ All agents must do these steps before using or editing skills:
 6. For Step 2 enforcement work, load [rate-limiting-tier-enforcement](rate-limiting-tier-enforcement/SKILL.md).
 7. For Step 3 routing and prompt orchestration, load [llm-router-and-model-selection](llm-router-and-model-selection/SKILL.md) and [system-prompt-assembly](system-prompt-assembly/SKILL.md).
 8. For Step 4-5 clause and extension workflow work, load [canonical-clause-ordering](canonical-clause-ordering/SKILL.md), [clause-state-management](clause-state-management/SKILL.md), [mv3-extension-boundaries](mv3-extension-boundaries/SKILL.md), and [sse-streaming-bridge](sse-streaming-bridge/SKILL.md).
-9. Add cross-cutting skills as needed in this order:
+9. For Step 6-11 extension runtime workflow work, load [background-port-state-recovery](background-port-state-recovery/SKILL.md), [content-script-instrumentation](content-script-instrumentation/SKILL.md), [underline-preview-rendering](underline-preview-rendering/SKILL.md), and [hotkey-bind-commit-ux](hotkey-bind-commit-ux/SKILL.md) alongside boundary/state/stream skills as needed.
+10. Add cross-cutting skills as needed in this order:
   1. [skill-map-governance](skill-map-governance/SKILL.md)
   2. [verification-gate](verification-gate/SKILL.md)
   3. [workflow-logging](workflow-logging/SKILL.md)
@@ -42,6 +43,10 @@ All agents must do these steps before using or editing skills:
 | clause-state-management | [clause-state-management/SKILL.md](clause-state-management/SKILL.md) | Enforce section lifecycle and stale-propagation correctness | Step 4-5 acceptance flow, stale invalidation, and bind gating work |
 | mv3-extension-boundaries | [mv3-extension-boundaries/SKILL.md](mv3-extension-boundaries/SKILL.md) | Preserve MV3 process and storage boundaries | Step 5 extension process-boundary and messaging work |
 | sse-streaming-bridge | [sse-streaming-bridge/SKILL.md](sse-streaming-bridge/SKILL.md) | Enforce stream contract and abort-safe relay behavior | Step 5 SSE streaming bridge implementation across backend and extension |
+| background-port-state-recovery | [background-port-state-recovery/SKILL.md](background-port-state-recovery/SKILL.md) | Enforce restart-safe background port orchestration and per-tab session recovery | Step 7 background worker verbs, disconnect cleanup, and session-state restoration |
+| content-script-instrumentation | [content-script-instrumentation/SKILL.md](content-script-instrumentation/SKILL.md) | Enforce robust input discovery, idempotent attachment, and debounce/abort orchestration | Step 8 content instrumentation across dynamic editors |
+| underline-preview-rendering | [underline-preview-rendering/SKILL.md](underline-preview-rendering/SKILL.md) | Enforce deterministic underline/preview rendering behavior from section state | Step 9 overlay alignment, confidence styling, and preview lifecycle behavior |
+| hotkey-bind-commit-ux | [hotkey-bind-commit-ux/SKILL.md](hotkey-bind-commit-ux/SKILL.md) | Enforce guarded keybinding flow from acceptance through bind and commit | Step 11 hotkey guards, commit behavior, and reset semantics |
 | skill-map-governance | [skill-map-governance/SKILL.md](skill-map-governance/SKILL.md) | Keep the skill map synchronized with the skill catalog | Any skill add/remove/rename/scope change |
 | verification-gate | [verification-gate/SKILL.md](verification-gate/SKILL.md) | Enforce verification before completion | Any task that edits files, config, or process docs |
 | workflow-logging | [workflow-logging/SKILL.md](workflow-logging/SKILL.md) | Capture decisions, progress, and change records | Material process or instruction updates |
@@ -85,6 +90,10 @@ skillMap:
     - clause-state-management
     - mv3-extension-boundaries
     - sse-streaming-bridge
+    - background-port-state-recovery
+    - content-script-instrumentation
+    - underline-preview-rendering
+    - hotkey-bind-commit-ux
     - skill-map-governance
     - verification-gate
     - workflow-logging
@@ -126,6 +135,18 @@ skillMap:
     - name: sse-streaming-bridge
       path: .github/skills/sse-streaming-bridge/SKILL.md
       type: streaming
+    - name: background-port-state-recovery
+      path: .github/skills/background-port-state-recovery/SKILL.md
+      type: extension-runtime
+    - name: content-script-instrumentation
+      path: .github/skills/content-script-instrumentation/SKILL.md
+      type: extension-instrumentation
+    - name: underline-preview-rendering
+      path: .github/skills/underline-preview-rendering/SKILL.md
+      type: extension-rendering
+    - name: hotkey-bind-commit-ux
+      path: .github/skills/hotkey-bind-commit-ux/SKILL.md
+      type: extension-interaction
     - name: skill-map-governance
       path: .github/skills/skill-map-governance/SKILL.md
       type: governance

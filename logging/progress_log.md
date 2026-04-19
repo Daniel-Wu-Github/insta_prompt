@@ -514,3 +514,89 @@
 	- Fulfillment: Removes the last stale Step 0-2 audit contradiction found in the focused pass.
 	- Deviation: None.
 
+## Entry 025 - 2026-04-19 - Completed Skills Steps 6-11 Phase 2 Recommendations
+
+- Task: Proceed phase by phase and complete Phase 2 for Step 6-11 project-specific skill planning.
+- What the agent did: Produced a Phase 2 gap-analysis and recommendation artifact that converts Phase 1 baseline ratings into a minimum new-skill set with overlap controls and a Phase 3 drafting handoff, then linked the Phase 1 handoff section to the completed Phase 2 artifact.
+- How the agent did it: Re-read Phase 1 baseline plus source-of-truth docs, reviewed current skill boundaries, validated MV3/runtime/content-script references, then documented per-step decisions for partial/missing rows.
+- Files edited:
+	- docs/agent_plans/v1_skills_steps6-11_phase1.md
+	- docs/agent_plans/v1_skills_steps6-11_phase2.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed the Phase 1 handoff section now points to the Phase 2 artifact for direct phase navigation.
+	- Confirmed the new Phase 2 doc exists and includes scope lock, gap decisions, minimum new-skill recommendations, overlap controls, and phase handoff.
+	- Confirmed the Phase 2 planning file has no diagnostics from workspace error checks.
+	- Confirmed no skill files, SKILL_MAP, or runtime code were edited in this phase.
+- Task alignment:
+	- Fulfillment: Completes the requested Phase 2 step in sequence with recommendations-only output.
+	- Deviation: None.
+
+## Entry 026 - 2026-04-19 - Completed Skills Steps 6-11 Phase 3 Drafting
+
+- Task: Execute Phase 3 by drafting new Step 7-11 skills and synchronizing governance surfaces.
+- What the agent did: Added four new project-specific skills (each with a focused reference note), updated SKILL_MAP selection/registry/index surfaces, and recorded a Phase 3 execution artifact with phase handoff linkage.
+- How the agent did it: Used the Phase 2 recommendations as input, drafted narrow-scope SKILL.md files with explicit do/do-not boundaries, synchronized SKILL_MAP entries in the same pass, and updated phase docs and workflow logging.
+- Files edited:
+	- .github/skills/background-port-state-recovery/SKILL.md
+	- .github/skills/background-port-state-recovery/references/BACKGROUND_PORT_RECOVERY.md
+	- .github/skills/content-script-instrumentation/SKILL.md
+	- .github/skills/content-script-instrumentation/references/INSTRUMENTATION_FLOW.md
+	- .github/skills/underline-preview-rendering/SKILL.md
+	- .github/skills/underline-preview-rendering/references/RENDERING_STATE_MAP.md
+	- .github/skills/hotkey-bind-commit-ux/SKILL.md
+	- .github/skills/hotkey-bind-commit-ux/references/HOTKEY_GUARD_MATRIX.md
+	- .github/skills/SKILL_MAP.md
+	- docs/agent_plans/v1_skills_steps6-11_phase2.md
+	- docs/agent_plans/v1_skills_steps6-11_phase3.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed all four new skill directories and SKILL.md files exist at the expected paths.
+	- Confirmed SKILL_MAP now includes all four new skills in selection order, registry table, and machine-readable index blocks.
+	- Confirmed Phase 2 now links to the completed Phase 3 artifact for phase navigation.
+	- Confirmed no backend or extension runtime implementation files were edited.
+- Task alignment:
+	- Fulfillment: Completes requested Phase 3 execution with synchronized skill drafting and governance updates.
+	- Deviation: None.
+
+## Entry 027 - 2026-04-19 - Completed Skills Steps 6-11 Phase 4 Validation
+
+- Task: Execute Phase 4 by validating non-explicit skill auto-loading behavior and tightening weak trigger wording.
+- What the agent did: Ran fallback and targeted smoke tests, identified trigger weaknesses for Step 7 and Step 8 prompts, applied minimal description refinements to two skills, and published a Phase 4 validation artifact with scorecards and outcomes.
+- How the agent did it: Used the skill-improvement fallback script plus four non-explicit Step 7-11 prompts with a transparent overlap heuristic, compared pre/post scores, then patched only the affected skill descriptions and phase handoff docs.
+- Files edited:
+	- .github/skills/background-port-state-recovery/SKILL.md
+	- .github/skills/content-script-instrumentation/SKILL.md
+	- docs/agent_plans/v1_skills_steps6-11_phase3.md
+	- docs/agent_plans/v1_skills_steps6-11_phase4.md
+	- /memories/repo/customization-notes.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed fallback script executed successfully for non-explicit prompts.
+	- Confirmed post-tuning targeted checks rank `background-port-state-recovery` highest for the Step 7 recovery prompt and `content-script-instrumentation` highest for the Step 8 instrumentation prompt.
+	- Confirmed `underline-preview-rendering` and `hotkey-bind-commit-ux` remain top-ranked for Step 9 and Step 11 prompts respectively.
+	- Confirmed no skill catalog additions/removals and no runtime backend/extension implementation edits in this phase.
+	- Added reusable memory note to prefer `grep` fallback when `rg` is unavailable in this environment.
+- Task alignment:
+	- Fulfillment: Completes requested Phase 4 validation and wording-tuning pass for the Step 6-11 skill cycle.
+	- Deviation: None.
+
+## Entry 028 - 2026-04-19 - Completed Skills Steps 6-11 Phase 5 Wrap-Up
+
+- Task: Execute Phase 5 and wrap up the Step 6-11 skill expansion cycle.
+- What the agent did: Added a final Phase 5 closure artifact, fixed a duplicated content block in the Phase 4 artifact, linked Phase 4 forward to Phase 5, and recorded final cycle status and residual maintenance triggers.
+- How the agent did it: Re-read all phase artifacts and workflow governance files, patched only documentation/logging surfaces, and ran final diagnostics plus changed-file scope checks.
+- Files edited:
+	- docs/agent_plans/v1_skills_steps6-11_phase4.md
+	- docs/agent_plans/v1_skills_steps6-11_phase5.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed Phase 5 artifact exists and references all prior phase artifacts.
+	- Confirmed duplicate Phase 4 block was removed and the document now has one canonical copy.
+	- Confirmed Phase 4 now links to the Phase 5 closeout artifact.
+	- Confirmed no backend/extension runtime implementation files were edited in this pass.
+	- Confirmed no diagnostics were reported for edited files.
+- Task alignment:
+	- Fulfillment: Completes the requested Phase 5 and wraps up the Step 6-11 cycle with explicit closure documentation.
+	- Deviation: None.
+
