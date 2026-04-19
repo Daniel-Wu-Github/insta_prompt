@@ -1171,3 +1171,296 @@ Use this section to log your own observations while running the guide:
 - Sunny path result:
 - Rainy path result:
 - Bugs found:
+
+## Step 5 Manual Testing Guide (`/enhance` SSE Expansion)
+
+Use this guide to validate Step 5 `/enhance` streaming behavior end-to-end with local Supabase and Redis services. It aligns with the Step 5 taskboard in [v1_step_5.md](v1_step_by_step/v1_step_5.md), plus the Step 3 router/prompt contracts used by the enhance handoff.
+
+Current main-branch note: `/enhance` remains a protected route (`auth -> ratelimit -> tier`) and commits streaming headers before the first SSE frame, so keep Redis healthy for live route checks and treat mid-stream failures as SSE `error` events (not HTTP status flips).
+
+### What This Covers
+
+1. Local Supabase and Redis harness health for protected `/enhance` checks.
+2. `/enhance` request validation and SSE envelope behavior.
+3. Deterministic model + prompt handoff wiring (`callType: "enhance"`, mode-aware budget, goal-type prompt templates, sibling context).
+4. Ordered token streaming, single terminal-event semantics, and deterministic provider-error mapping.
+5. Abort/disconnect behavior and metadata capture hooks.
+6. Step 5 test matrix plus manual sunny/rainy cURL checks.
+
+### Terminal Setup
+
+1. Terminal A: repo root for Supabase/Redis setup and invariant checks.
+2. Terminal B: backend folder for env export and test runs.
+3. Terminal C: backend folder for manual server and cURL stream probes.
+
+### Test 5.1 - Preflight
+
+How to run: run from the repo root before touching Supabase, Redis, or backend tests.
+
+```bash
+cd /root/insta_prompt
+docker --version
+docker compose version
+bun --version
+npx supabase --version
+```
+
+Sunny day expected:
+
+1. All commands print a version.
+2. No command-not-found errors.
+
+Rainy day expected:
+
+1. Missing Docker, Bun, or the Supabase CLI causes command-not-found or version errors.
+2. Fix the missing dependency, then rerun preflight.
+
+### Test 5.2 - Start and Reset Local Services
+
+How to run: execute in Terminal A. This gives you a clean Supabase state and healthy local Redis.
+
+```bash
+cd /root/insta_prompt
+docker compose up -d redis
+docker compose ps redis
+npx supabase start
+npx supabase db reset --yes --no-seed
+```
+
+Sunny day expected:
+
+1. `docker compose ps redis` shows `redis` as Up (healthy).
+2. Supabase starts and prints local URLs.
+3. Reset reapplies local migrations required for auth and protected-route checks.
+
+Rainy day expected:
+
+1. If Docker is not running, Redis and Supabase start fail.
+2. If Supabase containers are stale, status/reset commands can fail with container-health errors.
+3. Recovery command sequence:
+
+```bash
+cd /root/insta_prompt
+docker compose down
+docker compose up -d redis
+npx supabase stop
+npx supabase start
+npx supabase db reset --yes --no-seed
+```
+
+### Test 5.3 - Export Local Env Vars For Integration and Manual Checks
+
+How to run: execute in Terminal B before test runs and manual probes. Repeat this in every new shell session.
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+if [ -z "$STATUS_ENV" ]; then
+	echo "Supabase env export failed. Start Supabase and rerun this block." >&2
+	return 1 2>/dev/null || exit 1
+fi
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+export REDIS_URL="redis://127.0.0.1:6379"
+set +a
+env | grep -E '^(SUPABASE_URL|REDIS_URL)='
+```
+
+Optional: export `GROQ_API_KEY` in this shell if you want the live sunny-path stream. Leaving it unset is useful for the deterministic missing-key rainy-path check.
+
+Sunny day expected:
+
+1. Env print shows non-empty values for `SUPABASE_URL` and `REDIS_URL`.
+2. No command errors during `status`, `eval`, or export.
+
+Rainy day expected:
+
+1. If Supabase is not running, `npx supabase status -o env` fails and the block exits before `eval`.
+2. If Redis is down, env export can still succeed but protected `/enhance` checks can return `503` before streaming starts.
+
+### Test 5.4 - Verify Step 5 Invariants Manually
+
+How to run: execute from repo root and confirm Step 5 routing, handoff, SSE, abort, and metadata surfaces.
+
+```bash
+cd /root/insta_prompt
+grep -e 'PROTECTED_ROUTE_PREFIXES = ["/segment", "/enhance", "/bind", "/projects"]' -e "auth -> ratelimit -> tier" backend/src/index.ts
+grep -e "enhanceRequestSchema" -e "sectionInputSchema" -e "project_id" backend/src/lib/schemas.ts
+grep -e "fetchProjectContext" -e 'callType: "enhance"' -e "prepareEnhanceServiceHandoff" -e "streamSSE" -e "c.req.raw.signal" backend/src/services/routeHandlers.ts
+grep -e "toDeterministicEnhanceErrorMessage" -e "PROVIDER_ABORTED" -e 'type: "token"' -e 'type: "done"' -e 'type: "error"' backend/src/services/routeHandlers.ts
+grep -e "captureEnhanceStreamMetadata" -e "[observability][enhance_stream]" backend/src/services/history.ts
+if grep -n -E 'readJsonBody|parseWithSchema|selectModel|prepareEnhanceServiceHandoff|streamSSE' backend/src/routes/enhance.ts; then
+	echo "Route leakage found"
+else
+	echo "Route files stay thin"
+fi
+```
+
+Sunny day expected:
+
+1. Protected-route prefixes include `/enhance` and middleware-order comment shows `auth -> ratelimit -> tier`.
+2. `enhanceRequestSchema` includes typed `section`, `siblings`, `mode`, and nullable `project_id`.
+3. `enhanceRouteHandler` resolves context, selects model via `callType: "enhance"`, assembles prompt via handoff helper, and streams via `streamSSE`.
+4. Abort propagation uses `c.req.raw.signal` and terminal-event logic includes deterministic `token | done | error` SSE envelope handling.
+5. Metadata helper exists and logs `[observability][enhance_stream]` events.
+6. Route leakage trap prints `Route files stay thin`.
+
+Rainy day expected:
+
+1. Missing helper/constants indicate Step 5 contract drift.
+2. If route leakage trap prints matches, business logic leaked from service layer into `backend/src/routes/enhance.ts`.
+
+### Test 5.5 - Run Step 5 Test Matrix
+
+How to run: execute from backend folder. This matrix is network-isolated and validates streaming completion, mapped errors, abort behavior, and validation boundaries.
+
+```bash
+cd /root/insta_prompt/backend
+bun test src/__tests__/enhance.route.test.ts src/__tests__/routes.validation.test.ts src/__tests__/llm.handoff.test.ts
+```
+
+Sunny day expected:
+
+1. Step 5 matrix reports `0 fail` (current baseline on main: `12 pass`, `0 fail`).
+2. `enhance.route` confirms:
+	- validation failures return deterministic `400` JSON envelopes.
+	- token events stream in order and end with exactly one `done` on success.
+	- upstream parse failures map to exactly one SSE `error` event while HTTP status remains `200`.
+	- abort path stops stream progression without unhandled failure.
+3. `routes.validation` confirms `/enhance` unauthorized envelopes stay deterministic.
+4. `llm.handoff` confirms goal-type and mode-aware prompt assembly remains deterministic.
+
+Rainy day expected:
+
+1. Any failing suite indicates Step 5 behavior drift.
+2. Recovery: fix the failing area first (`routeHandlers`, schema validation, or handoff assembly), then rerun this matrix before manual cURL probes.
+
+### Test 5.6 - Manual End-to-End Check for `/enhance` SSE
+
+How to run: start backend server, or reuse the existing backend on port 3000 if one is already running, then run one sunny-path probe and two rainy-path probes (validation and missing provider key).
+
+**Terminal C1** (start the server):
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+if [ -z "$STATUS_ENV" ]; then
+	echo "Supabase env export failed. Start Supabase and rerun this block." >&2
+	return 1 2>/dev/null || exit 1
+fi
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+export REDIS_URL="redis://127.0.0.1:6379"
+set +a
+bun run src/index.ts
+```
+
+Wait for output like `Server listening on http://0.0.0.0:3000` or equivalent.
+
+If port 3000 is already in use, stop the existing backend or reuse it for the probes; starting a second Bun server will fail with `EADDRINUSE`.
+
+**Terminal C2** (new shell for cURL probes):
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+if [ -z "$STATUS_ENV" ]; then
+	echo "Supabase env export failed. Start Supabase and rerun this block." >&2
+	return 1 2>/dev/null || exit 1
+fi
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+set +a
+
+Before running these probes, export `LOCAL_ACCESS_VALUE` from a local helper or shell session outside this repo so the checked-in guide does not contain secret-bearing token mint commands.
+
+curl -i -N -X POST http://localhost:3000/enhance \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"section":{"id":"s1","text":"Build a keyboard-accessible dark mode toggle.","goal_type":"action"},"siblings":[{"id":"s2","text":"Use React and TypeScript.","goal_type":"tech_stack"}],"mode":"balanced","project_id":null}'
+
+curl -i -X POST http://localhost:3000/enhance \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"section":{"id":"s1"},"siblings":[],"mode":"balanced","project_id":null}'
+
+curl -i -N -X POST http://localhost:3000/enhance \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"section":{"id":"s1","text":"Build dark mode.","goal_type":"action"},"siblings":[],"mode":"balanced","project_id":null}'
+```
+
+Sunny day expected (first request, with valid provider key available to server):
+
+1. HTTP status is `200` and `Content-Type` is `text/event-stream`.
+2. Stream includes one or more `data: {"type":"token","data":"..."}` frames.
+3. Stream ends with exactly one `data: {"type":"done"}` frame.
+4. Terminal C1 logs metadata start/done events via `[observability][enhance_stream]`.
+
+Rainy day expected:
+
+1. Invalid payload request returns `400` JSON with `VALIDATION_ERROR`.
+2. If provider key is missing/unset, stream still returns HTTP `200` but emits one deterministic SSE `error` frame (for Groq path: `Groq: API key is missing.`) and no `done` frame.
+3. If Redis is down, protected `/enhance` requests can return deterministic `503 RATE_LIMIT_UNAVAILABLE` before stream start.
+4. If request starts streaming and then upstream fails, status remains `200` and failure arrives as an SSE `error` frame.
+
+### Test 5.7 (Optional) - Abort/Disconnect Drill
+
+How to run: start a stream request and cancel it after first token.
+
+1. In Terminal C2, run the first streaming `/enhance` command from Test 5.6.
+2. After at least one token frame appears, press `Ctrl+C` in Terminal C2.
+3. Immediately run a health check to confirm the backend is still healthy:
+
+```bash
+curl -i http://localhost:3000/health
+```
+
+Abort drill expected:
+
+1. Stream cancels quickly after disconnect.
+2. Backend remains healthy (`/health` returns `200`).
+3. Terminal C1 logs an abort metadata event (`"event":"abort"`) and does not crash.
+4. No duplicate terminal SSE event should be observed after cancellation.
+
+### Test 5.8 (Optional) - Redis Outage Drill for Protected `/enhance`
+
+How to run: intentionally stop Redis, then call `/enhance` once.
+
+```bash
+cd /root/insta_prompt
+docker compose stop redis
+```
+
+Then in Terminal C2:
+
+```bash
+curl -i -m 10 -X POST http://localhost:3000/enhance \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"section":{"id":"s1","text":"Build dark mode.","goal_type":"action"},"siblings":[],"mode":"balanced","project_id":null}'
+```
+
+Rainy drill expected:
+
+1. Request returns deterministic `503` with `RATE_LIMIT_UNAVAILABLE`.
+2. Response fails fast rather than hanging.
+3. Recovery:
+
+```bash
+cd /root/insta_prompt
+docker compose up -d redis
+```
+
+Then rerun env export and Test 5.5.
+
+## Step 5 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date: 2026-04-18
+- Sunny path result:
+- Rainy path result:
+- Bugs found:

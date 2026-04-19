@@ -156,7 +156,7 @@ Rationale:
 Planning rule:
 
 1. Convert provider object events to `StreamEvent` envelope at route/lib boundary.
-2. Preserve required SSE headers and framing syntax.
+2. Serialize through the shared SSE framing helper in `backend/src/lib/sse.ts`, or emit exact SSE frames (`data: ...\n\n`) if a helper is unavailable; do not write raw JSON chunks to the response body.
 3. Keep adapters provider-focused and transport-agnostic.
 
 ### Decision D5: Abort and disconnect cleanup are first-class correctness requirements
@@ -169,7 +169,7 @@ Rationale:
 
 Planning rule:
 
-1. Pass request abort signal into provider stream request path.
+1. Pass `c.req.raw.signal` (Hono's request abort signal) into the provider stream request path. Do not use `c.signal` or `req.signal`.
 2. Stop token forwarding immediately after abort.
 3. Ensure cleanup runs for success, error, and abort paths.
 
@@ -183,9 +183,10 @@ Rationale:
 
 Planning rule:
 
-1. Map provider failures to deterministic SSE `error` event shape.
-2. Do not leak raw provider payloads or stack traces.
-3. Keep terminal-event behavior idempotent.
+1. Once `text/event-stream` headers are committed and the stream has started, HTTP status is immutable; mid-stream failures must be emitted as SSE `error` events and the stream must close gracefully.
+2. Map provider failures to deterministic SSE `error` event shape.
+3. Do not leak raw provider payloads or stack traces.
+4. Keep terminal-event behavior idempotent.
 
 ### Decision D7: Metadata capture must be non-blocking and Step 6-safe
 

@@ -105,7 +105,7 @@ BYOK is a credential-source flag, not a different endpoint shape or prompt type.
 
 ### Adapter Output Contract
 
-Provider adapters must emit normalized stream events as JavaScript objects through an async iterable interface.
+Provider adapters must emit normalized stream events as JavaScript objects through an async iterable interface. Route handlers own SSE framing and status finalization; adapters must not write raw JSON chunks or raw HTTP SSE strings directly.
 
 ```typescript
 async function* providerStream(...): AsyncGenerator<StreamEvent> {
@@ -192,5 +192,7 @@ Error mid-stream:
 ```
 data: {"type":"error","message":"rate limit exceeded"}
 ```
+
+Once a streaming response has begun, HTTP status is immutable. If a failure occurs after the first frame is emitted, the backend must send the SSE `error` event and close the stream gracefully instead of returning a new HTTP status or JSON response.
 
 The background service worker parses this format and forwards `token` events to the content script via Port. The content script appends each token to the ghost text overlay.

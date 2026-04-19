@@ -74,6 +74,8 @@ data: {"type":"token","data":"functional dark/light "}
 data: {"type":"done"}
 ```
 
+Streaming rule: the response status and headers are committed when the first SSE frame is written. After streaming begins, HTTP status is immutable; mid-stream provider failures must be represented only as SSE `error` events followed by a graceful stream close.
+
 ---
 
 ### POST `/segment`
@@ -120,6 +122,8 @@ Assemble all accepted expanded sections into one coherent prompt. Returns SSE st
 ```
 
 **Response** — `text/event-stream` (same SSE format as `/enhance`)
+
+The same streaming-status rule applies here: finalize status and headers before the first frame is written, and keep mid-stream failures in the SSE envelope instead of switching to a new HTTP response.
 
 ---
 

@@ -1,4 +1,4 @@
-export async function fetchProjectContext(projectId: string | null): Promise<string | null> {
+export async function fetchProjectContext(projectId: string | null | undefined): Promise<string | null> {
 	if (!projectId) {
 		return null;
 	}

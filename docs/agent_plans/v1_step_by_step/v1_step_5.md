@@ -103,8 +103,9 @@ Goal: convert normalized provider object events into HTTP SSE frames at the rout
 - [ ] Map provider `token` events to shared `StreamEvent` token frames in-order.
 - [ ] Emit one terminal `done` frame on successful completion.
 - [ ] Map provider error events to deterministic SSE `error` frames without leaking provider internals.
-- [ ] Keep SSE serialization in route/lib transport surfaces; adapters remain object-event emitters.
+- [ ] Keep SSE serialization in route/lib transport surfaces; use the shared SSE framing helper or exact `data: ...\n\n` framing, and never write raw JSON chunks to the response body.
 - [ ] Preserve required SSE headers (`Content-Type`, `Cache-Control`, `Connection`).
+- [ ] Finalize response status and headers before the first SSE frame is written; once streaming starts, HTTP status is immutable.
 - [ ] Add or extend SSE utility support for async iterable sources where needed.
 
 Allowed files for this slice:
@@ -117,13 +118,15 @@ Done when:
 
 1. Client receives ordered token frames and one terminal event.
 2. SSE envelope matches source-of-truth docs.
-3. Adapter and transport boundaries remain intact.
+3. Response status is committed before streaming begins and does not change mid-stream.
+4. Adapter and transport boundaries remain intact.
 
 ### 5.5 Implement abort and disconnect cleanup
 
 Goal: release provider/network resources promptly on cancel/disconnect.
 
 - [ ] Propagate request abort/disconnect into provider stream cancellation.
+- [ ] Use `c.req.raw.signal` (Hono's request abort signal) for abort propagation; do not use `c.signal` or `req.signal`.
 - [ ] Ensure cancelled streams stop token emission promptly.
 - [ ] Ensure cleanup executes on success, error, and abort paths.
 - [ ] Guard against double-terminal event emission after abort or error.
@@ -138,8 +141,9 @@ Allowed files for this slice:
 Done when:
 
 1. Abort releases resources and ends streaming promptly.
-2. Terminal-event handling is idempotent.
-3. No stale stream state remains after completion or cancellation.
+2. Abort propagation uses the Hono request signal surface, not a hallucinated alias.
+3. Terminal-event handling is idempotent.
+4. No stale stream state remains after completion or cancellation.
 
 ### 5.6 Capture enhance request metadata for usage/observability
 
