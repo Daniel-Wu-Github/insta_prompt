@@ -179,19 +179,23 @@ Deliverables:
 1. Final assembly endpoint that binds accepted sections.
 2. Canonical ordering enforcement server-side (never trust client order).
 3. History write on successful completion.
+4. Per-account abuse telemetry and short-window burst-limiter guardrails before provider budget consumption.
 
 Implementation checklist:
 
 1. Sort sections by canonical order in handler.
 2. Build bind prompt with mode-specific formatting instruction.
-3. Stream bound prompt tokens as SSE.
-4. On success, write row to `enhancement_history`.
-5. Add test for duplicate/redundant sections reduction behavior.
+3. Add short-window burst checks and abuse telemetry capture ahead of provider calls.
+4. Stream bound prompt tokens as SSE.
+5. On success, write row to `enhancement_history`.
+6. Add test for duplicate/redundant sections reduction behavior.
+7. Add test coverage for burst-limiter and abuse-telemetry guardrails.
 
 Done when:
 
 1. Output is single coherent prompt block.
 2. Canonical order is guaranteed regardless of request ordering.
+3. Burst-limiter and abuse-telemetry guardrails are part of the Step 6 contract.
 
 ## Step 7 - Background Service Worker Core
 

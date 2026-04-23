@@ -2,18 +2,19 @@ import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 
 import type { Tier } from "../../../shared/contracts";
-import type { StreamEvent } from "../../../shared/contracts";
 import { readJsonBody, validationErrorResponse, zodValidationErrorResponse } from "../lib/http";
 import { bindRequestSchema, enhanceRequestSchema, segmentRequestSchema, segmentResponseSchema } from "../lib/schemas";
-import { streamFromEvents } from "../lib/sse";
 import { parseWithSchema } from "../lib/validation";
 import { fetchProjectContext } from "./context";
 import {
 	captureEnhanceStreamMetadata,
+	recordEnhancementHistory,
 	type EnhanceStreamMetadata,
 	type EnhanceStreamMetadataEvent,
 } from "./history";
 import {
+	canonicalizeBindSections,
+	prepareBindServiceHandoff,
 	prepareEnhanceServiceHandoff,
 	selectModel,
 	type ByokConfig,
@@ -32,17 +33,7 @@ import {
 	normalizeSegmentClassificationIntermediate,
 } from "./segment";
 
-function toTokenEvents(text: string): StreamEvent[] {
-	const events: StreamEvent[] = text
-		.split(/\s+/)
-		.filter(Boolean)
-		.map((token) => ({ type: "token", data: `${token} ` }));
-
-	events.push({ type: "done" });
-	return events;
-}
-
-function initializeEnhanceStreamingAdapter(provider: string): ProviderStreamingAdapter | null {
+function initializeStreamingAdapter(provider: string): ProviderStreamingAdapter | null {
 	if (provider === "groq") {
 		return createGroqStreamingAdapter();
 	}
@@ -85,7 +76,7 @@ function isAbortError(error: unknown): boolean {
 	return false;
 }
 
-function toDeterministicEnhanceErrorMessage(errorEvent: ProviderStreamErrorEvent): string {
+function toDeterministicProviderErrorMessage(errorEvent: ProviderStreamErrorEvent): string {
 	const providerLabel = errorEvent.provider === "groq" ? "Groq" : "Anthropic";
 	const mapped = DETERMINISTIC_PROVIDER_ERROR_MESSAGES[errorEvent.code] ?? "request failed";
 
@@ -212,7 +203,7 @@ export async function enhanceRouteHandler(c: Context) {
 		model: handoff.model.model,
 	};
 
-	const providerAdapter = initializeEnhanceStreamingAdapter(model.provider);
+	const providerAdapter = initializeStreamingAdapter(model.provider);
 	if (!providerAdapter) {
 		return streamSSE(c, async (stream) => {
 			const captureMetadata = createEnhanceStreamMetadataCapture(enhanceMetadataBase);
@@ -297,7 +288,7 @@ export async function enhanceRouteHandler(c: Context) {
 						return;
 					}
 
-					await writeErrorEvent(toDeterministicEnhanceErrorMessage(providerEvent));
+					await writeErrorEvent(toDeterministicProviderErrorMessage(providerEvent));
 					return;
 				}
 
@@ -330,7 +321,7 @@ export async function enhanceRouteHandler(c: Context) {
 			}
 
 			const mappedError = toProviderErrorEvent(providerAdapter.provider, error);
-			await writeErrorEvent(toDeterministicEnhanceErrorMessage(mappedError));
+			await writeErrorEvent(toDeterministicProviderErrorMessage(mappedError));
 		}
 	});
 }
@@ -346,12 +337,192 @@ export async function bindRouteHandler(c: Context) {
 		return zodValidationErrorResponse(c, parsed.error);
 	}
 
-	const ordered = [...parsed.data.sections].sort((a, b) => a.canonical_order - b.canonical_order);
-	const finalPrompt = ordered.map((section) => section.expansion.trim()).join("\n\n");
+	const rawInput = JSON.stringify(parsed.data.sections);
+	const sectionCount = parsed.data.sections.length;
+	const tier = c.get("tier") as Tier;
+	const userId = c.get("userId") as string | undefined;
+	const byokConfig: ByokConfig | null = null;
+	const abortSignal = c.req.raw.signal;
+	const canonicalSections = canonicalizeBindSections(parsed.data.sections);
 
-	return c.newResponse(streamFromEvents(toTokenEvents(finalPrompt)), 200, {
-		"Content-Type": "text/event-stream",
-		"Cache-Control": "no-cache",
-		Connection: "keep-alive",
+	if (!userId || userId.trim().length === 0) {
+		return c.json(
+			{
+				error: {
+					code: "INTERNAL_ERROR",
+					message: "Bind user context is missing.",
+				},
+			},
+			500,
+		);
+	}
+
+	if (canonicalSections.length === 0) {
+		return validationErrorResponse(c, "sections must include at least one non-empty expansion");
+	}
+
+	const route = {
+		callType: "bind" as const,
+		tier,
+		mode: parsed.data.mode,
+		byokConfig,
+	};
+
+	const model = selectModel(route);
+	const handoff = prepareBindServiceHandoff({
+		route,
+		template: {
+			mode: parsed.data.mode,
+			sections: canonicalSections,
+		},
+	});
+
+	const providerAdapter = initializeStreamingAdapter(model.provider);
+	if (!providerAdapter) {
+		return c.json(
+			{
+				error: {
+					code: "UNSUPPORTED_PROVIDER",
+					message: "Bind streaming provider is not supported.",
+				},
+			},
+			400,
+		);
+	}
+
+	if (
+		handoff.model.provider !== model.provider ||
+		handoff.model.model !== model.model ||
+		handoff.model.maxTokens !== model.maxTokens
+	) {
+		return c.json(
+			{
+				error: {
+					code: "INTERNAL_ERROR",
+					message: "Bind handoff model mismatch.",
+				},
+			},
+			500,
+		);
+	}
+
+	if (handoff.prompt.trim().length === 0) {
+		return c.json(
+			{
+				error: {
+					code: "INTERNAL_ERROR",
+					message: "Bind handoff prompt is empty.",
+				},
+			},
+			500,
+		);
+	}
+
+	const modelUsed = `${handoff.model.provider}:${handoff.model.model}`;
+
+	return streamSSE(c, async (stream) => {
+		let finalPrompt = "";
+		let generationCompleted = false;
+		let terminalEventSent = false;
+		let streamAborted = false;
+
+		stream.onAbort(() => {
+			streamAborted = true;
+		});
+
+		const writeErrorEvent = async (message: string) => {
+			if (terminalEventSent || streamAborted || abortSignal.aborted) {
+				return;
+			}
+
+			terminalEventSent = true;
+			await stream.writeSSE({
+				data: JSON.stringify({
+					type: "error",
+					message,
+				}),
+			});
+		};
+
+		try {
+			for await (const providerEvent of providerAdapter.stream({
+				model: handoff.model.model,
+				userPrompt: handoff.prompt,
+				maxTokens: handoff.model.maxTokens,
+				signal: abortSignal,
+			})) {
+				if (streamAborted || abortSignal.aborted) {
+					return;
+				}
+
+				if (providerEvent.type === "token") {
+					finalPrompt += providerEvent.content;
+					await stream.writeSSE({
+						data: JSON.stringify({
+							type: "token",
+							data: providerEvent.content,
+						}),
+					});
+					continue;
+				}
+
+				if (providerEvent.type === "error") {
+					if (providerEvent.code === "PROVIDER_ABORTED") {
+						return;
+					}
+
+					await writeErrorEvent(toDeterministicProviderErrorMessage(providerEvent));
+					return;
+				}
+
+				generationCompleted = true;
+				break;
+			}
+
+			if (!generationCompleted && !streamAborted && !abortSignal.aborted) {
+				generationCompleted = true;
+			}
+
+			if (!generationCompleted || streamAborted || abortSignal.aborted || terminalEventSent) {
+				return;
+			}
+
+			try {
+				await recordEnhancementHistory({
+					userId,
+					projectId: null,
+					rawInput,
+					finalPrompt,
+					mode: parsed.data.mode,
+					modelUsed,
+					sectionCount,
+				});
+			} catch {
+				if (streamAborted || abortSignal.aborted) {
+					return;
+				}
+
+				await writeErrorEvent("Bind history persistence failed.");
+				return;
+			}
+
+			if (c.req.raw.signal.aborted || streamAborted || terminalEventSent) {
+				return;
+			}
+
+			terminalEventSent = true;
+			await stream.writeSSE({
+				data: JSON.stringify({
+					type: "done",
+				}),
+			});
+		} catch (error) {
+			if (isAbortError(error) || streamAborted || abortSignal.aborted) {
+				return;
+			}
+
+			const mappedError = toProviderErrorEvent(providerAdapter.provider, error);
+			await writeErrorEvent(toDeterministicProviderErrorMessage(mappedError));
+		}
 	});
 }

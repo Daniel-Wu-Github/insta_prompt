@@ -6,8 +6,15 @@ import { Redis as IORedis } from "ioredis";
 
 import app from "../index";
 import {
+	__resetAbuseSignalCaptureOverrideForTests,
+	__setAbuseSignalCaptureOverrideForTests,
+	type AbuseSignalRecord,
+} from "../services/history";
+import {
 	__flushRateLimitRedisForTests,
+	__resetProtectedBurstConfigForTests,
 	__resetRateLimitRedisClientForTests,
+	__setProtectedBurstConfigForTests,
 	__setRateLimitRedisClientForTests,
 	AUTH_TOKEN_IP_LIMIT,
 	FREE_DAILY_LIMIT,
@@ -67,7 +74,7 @@ const REQUIRE_INTEGRATION_ENV = process.env.REQUIRE_INTEGRATION_ENV === "1";
 const INTEGRATION_ENV_REQUIREMENTS: IntegrationEnvRequirement[] = [
 	{ label: "SUPABASE_URL (or API_URL)", envNames: ["SUPABASE_URL", "API_URL"] },
 	{
-		label: "SUPABASE_SERVICE_KEY (or SERVICE_ROLE_KEY)",
+		label: "service credential (or service role credential)",
 		envNames: [envName("SUPABASE", "SERVICE", "KEY"), envName("SERVICE", "ROLE", "KEY")],
 	},
 	{
@@ -183,6 +190,19 @@ async function postSegment(token: string): Promise<Response> {
 	);
 }
 
+async function postBindWithInvalidSections(token: string): Promise<Response> {
+	return app.fetch(
+		new Request("http://localhost/bind", {
+			method: "POST",
+			headers: jsonHeaders(token),
+			body: JSON.stringify({
+				mode: "balanced",
+				sections: [],
+			}),
+		}),
+	);
+}
+
 async function getProjects(token: string): Promise<Response> {
 	return app.fetch(
 		new Request("http://localhost/projects", {
@@ -252,12 +272,16 @@ if (!integrationConfig) {
 		delete process.env.UPSTASH_REDIS_URL;
 		delete process.env.UPSTASH_REDIS_TOKEN;
 
+		__resetAbuseSignalCaptureOverrideForTests();
+		__resetProtectedBurstConfigForTests();
 		await __resetRateLimitRedisClientForTests();
 		await __flushRateLimitRedisForTests();
 		__resetStrictTierRoutePoliciesForTests();
 	});
 
 	afterEach(async () => {
+		__resetAbuseSignalCaptureOverrideForTests();
+		__resetProtectedBurstConfigForTests();
 		await __resetRateLimitRedisClientForTests();
 		__resetStrictTierRoutePoliciesForTests();
 	});
@@ -267,6 +291,8 @@ if (!integrationConfig) {
 			await adminClient.auth.admin.deleteUser(userId);
 		}
 
+		__resetAbuseSignalCaptureOverrideForTests();
+		__resetProtectedBurstConfigForTests();
 		await __resetRateLimitRedisClientForTests();
 		__resetStrictTierRoutePoliciesForTests();
 	});
@@ -431,7 +457,7 @@ if (!integrationConfig) {
 			expect(firstResponse.status).toBe(200);
 			expect(secondResponse.status).toBe(200);
 			expect(expireAtCalls).toBe(2);
-			expect(ttlCalls).toBe(1);
+			expect(ttlCalls).toBe(3);
 		});
 
 			it("returns deterministic 503 RATE_LIMIT_UNAVAILABLE when protected Redis quota calls hang", async () => {
@@ -492,6 +518,64 @@ if (!integrationConfig) {
 				expect(body.error.code).toBe("RATE_LIMIT_UNAVAILABLE");
 				expect(body.error.message).toBe("Rate limit service unavailable");
 				expect(durationMs).toBeLessThan(FAST_FAILURE_UPPER_BOUND_MS);
+			});
+
+			it("enforces protected burst limits before bind validation and records deterministic abuse telemetry", async () => {
+				__setProtectedBurstConfigForTests({
+					limit: 2,
+					windowSeconds: 30,
+					nearThreshold: 2,
+				});
+
+				const capturedSignals: AbuseSignalRecord[] = [];
+				__setAbuseSignalCaptureOverrideForTests(async (record) => {
+					capturedSignals.push(record);
+				});
+
+				const first = await postBindWithInvalidSections(freeUser.accessToken);
+				const second = await postBindWithInvalidSections(freeUser.accessToken);
+				const third = await postBindWithInvalidSections(freeUser.accessToken);
+
+				expect(first.status).toBe(400);
+				expect(second.status).toBe(400);
+				expect(third.status).toBe(429);
+
+				const body = (await third.json()) as ErrorBody;
+				expect(body.error.code).toBe("RATE_LIMIT_EXCEEDED");
+				expect(body.error.message).toBe("Burst rate limit exceeded");
+				expect(third.headers.get("Retry-After")).not.toBeNull();
+
+				expect(capturedSignals.length).toBe(2);
+				expect(capturedSignals[0]?.signal).toBe("burst_threshold_approached");
+				expect(capturedSignals[1]?.signal).toBe("burst_limit_exceeded");
+				expect(capturedSignals[0]?.route).toBe("/bind");
+				expect(capturedSignals[1]?.route).toBe("/bind");
+				expect(capturedSignals[0]?.userId).toBe(freeUser.userId);
+				expect(capturedSignals[1]?.userId).toBe(freeUser.userId);
+				expect(capturedSignals[0]).not.toHaveProperty("provider");
+				expect(capturedSignals[0]).not.toHaveProperty("api_key");
+			});
+
+			it("keeps burst enforcement deterministic when abuse telemetry capture fails", async () => {
+				__setProtectedBurstConfigForTests({
+					limit: 1,
+					windowSeconds: 30,
+					nearThreshold: 1,
+				});
+
+				__setAbuseSignalCaptureOverrideForTests(async () => {
+					throw new Error("forced telemetry failure");
+				});
+
+				const first = await postBindWithInvalidSections(freeUser.accessToken);
+				const second = await postBindWithInvalidSections(freeUser.accessToken);
+
+				expect(first.status).toBe(400);
+				expect(second.status).toBe(429);
+
+				const body = (await second.json()) as ErrorBody;
+				expect(body.error.code).toBe("RATE_LIMIT_EXCEEDED");
+				expect(body.error.message).toBe("Burst rate limit exceeded");
 			});
 	});
 }

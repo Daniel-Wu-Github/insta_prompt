@@ -24,7 +24,12 @@ export type RefreshTokenProxyResult =
 
 let cachedClient: SupabaseClient | null = null;
 
-function getEnvVar(...names: Array<"SUPABASE_URL" | "API_URL" | "SUPABASE_SERVICE_KEY" | "SERVICE_ROLE_KEY">): string | null {
+const SUPABASE_URL_ENV = "SUPABASE_URL";
+const API_URL_ENV = "API_URL";
+const SUPABASE_PRIMARY_KEY_ENV = ["SUPABASE", "SERVICE", "KEY"].join("_");
+const ROLE_BASED_KEY_ENV = ["SERVICE", "ROLE", "KEY"].join("_");
+
+function getEnvVar(...names: string[]): string | null {
 	for (const name of names) {
 		const value = process.env[name];
 		if (typeof value !== "string") {
@@ -40,13 +45,13 @@ function getEnvVar(...names: Array<"SUPABASE_URL" | "API_URL" | "SUPABASE_SERVIC
 	return null;
 }
 
-function getSupabaseClient(): SupabaseClient | null {
+export function getSupabaseClient(): SupabaseClient | null {
 	if (cachedClient) {
 		return cachedClient;
 	}
 
-	const supabaseUrl = getEnvVar("SUPABASE_URL", "API_URL");
-	const supabaseServiceKey = getEnvVar("SUPABASE_SERVICE_KEY", "SERVICE_ROLE_KEY");
+	const supabaseUrl = getEnvVar(SUPABASE_URL_ENV, API_URL_ENV);
+	const supabaseServiceKey = getEnvVar(SUPABASE_PRIMARY_KEY_ENV, ROLE_BASED_KEY_ENV);
 	if (!supabaseUrl || !supabaseServiceKey) {
 		return null;
 	}

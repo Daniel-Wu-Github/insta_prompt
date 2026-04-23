@@ -11,8 +11,9 @@ Step 6 is done when the repo has:
 5. Route-level SSE serialization that preserves `token | done | error` semantics with one terminal outcome.
 6. Abort-safe and error-safe stream cleanup behavior.
 7. Exactly one successful `enhancement_history` write on successful bind completion.
-8. Tests for validation, canonical ordering, completion, cancel, provider-error mapping, persistence success/failure behavior, and duplicate/redundant section handling.
-9. No Step 7 extension bridge behavior or Step 8+ UX/commit behavior leakage.
+8. Per-account abuse telemetry and short-window burst-limiter guardrails before provider budget consumption.
+9. Tests for validation, canonical ordering, completion, cancel, provider-error mapping, persistence success/failure behavior, duplicate/redundant section handling, and burst/abuse guardrail behavior.
+10. No Step 7 extension bridge behavior or Step 8+ UX/commit behavior leakage.
 
 ## Step 6 Taskboard
 
@@ -112,7 +113,35 @@ Done when:
 2. Bind handoff uses one canonical-order source.
 3. Duplicate/redundant content handling intent is explicit and deterministic.
 
-### 6.5 Stream bind provider events through the unified SSE envelope
+### 6.5 Add per-account abuse telemetry and burst limiter guardrails
+
+Goal: throttle suspicious high-frequency protected-route traffic and persist deterministic abuse signals before provider budgets are consumed.
+
+- [ ] Add a short-window per-account burst limiter for protected LLM routes (`/segment`, `/enhance`, `/bind`) in the shared rate-limit service.
+- [ ] Keep the existing free-tier daily quota behavior and envelope semantics unchanged.
+- [ ] Emit deterministic abuse-signal records when burst thresholds are exceeded (or repeatedly approached) without leaking provider or secret data.
+- [ ] Keep abuse-signal persistence non-blocking; request enforcement must stay deterministic even if telemetry write fails.
+- [ ] Keep route and middleware responsibilities thin: shared limiter logic in services, route decisions in middleware.
+- [ ] Add deterministic tests for burst-boundary behavior and telemetry-trigger paths.
+
+Allowed files for this slice:
+
+- `backend/src/services/rateLimit.ts`
+- `backend/src/middleware/ratelimit.ts`
+- `backend/src/services/history.ts` (or a dedicated abuse telemetry service if introduced)
+- `backend/src/__tests__/ratelimit.integration.test.ts`
+- `backend/src/__tests__/rateLimit.service.test.ts`
+- `supabase/migrations/**` (only if a dedicated abuse-signal table/columns are explicitly approved)
+- `docs/BACKEND_API.md` (only if deterministic envelope/code contract changes are approved)
+
+Done when:
+
+1. Burst-limiter checks execute before provider call paths on protected LLM routes.
+2. Abuse signals are persisted with deterministic fields and no secret leakage.
+3. Burst-throttle responses are deterministic (`429`) and Redis-unavailable behavior remains deterministic (`503 RATE_LIMIT_UNAVAILABLE`).
+4. Existing Step 2 daily-quota behavior and tier semantics remain intact.
+
+### 6.6 Stream bind provider events through the unified SSE envelope
 
 Goal: convert provider stream events into deterministic bind SSE output.
 
@@ -122,6 +151,7 @@ Goal: convert provider stream events into deterministic bind SSE output.
 - [ ] Keep SSE serialization in route/lib transport surfaces; use shared framing helpers or exact `data: ...\n\n` framing.
 - [ ] Preserve required SSE headers and keep status immutable after streaming starts.
 - [ ] Guard against duplicate or mixed terminal outcomes.
+- [ ] Before emitting terminal `done` or `error` after asynchronous post-generation work (including persistence), check `c.req.raw.signal.aborted` and return without writing if aborted.
 
 Allowed files for this slice:
 
@@ -136,16 +166,19 @@ Done when:
 2. SSE envelope matches source-of-truth docs.
 3. Terminal behavior is deterministic and idempotent.
 
-### 6.6 Persist successful bind completion to enhancement history
+### 6.7 Persist successful bind completion to enhancement history
 
 Goal: write one deterministic success record for each successful bind stream completion.
 
 - [ ] Implement `recordEnhancementHistory` persistence wiring for successful bind completion.
 - [ ] Capture deterministic history payload fields: `userId`, derived `rawInput`, `finalPrompt`, `mode`, `modelUsed`, and `section_count`.
+- [ ] Derive `rawInput` by JSON serializing the validated client-provided bind sections array, preserving per-section structure (`canonical_order`, `goal_type`, `expansion`) and array order.
+- [ ] Do not flatten `rawInput` into one concatenated text block.
 - [ ] Keep `project_id` nullable unless a contract update is explicitly approved.
 - [ ] Attempt exactly one write per successful bind completion before emitting terminal `done`.
 - [ ] Ensure abort/error paths do not create success history rows.
 - [ ] Ensure write failures map to deterministic stream-safe `error` behavior when `done` has not yet been emitted.
+- [ ] Extract `userId` strictly from middleware-populated Hono context (`c.get("userId")`); do not decode JWT manually or re-run Supabase auth verification inside the bind route.
 
 Allowed files for this slice:
 
@@ -158,8 +191,9 @@ Done when:
 1. Successful binds produce exactly one successful history write attempt.
 2. Abort/error binds produce zero success rows.
 3. Persistence behavior is deterministic and stream-safe.
+4. `rawInput` preserves structured section boundaries and ordering for history/audit replay.
 
-### 6.7 Add Step 6 test matrix
+### 6.8 Add Step 6 test matrix
 
 Goal: prove `/bind` behavior across validation, canonicalization, streaming, and persistence paths.
 
@@ -179,7 +213,7 @@ Done when:
 2. Canonical-order and persistence semantics are deterministic and test-covered.
 3. Step boundary with Step 7+ remains intact.
 
-### 6.8 Final review and handoff
+### 6.9 Final review and handoff
 
 Goal: ensure Step 6 is complete and Step 7 can begin without reopening bind decisions.
 
@@ -204,9 +238,10 @@ Treat Step 6 as production bind-route and persistence work, not temporary scaffo
 2. Canonical bind ordering is enforced server-side regardless of request ordering.
 3. Model and bind prompt assembly are deterministic by `callType`, `tier`, and `mode`.
 4. Token ordering is preserved and terminal-event behavior is explicit.
-5. Successful bind completion triggers exactly one deterministic success-write attempt.
-6. Abort/error paths never emit success rows.
-7. Step 7+ boundaries remain preserved.
+5. Burst-limiter and abuse-telemetry guardrails execute before provider budget consumption.
+6. Successful bind completion triggers exactly one deterministic success-write attempt.
+7. Abort/error paths never emit success rows.
+8. Step 7+ boundaries remain preserved.
 
 ## Step 6 Exit Criteria
 
@@ -215,17 +250,19 @@ Do not start Step 7 until all of these are true:
 1. Step 6 taskboard is complete.
 2. `/bind` streams ordered token events and one terminal event.
 3. Canonical order is guaranteed server-side regardless of request ordering.
-4. Successful bind completion writes one deterministic history row.
-5. Abort/error paths do not create success history rows.
-6. Step 6 validation/canonical/stream/persistence tests pass.
-7. No Step 7+ extension or UX behavior was implemented early.
+4. Burst-limiter and abuse-telemetry guardrails are present and deterministic.
+5. Successful bind completion writes one deterministic history row.
+6. Abort/error paths do not create success history rows.
+7. Step 6 validation/canonical/stream/persistence/abuse tests pass.
+8. No Step 7+ extension or UX behavior was implemented early.
 
 ## Short Version You Can Remember
 
 1. Lock Step 6 scope before touching bind code.
 2. Replace placeholder `/bind` behavior with routed model+prompt streaming orchestration.
 3. Enforce canonical ordering server-side before final assembly.
-4. Serialize provider output into deterministic `token | done | error` SSE frames.
-5. Persist one successful history row for each successful bind completion.
-6. Add bind-focused tests for canonical order, stream behavior, and persistence semantics.
-7. Hand off to Step 7 only after Step 6 boundaries are clean.
+4. Add short-window burst-limiter and abuse-telemetry guardrails before provider calls.
+5. Serialize provider output into deterministic `token | done | error` SSE frames.
+6. Persist one successful history row for each successful bind completion.
+7. Add bind-focused tests for canonical order, stream behavior, persistence semantics, and abuse guardrails.
+8. Hand off to Step 7 only after Step 6 boundaries are clean.

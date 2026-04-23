@@ -21,16 +21,17 @@ The following decisions are now locked for implementation and must not be re-ope
 
 | Decision area | Locked choice (Phase 6) | Why this is locked now | Downstream dependency |
 |---|---|---|---|
-| `/bind` transport contract | `/bind` remains `POST` + `text/event-stream`, emitting ordered `token` events and one terminal event (`done` or `error`) in the shared envelope. | Background bridge and bind-preview flows depend on deterministic stream framing. | 6.5 stream serialization, 6.7 stream contract tests |
-| Router path invariant | `/bind` always resolves model config through `selectModel({ callType: "bind", tier, mode, byokConfig })`; no route-level provider policy branching. | Keeps routing policy centralized in Step 3 service surfaces and avoids drift. | 6.3 handoff wiring, 6.7 routing assertions |
-| Prompt-assembly invariant | `/bind` prompt text is built via Step 3 bind prompt assembly (`prepareBindServiceHandoff`); route handlers do not inline bind templates. | Preserves deterministic prompt behavior and keeps canonical-order logic centralized. | 6.4 bind assembly, 6.7 prompt-handoff tests |
-| Canonical-order invariant | Server canonicalizes and sorts sections from `goal_type` slot mapping (`context -> tech_stack -> constraint -> action -> output_format -> edge_case`) and never trusts client order. | Final bind quality and cross-layer consistency depend on one canonical order source. | 6.4 canonicalization checks, 6.7 out-of-order input tests |
-| SSE boundary rule | Provider adapters emit object events only; SSE string framing remains route/lib transport responsibility. | Keeps provider abstraction clean and transport behavior testable. | 6.5 SSE utility integration |
-| Terminal/idempotency rule | Stream emits exactly one terminal outcome; no duplicate `done` or mixed terminal events after abort/error. | Prevents dangling bind states in downstream consumers. | 6.5 terminal guards, 6.7 terminal-event tests |
-| Persistence-write coupling | On successful bind completion, exactly one `enhancement_history` write is attempted before the terminal `done` event is finalized. | Step 6 explicitly owns successful bind history persistence and auditability. | 6.6 history write wiring, 6.7 persistence-path tests |
-| History payload policy | History writes record deterministic `raw_input`, `final_prompt`, `mode`, `model_used`, and `section_count`; `project_id` remains nullable. | Current bind request shape does not include explicit raw-input/project payload fields, but DB schema still requires non-null `raw_input`. | 6.6 payload shaping, residual-risk tracking |
-| Error/abort policy | Provider/persistence failures map to deterministic non-leaky SSE `error` events; abort/error paths do not create success history rows. | Ensures contract-safe failures while preserving data integrity semantics. | 6.5 error mapping, 6.6 write gating, 6.7 failure-path tests |
-| Step boundary rule | Step 6 implements `/bind` backend orchestration and successful persistence only; Step 7 extension bridge and Step 8+ UX/commit behavior remain deferred. | Preserves sequence and avoids integration churn. | 6.8 handoff, Step 7+ readiness |
+| `/bind` transport contract | `/bind` remains `POST` + `text/event-stream`, emitting ordered `token` events and one terminal event (`done` or `error`) in the shared envelope. | Background bridge and bind-preview flows depend on deterministic stream framing. | 6.6 stream serialization, 6.8 stream contract tests |
+| Router path invariant | `/bind` always resolves model config through `selectModel({ callType: "bind", tier, mode, byokConfig })`; no route-level provider policy branching. | Keeps routing policy centralized in Step 3 service surfaces and avoids drift. | 6.3 handoff wiring, 6.8 routing assertions |
+| Prompt-assembly invariant | `/bind` prompt text is built via Step 3 bind prompt assembly (`prepareBindServiceHandoff`); route handlers do not inline bind templates. | Preserves deterministic prompt behavior and keeps canonical-order logic centralized. | 6.4 bind assembly, 6.8 prompt-handoff tests |
+| Canonical-order invariant | Server canonicalizes and sorts sections from `goal_type` slot mapping (`context -> tech_stack -> constraint -> action -> output_format -> edge_case`) and never trusts client order. | Final bind quality and cross-layer consistency depend on one canonical order source. | 6.4 canonicalization checks, 6.8 out-of-order input tests |
+| Abuse-guardrail invariant | Protected LLM routes apply short-window per-account burst checks and emit abuse telemetry signals before provider calls. | Limits account-level high-frequency exploitation and preserves forensic visibility without consuming provider budget first. | 6.5 limiter/telemetry slice, 6.8 abuse-path tests |
+| SSE boundary rule | Provider adapters emit object events only; SSE string framing remains route/lib transport responsibility. | Keeps provider abstraction clean and transport behavior testable. | 6.6 SSE utility integration |
+| Terminal/idempotency rule | Stream emits exactly one terminal outcome; no duplicate `done` or mixed terminal events after abort/error. | Prevents dangling bind states in downstream consumers. | 6.6 terminal guards, 6.8 terminal-event tests |
+| Persistence-write coupling | On successful bind completion, exactly one `enhancement_history` write is attempted before the terminal `done` event is finalized. | Step 6 explicitly owns successful bind history persistence and auditability. | 6.7 history write wiring, 6.8 persistence-path tests |
+| History payload policy | History writes record deterministic `raw_input`, `final_prompt`, `mode`, `model_used`, and `section_count`; `project_id` remains nullable. | Current bind request shape does not include explicit raw-input/project payload fields, but DB schema still requires non-null `raw_input`. | 6.7 payload shaping, residual-risk tracking |
+| Error/abort policy | Provider/persistence failures map to deterministic non-leaky SSE `error` events; abort/error paths do not create success history rows. | Ensures contract-safe failures while preserving data integrity semantics. | 6.6 error mapping, 6.7 write gating, 6.8 failure-path tests |
+| Step boundary rule | Step 6 implements `/bind` backend orchestration and successful persistence only; Step 7 extension bridge and Step 8+ UX/commit behavior remain deferred. | Preserves sequence and avoids integration churn. | 6.9 handoff, Step 7+ readiness |
 
 ### Step 6 scope in one paragraph
 
@@ -43,7 +44,8 @@ Step 6 replaces placeholder `/bind` behavior with production SSE final-assembly 
 3. Bind prompt assembly with mode-specific formatting instructions.
 4. Streaming bind output over the unified SSE envelope.
 5. Successful completion write to `enhancement_history`.
-6. Tests for completion, cancel, provider-error mapping, persistence behavior, and duplicate/redundant section handling.
+6. Per-account burst-limiter and abuse telemetry guardrails before provider calls.
+7. Tests for completion, cancel, provider-error mapping, persistence behavior, duplicate/redundant section handling, and abuse guardrails.
 
 ### Runtime-deferred implementation surface for this planning pass
 
@@ -51,11 +53,12 @@ The following runtime files are intentionally deferred until Phase F execution s
 
 1. `backend/src/services/routeHandlers.ts` (`bindRouteHandler` production behavior)
 2. `backend/src/services/history.ts` (history persistence implementation)
-3. `backend/src/services/supabase.ts` (shared client/export wiring only if required)
-4. `backend/src/lib/sse.ts` (only if stream framing helpers are expanded)
-5. `backend/src/services/providers/**` (only if bind adapter selection or abort plumbing needs tightening)
-6. `backend/src/lib/schemas.ts` and `shared/contracts/api.ts` (only if bind request constraints change)
-7. `backend/src/__tests__/` Step 6 test expansions for bind stream/persistence behavior
+3. `backend/src/services/rateLimit.ts` and `backend/src/middleware/ratelimit.ts` (burst-limiter and abuse-telemetry implementation)
+4. `backend/src/services/supabase.ts` (shared client/export wiring only if required)
+5. `backend/src/lib/sse.ts` (only if stream framing helpers are expanded)
+6. `backend/src/services/providers/**` (only if bind adapter selection or abort plumbing needs tightening)
+7. `backend/src/lib/schemas.ts` and `shared/contracts/api.ts` (only if bind request constraints change)
+8. `backend/src/__tests__/` Step 6 test expansions for bind stream/persistence/abuse behavior
 
 Planning rule:
 
@@ -71,6 +74,7 @@ Planning rule:
 | Bind semantics and canonical ordering expectations | `docs/CLAUSE_PIPELINE.md` + `docs/UX_FLOW.md` | Defines canonical-order bind behavior consumed by extension flows. |
 | Model and provider routing behavior for bind calls | `docs/LLM_ROUTING.md` | Locks call-type/tier/mode routing behavior. |
 | Bind persistence schema requirements | `docs/DATA_MODELS.md` | Defines required `enhancement_history` write shape. |
+| Protected-route burst guardrails | `docs/BACKEND_API.md` + `docs/ARCHITECTURE.md` | Defines the route/middleware boundary for deterministic burst-throttle and abuse-telemetry enforcement. |
 | Shared request/event contracts | `shared/contracts/api.ts`, `shared/contracts/sse.ts`, `backend/src/lib/schemas.ts` | Keeps runtime validation and transport typing aligned. |
 | Existing orchestration and persistence surfaces | `backend/src/services/routeHandlers.ts`, `backend/src/services/history.ts`, `backend/src/routes/bind.ts` | Defines implementation target for placeholder replacement. |
 | Step-level acceptance criteria | `docs/agent_plans/v1_step_by_step/v1_step_6.md` | Defines execution checklist and done criteria. |
@@ -175,6 +179,7 @@ Planning rule:
 1. Pass `c.req.raw.signal` through provider stream request path.
 2. Stop forwarding token events immediately after abort.
 3. Guard terminal emission so only one terminal outcome can be sent.
+4. Before emitting terminal `done` or `error` after asynchronous post-generation work (including history writes), check `c.req.raw.signal.aborted` and return without writing if aborted.
 
 ### Decision D6: Successful bind persistence is coupled to successful stream completion
 
@@ -200,9 +205,10 @@ Rationale:
 
 Planning rule:
 
-1. Derive deterministic `raw_input` from canonicalized section expansions.
-2. Keep `project_id` nullable (`null`) unless a contract update is explicitly approved.
-3. Persist `mode`, `model_used`, and `section_count` deterministically.
+1. Derive deterministic `raw_input` by JSON serializing the validated client-provided bind sections array, preserving per-section structure (`canonical_order`, `goal_type`, `expansion`) and array order.
+2. Do not collapse sections into one flattened concatenated string when deriving `raw_input`.
+3. Keep `project_id` nullable (`null`) unless a contract update is explicitly approved.
+4. Persist `mode`, `model_used`, and `section_count` deterministically.
 
 ### Decision D8: Abort/error paths never create success history rows
 
@@ -262,13 +268,30 @@ Execution order constraint:
 2. Ensure out-of-order client input yields deterministic canonical prompt assembly.
 3. Keep canonical ordering source centralized (no alternate route-local map).
 
-### 6.5 Provider-event to SSE envelope streaming for bind
+### 6.5 Short-window burst limiter and abuse telemetry guardrails
+
+- `backend/src/services/rateLimit.ts`
+- `backend/src/middleware/ratelimit.ts`
+- `backend/src/services/history.ts` (or a dedicated abuse telemetry service if introduced)
+- `backend/src/__tests__/ratelimit.integration.test.ts`
+- `backend/src/__tests__/rateLimit.service.test.ts`
+- `supabase/migrations/**` (only if a dedicated abuse-signal table/columns are explicitly approved)
+
+Dependencies: Step 2 rate-limit semantics and 6.3-6.4 route/prompt wiring.
+
+Execution order constraint:
+
+1. Apply burst checks before provider calls on protected LLM routes.
+2. Persist deterministic abuse telemetry without leaking provider or secret data.
+3. Keep enforcement deterministic even if telemetry persistence fails.
+
+### 6.6 Provider-event to SSE envelope streaming for bind
 
 - `backend/src/services/routeHandlers.ts`
 - `backend/src/lib/sse.ts`
 - `backend/src/services/providers/**` (only if adapter lifecycle hooks need tightening)
 
-Dependencies: 6.3-6.4 complete.
+Dependencies: 6.3-6.5 complete.
 
 Execution order constraint:
 
@@ -276,28 +299,30 @@ Execution order constraint:
 2. Serialize deterministic `token | done | error` SSE events.
 3. Enforce single terminal outcome and abort-safe cleanup.
 
-### 6.6 Successful enhancement-history persistence wiring
+### 6.7 Successful enhancement-history persistence wiring
 
 - `backend/src/services/routeHandlers.ts`
 - `backend/src/services/history.ts`
 - `backend/src/services/supabase.ts` (only if shared client/export support is required)
 
-Dependencies: 6.5 stream behavior complete.
+Dependencies: 6.6 stream behavior complete.
 
 Execution order constraint:
 
 1. Accumulate final bind output while streaming token events.
 2. On success path, write exactly one `enhancement_history` row before terminal `done`.
 3. Keep write failures deterministic and stream-safe (`error` terminal if `done` not yet sent).
+4. Read `userId` strictly from middleware-populated Hono context (`c.get("userId")`); do not decode JWT in-route or re-run Supabase auth verification inside `bindRouteHandler`.
+5. Derive `raw_input` using structured JSON serialization of validated bind sections; preserve section boundaries and order.
 
-### 6.7 Test matrix expansion
+### 6.8 Test matrix expansion
 
 - `backend/src/__tests__/bind.route.test.ts` (new)
 - `backend/src/__tests__/routes.validation.test.ts` (if bind validation envelopes are expanded)
 - `backend/src/__tests__/llm.handoff.test.ts` (if bind handoff assertions are expanded)
 - `backend/src/__tests__/stress-tests.test.ts` (if bind cancel/stream stress checks are added)
 
-Dependencies: 6.3-6.6 runtime behavior complete.
+Dependencies: 6.3-6.7 runtime behavior complete.
 
 Test boundary rule:
 
@@ -311,7 +336,7 @@ Test boundary rule:
 8. Cover duplicate/redundant section handling expectations in canonical bind assembly.
 9. Keep tests network-isolated with deterministic adapter stubs/mocks.
 
-### 6.8 Final review and handoff
+### 6.9 Final review and handoff
 
 - `docs/agent_plans/v1_step_by_step/v1_step_6.md` (checkbox status)
 - `logging/progress_log.md`
@@ -366,19 +391,21 @@ Slice sequence:
 
 1. Slice 1: bind validation and model/prompt handoff integration.
 2. Slice 2: canonical bind section ordering enforcement in route handoff.
-3. Slice 3: provider-event to SSE envelope streaming with terminal guards.
-4. Slice 4: successful enhancement-history write integration.
-5. Slice 5: test matrix expansion for validation/completion/cancel/error/persistence behavior.
-6. Slice 6: final criteria audit and progress-log update.
+3. Slice 3: short-window burst-limiter and abuse-telemetry guardrails.
+4. Slice 4: provider-event to SSE envelope streaming with terminal guards.
+5. Slice 5: successful enhancement-history write integration.
+6. Slice 6: test matrix expansion for validation/completion/cancel/error/persistence/abuse behavior.
+7. Slice 7: final criteria audit and progress-log update.
 
 Slice stop conditions (for execution pass):
 
 1. Slice 1 stop: `/bind` handoff is deterministic and schema-safe.
 2. Slice 2 stop: canonical order is guaranteed server-side regardless of request ordering.
-3. Slice 3 stop: stream emits ordered tokens and exactly one terminal event.
-4. Slice 4 stop: successful bind completion writes one deterministic history row.
-5. Slice 5 stop: Step 6 bind behavior is covered by deterministic tests.
-6. Slice 6 stop: Step 6 acceptance criteria map cleanly to code/tests with no Step 7+ bleed.
+3. Slice 3 stop: burst-throttle enforcement and abuse telemetry are deterministic before provider calls.
+4. Slice 4 stop: stream emits ordered tokens and exactly one terminal event.
+5. Slice 5 stop: successful bind completion writes one deterministic history row.
+6. Slice 6 stop: Step 6 bind behavior is covered by deterministic tests.
+7. Slice 7 stop: Step 6 acceptance criteria map cleanly to code/tests with no Step 7+ bleed.
 
 Stop condition for this planning pass:
 

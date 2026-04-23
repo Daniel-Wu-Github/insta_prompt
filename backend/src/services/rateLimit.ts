@@ -4,6 +4,8 @@ import { Redis as IORedis } from "ioredis";
 export const FREE_DAILY_LIMIT = 30;
 export const AUTH_TOKEN_IP_LIMIT = 20;
 export const AUTH_TOKEN_IP_WINDOW_SECONDS = 60;
+const DEFAULT_PROTECTED_BURST_LIMIT = 60;
+const DEFAULT_PROTECTED_BURST_WINDOW_SECONDS = 10;
 const DEFAULT_REDIS_CONNECT_TIMEOUT_MS = 2000;
 const DEFAULT_REDIS_COMMAND_TIMEOUT_MS = 2000;
 
@@ -44,11 +46,31 @@ type AuthTokenIpQuotaSuccess = {
 	exceeded: boolean;
 };
 
+type ProtectedBurstQuotaSuccess = {
+	ok: true;
+	limit: number;
+	used: number;
+	remaining: number;
+	reset: number;
+	retryAfter: number;
+	windowSeconds: number;
+	nearThreshold: boolean;
+	exceeded: boolean;
+};
+
+type ProtectedBurstConfig = {
+	limit: number;
+	windowSeconds: number;
+	nearThreshold: number;
+};
+
 export type DailyQuotaResult = DailyQuotaSuccess | RateLimitUnavailable;
 export type AuthTokenIpQuotaResult = AuthTokenIpQuotaSuccess | RateLimitUnavailable;
+export type ProtectedBurstQuotaResult = ProtectedBurstQuotaSuccess | RateLimitUnavailable;
 
 let cachedRedisClient: RateLimitRedisClient | null | undefined;
 let testOverrideRedisClient: RateLimitRedisClient | null | undefined;
+let testOverrideProtectedBurstConfig: ProtectedBurstConfig | undefined;
 
 function readPositiveIntEnv(name: string, fallback: number): number {
 	const raw = process.env[name];
@@ -92,6 +114,48 @@ function buildDailyQuotaKey(userId: string): string {
 
 function buildAuthTokenIpQuotaKey(clientIp: string): string {
 	return `rate:auth-token-ip:${encodeURIComponent(clientIp)}`;
+}
+
+function buildProtectedBurstQuotaKey(userId: string): string {
+	return `rate:burst:${userId}`;
+}
+
+function normalizeProtectedBurstConfig(config: {
+	limit: number;
+	windowSeconds: number;
+	nearThreshold: number;
+}): ProtectedBurstConfig {
+	const limit = Number.isFinite(config.limit) && config.limit > 0 ? Math.floor(config.limit) : DEFAULT_PROTECTED_BURST_LIMIT;
+	const windowSeconds =
+		Number.isFinite(config.windowSeconds) && config.windowSeconds > 0
+			? Math.floor(config.windowSeconds)
+			: DEFAULT_PROTECTED_BURST_WINDOW_SECONDS;
+	const nearThresholdRaw =
+		Number.isFinite(config.nearThreshold) && config.nearThreshold > 0
+			? Math.floor(config.nearThreshold)
+			: Math.max(1, Math.floor(limit * 0.8));
+
+	return {
+		limit,
+		windowSeconds,
+		nearThreshold: Math.min(limit, nearThresholdRaw),
+	};
+}
+
+function resolveProtectedBurstConfig(): ProtectedBurstConfig {
+	if (testOverrideProtectedBurstConfig) {
+		return testOverrideProtectedBurstConfig;
+	}
+
+	const limit = readPositiveIntEnv("RATE_LIMIT_BURST_LIMIT", DEFAULT_PROTECTED_BURST_LIMIT);
+	const windowSeconds = readPositiveIntEnv("RATE_LIMIT_BURST_WINDOW_SECONDS", DEFAULT_PROTECTED_BURST_WINDOW_SECONDS);
+	const nearThreshold = readPositiveIntEnv("RATE_LIMIT_BURST_NEAR_THRESHOLD", Math.max(1, Math.floor(limit * 0.8)));
+
+	return normalizeProtectedBurstConfig({
+		limit,
+		windowSeconds,
+		nearThreshold,
+	});
 }
 
 function createLocalRedisClient(redisUrl: string): RateLimitRedisClient {
@@ -183,6 +247,7 @@ export function __setRateLimitRedisClientForTests(client: RateLimitRedisClient |
 
 export async function __resetRateLimitRedisClientForTests(): Promise<void> {
 	testOverrideRedisClient = undefined;
+	testOverrideProtectedBurstConfig = undefined;
 	const existingClient = cachedRedisClient;
 	cachedRedisClient = undefined;
 
@@ -196,6 +261,18 @@ export async function __flushRateLimitRedisForTests(): Promise<void> {
 	if (redis?.flushdb) {
 		await redis.flushdb();
 	}
+}
+
+export function __setProtectedBurstConfigForTests(config: {
+	limit: number;
+	windowSeconds: number;
+	nearThreshold: number;
+}): void {
+	testOverrideProtectedBurstConfig = normalizeProtectedBurstConfig(config);
+}
+
+export function __resetProtectedBurstConfigForTests(): void {
+	testOverrideProtectedBurstConfig = undefined;
 }
 
 function unavailableResult(): RateLimitUnavailable {
@@ -290,6 +367,49 @@ export async function consumeAuthTokenIpQuota(clientIp: string, now = new Date()
 		};
 	} catch (error) {
 		console.error("Auth token IP rate limit Redis call failed", error);
+		return unavailableResult();
+	}
+}
+
+export async function consumeProtectedRouteBurstQuota(userId: string, now = new Date()): Promise<ProtectedBurstQuotaResult> {
+	const redis = resolveRedisClient();
+	if (!redis) {
+		return unavailableResult();
+	}
+
+	const config = resolveProtectedBurstConfig();
+	const key = buildProtectedBurstQuotaKey(userId);
+	const nowSeconds = epochSeconds(now);
+	let reset = nowSeconds + config.windowSeconds;
+
+	try {
+		const used = await withRedisTimeout(redis.incr(key), "incr");
+		if (used === 1) {
+			await withRedisTimeout(redis.expire(key, config.windowSeconds), "expire");
+		} else {
+			const ttl = await withRedisTimeout(redis.ttl(key), "ttl");
+			if (typeof ttl === "number" && ttl > 0) {
+				reset = nowSeconds + ttl;
+			} else {
+				await withRedisTimeout(redis.expire(key, config.windowSeconds), "expire");
+			}
+		}
+
+		const remaining = Math.max(0, config.limit - used);
+
+		return {
+			ok: true,
+			limit: config.limit,
+			used,
+			remaining,
+			reset,
+			retryAfter: Math.max(1, reset - nowSeconds),
+			windowSeconds: config.windowSeconds,
+			nearThreshold: used >= config.nearThreshold,
+			exceeded: used > config.limit,
+		};
+	} catch (error) {
+		console.error("Protected route burst rate limit Redis call failed", error);
 		return unavailableResult();
 	}
 }

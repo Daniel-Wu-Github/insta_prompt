@@ -1,0 +1,4 @@
+preload = ["./src/env.ts"]
+
+[test]
+preload = ["./src/env.ts"]

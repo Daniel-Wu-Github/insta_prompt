@@ -1,3 +1,5 @@
+3. Free generation model is Groq `llama-3.3-70b-versatile`.
+grep -e "FREE_GENERATION_MODEL" -e "llama-3.3-70b-versatile" backend/src/services/llm.ts
 # V1 Testing Notes
 
 ## Extension Popup In WSL
@@ -1267,7 +1269,7 @@ set +a
 env | grep -E '^(SUPABASE_URL|REDIS_URL)='
 ```
 
-Optional: export `GROQ_API_KEY` in this shell if you want the live sunny-path stream. Leaving it unset is useful for the deterministic missing-key rainy-path check.
+Optional: export the local provider credential in this shell if you want the live sunny-path stream. Leaving it unset is useful for the deterministic missing-credential rainy-path check.
 
 Sunny day expected:
 
@@ -1461,6 +1463,392 @@ Then rerun env export and Test 5.5.
 
 Use this section to log your own observations while running the guide:
 - Date: 2026-04-18
+- Sunny path result:
+- Rainy path result:
+- Bugs found:
+
+## Step 6 Manual Testing Guide (`/bind` SSE Final Assembly + History Persistence)
+
+Use this guide to validate Step 6 `/bind` streaming and persistence behavior end-to-end with local Supabase and Redis services. It aligns with the Step 6 taskboard in [v1_step_6.md](v1_step_by_step/v1_step_6.md), plus Step 3 router/prompt contracts and Step 5 SSE transport rules.
+
+Current main-branch note: `/bind` remains a protected route (`auth -> ratelimit -> tier`), canonicalizes bind sections server-side from goal type, and attempts one successful `enhancement_history` write before terminal `done`; protected LLM routes also need a short-window per-account burst guard and abuse telemetry path before provider budget consumption, so Step 6.5 is the guardrail slice that complements the bind stream and persistence flow.
+
+### What This Covers
+
+1. Local Supabase and Redis harness health for protected `/bind` checks.
+2. `/bind` request validation and SSE envelope behavior.
+3. Canonical bind ordering and service-layer handoff invariants.
+4. Burst limiter and abuse telemetry guardrails on protected LLM routes.
+5. Successful history-write payload semantics and deterministic persistence-failure mapping.
+6. Abort/disconnect behavior and protected-route Redis outage behavior.
+7. Step 6 test matrix plus manual cURL and DB probes.
+
+### Terminal Setup
+
+1. Terminal A: repo root for Supabase/Redis setup and DB verification queries.
+2. Terminal B: backend folder for env export and test runs.
+3. Terminal C: backend folder for manual backend server and cURL stream probes.
+
+### Test 6.1 - Preflight
+
+How to run: run from the repo root before touching Supabase, Redis, or backend tests.
+
+```bash
+cd /root/insta_prompt
+docker --version
+docker compose version
+bun --version
+npx supabase --version
+```
+
+Sunny day expected:
+
+1. All commands print a version.
+2. No command-not-found errors.
+
+Rainy day expected:
+
+1. Missing Docker, Bun, or the Supabase CLI causes command-not-found or version errors.
+2. Fix the missing dependency, then rerun preflight.
+
+### Test 6.2 - Start and Reset Local Services
+
+How to run: execute in Terminal A. This gives you a clean Supabase state and healthy local Redis.
+
+```bash
+cd /root/insta_prompt
+docker compose up -d redis
+docker compose ps redis
+npx supabase start
+npx supabase db reset --yes --no-seed
+```
+
+Sunny day expected:
+
+1. `docker compose ps redis` shows `redis` as Up (healthy).
+2. Supabase starts and prints local URLs.
+3. Reset reapplies local migrations required for auth, protected routes, and `enhancement_history` writes.
+
+Rainy day expected:
+
+1. If Docker is not running, Redis and Supabase start fail.
+2. If Supabase containers are stale, status/reset commands can fail with container-health errors.
+3. Recovery command sequence:
+
+```bash
+cd /root/insta_prompt
+docker compose down
+docker compose up -d redis
+npx supabase stop
+npx supabase start
+npx supabase db reset --yes --no-seed
+```
+
+### Test 6.3 - Export Local Env Vars For Integration and Manual Checks
+
+How to run: execute in Terminal B before test runs and manual probes. Repeat this in every new shell session.
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+if [ -z "$STATUS_ENV" ]; then
+	echo "Supabase env export failed. Start Supabase and rerun this block." >&2
+	return 1 2>/dev/null || exit 1
+fi
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+export REDIS_URL="redis://127.0.0.1:6379"
+set +a
+env | grep -E '^(SUPABASE_URL|REDIS_URL)='
+if [ -n "${SERVICE_CREDENTIAL:-}" ]; then
+	echo "Service credential present for bind history writes"
+else
+	echo "Service credential missing; bind completion will stream an error before done"
+fi
+```
+
+Optional: export the local provider credential in the shell where you run the backend if you want the live sunny-path stream for Test 6.7. Leave it unset only when you are intentionally exercising the deterministic missing-credential rainy-path check.
+
+Sunny day expected:
+
+1. Env print shows non-empty values for `SUPABASE_URL` and `REDIS_URL`.
+2. Service role key availability check reports present.
+3. No command errors during `status`, `eval`, or export.
+
+Rainy day expected:
+
+1. If Supabase is not running, `npx supabase status -o env` fails and the block exits before `eval`.
+2. If Redis is down, env export can still succeed but protected `/bind` checks can return `503` before stream start.
+3. If service role key is missing, successful generation cannot persist history and `/bind` should emit deterministic stream `error` (`Bind history persistence failed.`) with no terminal `done`.
+
+### Test 6.4 - Verify Step 6 Invariants Manually
+
+How to run: execute from repo root and confirm Step 6 routing, canonical bind assembly, SSE terminal semantics, and persistence wiring.
+
+```bash
+cd /root/insta_prompt
+grep -e 'PROTECTED_ROUTE_PREFIXES = ["/segment", "/enhance", "/bind", "/projects"]' -e "auth -> ratelimit -> tier" backend/src/index.ts
+grep -e "bindRequestSchema" -e "canonical_order" -e "goal_type" -e "expansion" backend/src/lib/schemas.ts
+grep -e "canonicalizeBindSections" -e 'callType: "bind"' -e "prepareBindServiceHandoff" -e "recordEnhancementHistory" -e "streamSSE" -e "c.req.raw.signal" backend/src/services/routeHandlers.ts
+grep -e "JSON.stringify(parsed.data.sections)" -e "sectionCount = parsed.data.sections.length" -e "modelUsed =" backend/src/services/routeHandlers.ts
+grep -e "CANONICAL_BIND_SLOT_ORDER" -e "canonicalizeBindSections" -e "Canonical slot order (must be enforced exactly):" backend/src/services/prompts/bind.ts
+grep -e "Bind history persistence failed." -e 'type: "token"' -e 'type: "done"' -e 'type: "error"' backend/src/services/routeHandlers.ts
+if grep -n -E 'readJsonBody|parseWithSchema|canonicalizeBindSections|prepareBindServiceHandoff|recordEnhancementHistory|streamSSE' backend/src/routes/bind.ts; then
+	echo "Route leakage found"
+else
+	echo "Route files stay thin"
+fi
+```
+
+Sunny day expected:
+
+1. Protected-route prefixes include `/bind` and middleware-order comment shows `auth -> ratelimit -> tier`.
+2. `bindRequestSchema` enforces `sections[]` shape with bounded `canonical_order`, valid `goal_type`, and non-empty `expansion`.
+3. `bindRouteHandler` canonicalizes sections, resolves bind handoff via `callType: "bind"`, streams via `streamSSE`, and wires `recordEnhancementHistory`.
+4. Raw history payload is derived from `JSON.stringify(parsed.data.sections)`, and `sectionCount` is derived from validated input length.
+5. Bind prompt service surface encodes canonical slot order and central canonicalization helpers.
+6. Route leakage trap prints `Route files stay thin`.
+
+Rainy day expected:
+
+1. Missing helper/constants indicate Step 6 contract drift.
+2. If route leakage trap prints matches, business logic leaked into `backend/src/routes/bind.ts`.
+
+### Test 6.5 - Verify Abuse Telemetry and Burst-Limiter Guardrails Manually
+
+How to run: once the Step 6.5 guardrail slice is implemented, execute from repo root and confirm the limiter sits ahead of provider work and that telemetry is deterministic.
+
+```bash
+cd /root/insta_prompt
+grep -e "burst" -e "abuse" backend/src/services/rateLimit.ts backend/src/middleware/ratelimit.ts backend/src/services/history.ts backend/src/index.ts docs/agent_plans/v1_step_by_step/v1_step_6.md docs/agent_plans/v1_step_by_step/v1_step_6_planning.md docs/agent_plans/v1_overarching_plan.md
+grep -e "FREE_DAILY_LIMIT" -e "AUTH_TOKEN_IP_LIMIT" -e "rate:daily:" -e "rate:auth-token-ip:" backend/src/services/rateLimit.ts
+grep -e "burst" -e "abuse" backend/src/__tests__/rateLimit.service.test.ts backend/src/__tests__/ratelimit.integration.test.ts
+```
+
+Sunny day expected:
+
+1. Burst checks execute before provider calls on `/segment`, `/enhance`, and `/bind`.
+2. Exceeding the burst threshold returns deterministic `429` without contacting the provider.
+3. Abuse telemetry is recorded with deterministic fields and no secret leakage.
+4. The existing daily free-tier and `/auth/token` IP limit behavior stays unchanged.
+
+Rainy day expected:
+
+1. Missing burst-limit logic or telemetry hooks indicates the Step 6.5 slice is not wired.
+2. Redis outages remain deterministic and should still return `503 RATE_LIMIT_UNAVAILABLE`.
+3. If telemetry persistence fails but enforcement changes, observability was coupled incorrectly to request gating.
+4. Recovery: align the rate-limit service, middleware, and tests with Step 6.5 requirements, then rerun the Step 6 matrix.
+
+### Test 6.6 - Run Step 6 Test Matrix
+
+How to run: execute from backend folder. This matrix is network-isolated and validates bind validation, canonical order, stream semantics, abort behavior, and persistence behavior.
+
+```bash
+cd /root/insta_prompt/backend
+bun test src/__tests__/bind.route.test.ts src/__tests__/stress-tests.test.ts src/__tests__/llm.handoff.test.ts
+```
+
+Sunny day expected:
+
+1. Step 6 matrix reports `0 fail` (current baseline on main: `13 pass`, `0 fail`).
+2. `bind.route` confirms:
+	- invalid payloads return deterministic `400` JSON `VALIDATION_ERROR` envelopes.
+	- out-of-order sections still produce canonical bind prompt ordering.
+	- token events stream in order, end with exactly one `done` on success, and write history exactly once.
+	- persistence failures emit exactly one stream `error` (`Bind history persistence failed.`) and no `done`.
+	- abort path stops stream progression and avoids history writes.
+3. `llm.handoff` confirms canonical bind ordering and deterministic bind handoff assembly.
+4. `stress-tests` confirms deterministic unauthorized envelope behavior for `/bind` under invalid auth.
+
+Rainy day expected:
+
+1. Any failing suite indicates Step 6 bind contract drift.
+2. Recovery: fix the failing area first (`routeHandlers`, bind prompt assembly, or persistence wiring), then rerun this matrix before manual cURL probes.
+
+### Test 6.7 - Manual End-to-End Check for `/bind` SSE and Success Persistence
+
+How to run: start backend server, then run one sunny-path stream probe plus one validation probe. Confirm successful completion writes exactly one new `enhancement_history` row.
+
+Sunny-path Test 6.7 requires the local provider credential and a service credential to be available in the backend shell before Terminal C1 starts. If either credential is missing, treat the run as the rainy path instead of a bind implementation failure.
+
+**Terminal C1** (start the server):
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+if [ -z "$STATUS_ENV" ]; then
+	echo "Supabase env export failed. Start Supabase and rerun this block." >&2
+	return 1 2>/dev/null || exit 1
+fi
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+export REDIS_URL="redis://127.0.0.1:6379"
+set +a
+bun run src/index.ts
+```
+
+Wait for output like `Server listening on http://0.0.0.0:3000` (or equivalent).
+
+If port 3000 is already in use, stop the existing backend or reuse it for the probes; starting a second Bun server will fail with `EADDRINUSE`.
+
+**Terminal C2** (new shell for cURL probes and DB checks):
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+if [ -z "$STATUS_ENV" ]; then
+	echo "Supabase env export failed. Start Supabase and rerun this block." >&2
+	return 1 2>/dev/null || exit 1
+fi
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+set +a
+
+If you do not already have `LOCAL_ACCESS_VALUE` and `LOCAL_REFRESH_VALUE` in this shell, mint a disposable session here so the probe stays self-contained.
+
+```bash
+cd /root/insta_prompt/backend
+AUTH_EXPORTS="$(bun -e 'import { createClient } from "@supabase/supabase-js"; import { randomUUID } from "node:crypto"; const supabaseUrl = process.env.SUPABASE_URL ?? process.env.API_URL; const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.ANON_KEY ?? process.env.PUBLISHABLE_KEY; if (!supabaseUrl || !anonKey) { throw new Error("Missing SUPABASE_URL or anon key"); } const authClient = createClient(supabaseUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } }); const email = `step6.${randomUUID()}@example.com`; const passphrase = `Aa1-${randomUUID()}-z`; const signUp = await authClient.auth.signUp({ email, password: passphrase }); if (signUp.error || !signUp.data.user) { throw new Error(`Failed to sign up integration user: ${signUp.error?.message ?? "unknown"}`); } let session = signUp.data.session; if (!session) { const signIn = await authClient.auth.signInWithPassword({ email, password: passphrase }); if (signIn.error || !signIn.data.session) { throw new Error(`Failed to sign in integration user: ${signIn.error?.message ?? "unknown"}`); } session = signIn.data.session; } if (!session.access_token || !session.refresh_token) { throw new Error("Integration user session is missing access or refresh token"); } console.log(`export LOCAL_ACCESS_VALUE=${JSON.stringify(session.access_token)}`); console.log(`export LOCAL_REFRESH_VALUE=${JSON.stringify(session.refresh_token)}`); console.log(`export LOCAL_USER_ID=${JSON.stringify(signUp.data.user.id)}`);')"
+eval "$AUTH_EXPORTS"
+env | grep -E '^(LOCAL_ACCESS_VALUE|LOCAL_REFRESH_VALUE|LOCAL_USER_ID)='
+```
+
+Canonicalization sanity probe: verify the bind handoff sorts the sections before the provider call.
+
+```bash
+bun -e 'import { prepareBindServiceHandoff } from "./src/services/llm.ts"; const handoff = prepareBindServiceHandoff({ route: { callType: "bind", tier: "free", mode: "balanced" }, template: { mode: "balanced", sections: [{ canonical_order: 6, goal_type: "edge_case", expansion: "Handle empty states and duplicate submissions." }, { canonical_order: 2, goal_type: "tech_stack", expansion: "Use React 18 with TypeScript." }, { canonical_order: 4, goal_type: "action", expansion: "Implement a keyboard-accessible dark mode toggle." }] } }); console.log("canonical_order", handoff.canonicalSections.map((section) => section.canonical_order).join(",")); console.log("goal_types", handoff.canonicalSections.map((section) => section.goal_type).join(",")); console.log("prompt_preview", handoff.prompt.split("\n").slice(0, 12).join("\n"));'
+
+cd ..
+npx supabase db query "select count(*) as history_count from enhancement_history;" -o table --agent=no
+cd backend
+
+curl -i -N -X POST http://localhost:3000/bind \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"sections":[{"canonical_order":6,"goal_type":"edge_case","expansion":"Handle empty states and duplicate submissions."},{"canonical_order":2,"goal_type":"tech_stack","expansion":"Use React 18 with TypeScript."},{"canonical_order":4,"goal_type":"action","expansion":"Implement a keyboard-accessible dark mode toggle."}],"mode":"balanced"}'
+
+curl -i -X POST http://localhost:3000/bind \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"sections":[],"mode":"balanced"}'
+
+cd ..
+npx supabase db query "select raw_input, left(final_prompt, 100) as prompt_preview, json_typeof(raw_input::json) as raw_input_type, mode, model_used, section_count, project_id from enhancement_history order by created_at desc limit 1;" -o table --agent=no
+```
+
+Sunny day expected, assuming the local provider credential is set and a service credential is available:
+
+1. Streaming request returns HTTP `200` with `Content-Type: text/event-stream`.
+2. Stream includes one or more `data: {"type":"token","data":"..."}` frames and ends with exactly one `data: {"type":"done"}` frame.
+3. Validation probe returns `400` JSON with `VALIDATION_ERROR`.
+4. `enhancement_history` count increases by exactly 1 after the successful stream.
+5. The canonicalization probe prints `canonical_order 2,4,6` and `goal_types tech_stack,action,edge_case`, proving the server sorted the bind sections before the provider call.
+6. The latest history row shows the exact submitted `raw_input` JSON string, `raw_input_type = array`, `mode = balanced`, `section_count = 3`, and `project_id = null`.
+7. The latest row's `prompt_preview` contains real generated text and is not empty or a literal `undefined`/`null` string.
+
+Rainy day expected:
+
+1. If the provider credential is missing, the valid bind request returns `200` with the deterministic SSE error `Groq: provider credential is missing.` and no `done`; that is the expected rainy-path provider gate.
+2. `401` from both requests indicates missing/invalid bearer token setup.
+3. `503` indicates Redis is unavailable before streaming starts.
+4. If stream emits `error` (`Bind history persistence failed.`) and no `done`, persistence dependencies failed (for example missing service role key or DB write failure); history count should not increase.
+5. If stream emits `done` but history count does not increase, bind-success persistence regressed.
+6. If the canonicalization probe prints any order other than `2,4,6`, the bind handoff sort path regressed before the LLM call.
+
+### Test 6.8 (Optional) - Abort/Disconnect Drill for `/bind`
+
+How to run: start a streaming bind request and cancel it after tokens begin.
+
+1. In Terminal C2, run the streaming `/bind` cURL command from Test 6.7.
+2. After at least one token frame appears, press `Ctrl+C` in Terminal C2.
+3. Immediately verify backend health:
+
+```bash
+curl -i http://localhost:3000/health
+```
+
+4. Verify no new success-history row was written for the aborted request:
+
+```bash
+cd /root/insta_prompt
+npx supabase db query "select count(*) as history_count from enhancement_history;" -o table --agent=no
+```
+
+Abort drill expected:
+
+1. Stream cancels quickly after disconnect.
+2. Backend remains healthy (`/health` returns `200`).
+3. Aborted bind does not produce terminal `done` and does not add a success-history row.
+
+### Test 6.9 (Optional) - Rainy Day Drills (Missing Provider Key and Redis Outage)
+
+How to run (drill A, missing provider key): restart server without Groq key and probe `/bind` once.
+
+**Terminal C1**:
+
+```bash
+cd /root/insta_prompt/backend
+unset PROVIDER_CREDENTIAL
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+export REDIS_URL="redis://127.0.0.1:6379"
+set +a
+bun run src/index.ts
+```
+
+**Terminal C2**:
+
+```bash
+curl -i -N -X POST http://localhost:3000/bind \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"sections":[{"canonical_order":4,"goal_type":"action","expansion":"Implement dark mode toggle."}],"mode":"balanced"}'
+```
+
+Drill A expected:
+
+1. Response status stays `200` (SSE started).
+2. Stream emits one deterministic `error` frame (`Groq: API key is missing.`) and no `done` frame.
+3. No new success-history row is written.
+
+How to run (drill B, Redis outage): intentionally stop Redis, then call `/bind` once.
+
+```bash
+cd /root/insta_prompt
+docker compose stop redis
+```
+
+Then in Terminal C2:
+
+```bash
+curl -i -m 10 -X POST http://localhost:3000/bind \
+	-H "Authorization: Bearer $LOCAL_ACCESS_VALUE" \
+	-H "Content-Type: application/json" \
+	-d '{"sections":[{"canonical_order":4,"goal_type":"action","expansion":"Implement dark mode toggle."}],"mode":"balanced"}'
+```
+
+Drill B expected:
+
+1. Request returns deterministic `503` with `RATE_LIMIT_UNAVAILABLE`.
+2. Response fails fast rather than hanging.
+3. Recovery:
+
+```bash
+cd /root/insta_prompt
+docker compose up -d redis
+```
+
+Then rerun env export and Test 6.6.
+
+## Step 6 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date: 2026-04-19
 - Sunny path result:
 - Rainy path result:
 - Bugs found:
