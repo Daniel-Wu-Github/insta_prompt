@@ -989,3 +989,48 @@ Entries are grouped by branch and extend commit messages with file-level change 
       - M docs/agent_plans/v1_step_by_step/v1_step_5_planning.md
       - M docs/agent_plans/v1_testing_notes.md
       - M logging/commit_log.md
+
+### 2026-04-23 06:05:38Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/main
+- Range: d4780e15c758b47dae3ba37f6c8a1a44e895878a..732ae5bc98b427e751e78db6deb627f7f6d61162
+- Commits:
+  - 9348651 step 6 planning and 6-11 skills
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-19T13:06:33-05:00
+    - Purpose: This commit adds 10, modifies 3 across .github, docs, logging.
+    - Files:
+      - M .github/skills/SKILL_MAP.md
+      - A .github/skills/background-port-state-recovery/SKILL.md
+      - A .github/skills/background-port-state-recovery/references/BACKGROUND_PORT_RECOVERY.md
+      - A .github/skills/content-script-instrumentation/SKILL.md
+      - A .github/skills/content-script-instrumentation/references/INSTRUMENTATION_FLOW.md
+      - A .github/skills/hotkey-bind-commit-ux/SKILL.md
+      - A .github/skills/hotkey-bind-commit-ux/references/HOTKEY_GUARD_MATRIX.md
+      - A .github/skills/underline-preview-rendering/SKILL.md
+      - A .github/skills/underline-preview-rendering/references/RENDERING_STATE_MAP.md
+      - A docs/agent_plans/v1_step_by_step/v1_step_6.md
+      - A docs/agent_plans/v1_step_by_step/v1_step_6_planning.md
+      - M logging/commit_log.md
+      - M logging/progress_log.md
+  - 732ae5b groqapikey
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-04-23T01:05:30-05:00
+    - Purpose: This commit adds 3, modifies 13 across backend, docs.
+    - Files:
+      - A backend/bunfig.toml
+      - A backend/src/__tests__/bind.route.test.ts
+      - M backend/src/__tests__/rateLimit.service.test.ts
+      - M backend/src/__tests__/ratelimit.integration.test.ts
+      - A backend/src/env.ts
+      - M backend/src/index.ts
+      - M backend/src/middleware/ratelimit.ts
+      - M backend/src/services/history.ts
+      - M backend/src/services/rateLimit.ts
+      - M backend/src/services/routeHandlers.ts
+      - M backend/src/services/supabase.ts
+      - M docs/LLM_ROUTING.md
+      - M docs/agent_plans/v1_overarching_plan.md
+      - M docs/agent_plans/v1_step_by_step/v1_step_6.md
+      - M docs/agent_plans/v1_step_by_step/v1_step_6_planning.md
+      - M docs/agent_plans/v1_testing_notes.md
