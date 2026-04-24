@@ -3,15 +3,16 @@ export default defineContentScript({
 	runAt: "document_idle",
 	main() {
 		const BRIDGE_PORT_NAME = "insta_prompt_bridge";
-		const BRIDGE_VERBS = ["SEGMENT", "ENHANCE", "BIND", "CANCEL"] as const;
 
 		const bridgePort = chrome.runtime.connect({ name: BRIDGE_PORT_NAME });
 
-		setTimeout(() => {
-			for (const verb of BRIDGE_VERBS) {
-				bridgePort.postMessage({ verb });
-			}
-		}, 0);
+		bridgePort.onMessage.addListener((message) => {
+			console.debug("PromptCompiler bridge message", message);
+		});
+
+		bridgePort.onDisconnect.addListener(() => {
+			console.debug("PromptCompiler bridge disconnected");
+		});
 	},
 });
 
