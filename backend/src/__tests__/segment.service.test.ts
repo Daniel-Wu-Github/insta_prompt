@@ -8,6 +8,7 @@ import {
 	__resetSegmentProviderAdapterOverridesForTests,
 	__setSegmentProviderAdapterOverrideForTests,
 	classifySegmentsFromStreamingAdapter,
+	normalizeIncomingSegments,
 	normalizeSegmentClassificationIntermediate,
 	type SegmentClassificationIntermediate,
 } from "../services/segment";
@@ -40,6 +41,15 @@ function createStreamingAdapter(eventsPerCall: readonly ProviderStreamEvent[][])
 			for (const event of events) {
 				yield event;
 			}
+		},
+	};
+}
+
+function createThrowingAdapter(error: Error): ProviderStreamingAdapter {
+	return {
+		provider: "groq",
+		async *stream() {
+			throw error;
 		},
 	};
 }
@@ -116,6 +126,13 @@ describe("segment service", () => {
 		]);
 		expect(normalized.sections.map((section) => section.canonical_order)).toEqual([1, 2, 5, 4]);
 		expect(normalized.sections.map((section) => section.confidence)).toEqual([1, 0, 0.5, 0.5]);
+	});
+
+	it("trims and filters incoming segments before classification", () => {
+		expect(normalizeIncomingSegments(["  keep me  ", "", "   ", "and me\n"])).toEqual([
+			"keep me",
+			"and me",
+		]);
 	});
 
 	it("generates deterministic stable ids from text + occurrence count", () => {
@@ -228,6 +245,30 @@ describe("segment service", () => {
 					},
 				],
 			]),
+		);
+
+		const classified = await classifySegmentsFromStreamingAdapter({
+			segments: ["Only segment"],
+			model: SEGMENT_MODEL,
+		});
+
+		expect(classified).toEqual({
+			sections: [
+				{
+					text: "Only segment",
+					goal_type: "context",
+					canonical_order: 1,
+					confidence: 0.1,
+					depends_on: [],
+				},
+			],
+		});
+	});
+
+	it("returns deterministic fallback intermediate when provider throws before yielding tokens", async () => {
+		__setSegmentProviderAdapterOverrideForTests(
+			"groq",
+			createThrowingAdapter(new Error("503 service unavailable")),
 		);
 
 		const classified = await classifySegmentsFromStreamingAdapter({

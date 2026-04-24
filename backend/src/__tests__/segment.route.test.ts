@@ -36,6 +36,15 @@ function createStreamingAdapter(eventsPerCall: readonly ProviderStreamEvent[][])
 	};
 }
 
+function createThrowingAdapter(error: Error): ProviderStreamingAdapter {
+	return {
+		provider: "groq",
+		async *stream() {
+			throw error;
+		},
+	};
+}
+
 function toStreamingJsonEvents(payload: unknown, chunkSize = 48): ProviderStreamEvent[] {
 	const text = JSON.stringify(payload);
 	if (text.length === 0) {
@@ -111,6 +120,29 @@ describe("/segment route", () => {
 
 		expect(payload.error.code).toBe("VALIDATION_ERROR");
 		expect(payload.error.message).toBe("segments must include at least one non-empty string");
+	});
+
+	it("returns 400 for an invalid mode with a deterministic validation envelope", async () => {
+		const app = createSegmentApp();
+
+		const response = await postSegment(app, {
+			segments: ["build feature"],
+			mode: "experimental",
+		});
+
+		expect(response.status).toBe(400);
+		const payload = (await response.json()) as {
+			error: {
+				code: string;
+				details: Array<{
+					path: string;
+					message: string;
+				}>;
+			};
+		};
+
+		expect(payload.error.code).toBe("VALIDATION_ERROR");
+		expect(payload.error.details.map((detail) => detail.path)).toContain("mode");
 	});
 
 	it("returns normalized schema-valid output for a minimal valid segment set", async () => {
@@ -273,6 +305,42 @@ describe("/segment route", () => {
 			{
 				id: deriveExpectedStableId("Second clause", 0),
 				text: "Second clause",
+				goal_type: "context",
+				canonical_order: 1,
+				confidence: 0.1,
+				depends_on: [],
+			},
+		]);
+	});
+
+	it("returns deterministic fallback 200 when provider throws before streaming tokens", async () => {
+		__setSegmentProviderAdapterOverrideForTests(
+			"groq",
+			createThrowingAdapter(new Error("503 service unavailable")),
+		);
+
+		const app = createSegmentApp();
+		const response = await postSegment(app, {
+			segments: ["provider failure"],
+			mode: "balanced",
+		});
+
+		expect(response.status).toBe(200);
+		const payload = (await response.json()) as {
+			sections: Array<{
+				id: string;
+				text: string;
+				goal_type: string;
+				canonical_order: number;
+				confidence: number;
+				depends_on: string[];
+			}>;
+		};
+
+		expect(payload.sections).toEqual([
+			{
+				id: deriveExpectedStableId("provider failure", 0),
+				text: "provider failure",
 				goal_type: "context",
 				canonical_order: 1,
 				confidence: 0.1,

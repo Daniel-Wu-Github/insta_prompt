@@ -29,6 +29,19 @@ const API_URL_ENV = "API_URL";
 const SUPABASE_PRIMARY_KEY_ENV = ["SUPABASE", "SERVICE", "KEY"].join("_");
 const ROLE_BASED_KEY_ENV = ["SERVICE", "ROLE", "KEY"].join("_");
 
+function isValidSupabaseUrl(value: string): boolean {
+	try {
+		const url = new URL(value);
+		return url.protocol === "http:" || url.protocol === "https:";
+	} catch {
+		return false;
+	}
+}
+
+function isPlaceholderConfigValue(value: string): boolean {
+	return value.startsWith("replace-with-");
+}
+
 function getEnvVar(...names: string[]): string | null {
 	for (const name of names) {
 		const value = process.env[name];
@@ -52,7 +65,13 @@ export function getSupabaseClient(): SupabaseClient | null {
 
 	const supabaseUrl = getEnvVar(SUPABASE_URL_ENV, API_URL_ENV);
 	const supabaseServiceKey = getEnvVar(SUPABASE_PRIMARY_KEY_ENV, ROLE_BASED_KEY_ENV);
-	if (!supabaseUrl || !supabaseServiceKey) {
+	if (
+		!supabaseUrl
+		|| !supabaseServiceKey
+		|| !isValidSupabaseUrl(supabaseUrl)
+		|| isPlaceholderConfigValue(supabaseUrl)
+		|| isPlaceholderConfigValue(supabaseServiceKey)
+	) {
 		return null;
 	}
 
