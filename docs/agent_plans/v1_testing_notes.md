@@ -1706,6 +1706,7 @@ fi
 eval "$STATUS_ENV"
 export SUPABASE_URL="$API_URL"
 set +a
+```
 
 If you do not already have `LOCAL_ACCESS_VALUE` and `LOCAL_REFRESH_VALUE` in this shell, mint a disposable session here so the probe stays self-contained.
 
@@ -1849,6 +1850,464 @@ Then rerun env export and Test 6.6.
 
 Use this section to log your own observations while running the guide:
 - Date: 2026-04-19
+- Sunny path result:
+- Rainy path result:
+- Bugs found:
+
+## Step 7 Manual Testing Guide (Background Service Worker Core)
+
+Use this guide to validate Step 7 background transport, session recovery, and keepalive behavior end-to-end with local Supabase and Redis services. It aligns with the Step 7 taskboard in [v1_step_7.md](v1_step_by_step/v1_step_7.md), plus Step 3 router/prompt contracts and Step 5/6 SSE transport rules.
+
+Current main-branch note: the background worker already owns the `insta_prompt_bridge` Port, `SEGMENT` returns one JSON response, `ENHANCE` and `BIND` stream SSE through the worker, `chrome.storage.session` stores tab-scoped recovery state, and the keepalive alarm self-heals on startup. The content script is still bootstrap-level, so the browser-console probes below use the content-script execution context to inject bridge messages.
+
+### What This Covers
+
+1. Local Supabase and Redis harness health for protected bridge probes.
+2. Extension dev build loading and bridge startup.
+3. Port connect/disconnect behavior plus `SEGMENT` single-response routing.
+4. `ENHANCE` / `BIND` SSE forwarding, `CANCEL`, and session-state cleanup.
+5. Worker restart recovery and keepalive self-registration.
+6. Step 7 test matrix plus manual browser-console probes.
+
+### Terminal Setup
+
+1. Terminal A: repo root for Supabase/Redis setup and route checks.
+2. Terminal B: backend folder for env export, token minting, and backend tests.
+3. Terminal C: extension folder for the WXT dev bundle.
+4. Browser A: a supported page tab where the content script can open the bridge port.
+5. Browser B: `chrome://extensions` plus the extension service worker DevTools.
+
+### Test 7.1 - Preflight
+
+How to run: run from the repo root before touching Supabase, Redis, or the extension build.
+
+```bash
+cd /root/insta_prompt
+docker --version
+docker compose version
+bun --version
+npx supabase --version
+cd extension
+node --version
+npm --version
+```
+
+Sunny day expected:
+
+1. All commands print a version.
+2. No command-not-found errors.
+
+Rainy day expected:
+
+1. Missing Docker, Bun, Node.js, or the Supabase CLI causes command-not-found or version errors.
+2. Fix the missing dependency, then rerun preflight.
+
+### Test 7.2 - Start and Reset Local Services
+
+How to run: execute in Terminal A. This gives you a clean Supabase state and healthy local Redis for protected route checks.
+
+```bash
+cd /root/insta_prompt
+docker compose up -d redis
+docker compose ps redis
+npx supabase start
+npx supabase db reset --yes --no-seed
+```
+
+Sunny day expected:
+
+1. `docker compose ps redis` shows `redis` as Up (healthy).
+2. Supabase starts and prints local URLs.
+3. Reset reapplies the local migrations required for auth, protected routes, and history writes.
+
+Rainy day expected:
+
+1. If Docker is not running, Redis and Supabase start fail.
+2. If Supabase containers are stale, status/reset commands can fail with container-health errors.
+3. Recovery command sequence:
+
+```bash
+cd /root/insta_prompt
+docker compose down
+docker compose up -d redis
+npx supabase stop
+npx supabase start
+npx supabase db reset --yes --no-seed
+```
+
+### Test 7.3 - Export Local Env Vars and Mint a Disposable Access Token
+
+How to run: execute in Terminal B before the backend tests and browser-console probes. Repeat the env-export block in every new shell session.
+
+```bash
+cd /root/insta_prompt/backend
+set -a
+STATUS_ENV="$(cd .. && npx supabase status -o env | grep -E '^[A-Z_]+=')"
+if [ -z "$STATUS_ENV" ]; then
+	echo "Supabase env export failed. Start Supabase and rerun this block." >&2
+	return 1 2>/dev/null || exit 1
+fi
+eval "$STATUS_ENV"
+export SUPABASE_URL="$API_URL"
+export REDIS_URL="redis://127.0.0.1:6379"
+set +a
+env | grep -E '^(SUPABASE_URL|REDIS_URL)='
+```
+
+If you do not already have a disposable access token in this shell, reuse the exact token-mint block from Test 6.7 earlier in this file and keep `LOCAL_ACCESS_VALUE` available for the browser-console probes below.
+
+Sunny day expected:
+
+1. Env print shows non-empty values for `SUPABASE_URL` and `REDIS_URL`.
+2. The disposable access-token block produces `LOCAL_ACCESS_VALUE` and `LOCAL_REFRESH_VALUE` when you run it.
+3. No command errors during `status`, `eval`, or export.
+
+Rainy day expected:
+
+1. If Supabase is not running, `npx supabase status -o env` fails and the block exits before `eval`.
+2. If Redis is down, env export can still succeed but protected bridge probes can return `503` before streaming starts.
+3. If the token-mint block fails, stop and fix local Supabase auth before trying the browser probes.
+
+### Test 7.4 - Verify Step 7 Invariants Manually
+
+How to run: execute from repo root and confirm the bridge, storage, and keepalive surfaces are present.
+
+```bash
+cd /root/insta_prompt
+grep -e 'BRIDGE_PORT_NAME = "insta_prompt_bridge"' -e 'BRIDGE_VERBS = \["SEGMENT", "ENHANCE", "BIND", "CANCEL"\]' -e 'chrome.storage.session' -e 'chrome.alarms' -e 'Accepted bridge port connection' -e 'Received bridge verb' -e 'Bridge port disconnected' -e 'Keepalive alarm tick' extension/src/background/index.ts
+grep -e 'chrome.runtime.connect({ name: BRIDGE_PORT_NAME })' -e 'PromptCompiler bridge message' -e 'PromptCompiler bridge disconnected' extension/src/content/index.ts
+grep -e 'segmentRequestSchema' -e 'enhanceRequestSchema' -e 'bindRequestSchema' backend/src/lib/schemas.ts
+```
+
+Sunny day expected:
+
+1. The background worker owns the bridge port name and verb set.
+2. The background worker uses `chrome.storage.session` and `chrome.alarms` for recovery and keepalive.
+3. The content script stays bootstrap-level and only opens the bridge port plus logs messages.
+4. The request schemas still accept the current `/segment`, `/enhance`, and `/bind` body shapes.
+
+Rainy day expected:
+
+1. Missing bridge or storage matches indicate the Step 7 surface drifted.
+2. Unexpected content-script fetch or routing logic would be a scope leak and should be deferred.
+
+### Test 7.5 - Run Step 7 Test Matrix
+
+How to run: execute the backend and extension validation matrix before doing browser probes.
+
+```bash
+cd /root/insta_prompt/backend
+bun test src/__tests__/routes.validation.test.ts src/__tests__/segment.route.test.ts src/__tests__/enhance.route.test.ts src/__tests__/bind.route.test.ts src/__tests__/llm.router.test.ts src/__tests__/prompt.factories.test.ts
+cd /root/insta_prompt/extension
+npm run typecheck
+npm run build
+```
+
+Sunny day expected:
+
+1. The backend test matrix passes with `0 fail`.
+2. Extension typecheck and build both complete successfully.
+3. No Step 8+ content instrumentation or Step 11 commit behavior is needed for this step.
+
+Rainy day expected:
+
+1. Backend failures indicate a contract drift in Step 3, Step 5, or Step 6 dependencies.
+2. Extension build or typecheck failures indicate the bridge or content-script surface regressed.
+3. Fix the failing slice and rerun the same matrix before browser probes.
+
+### Test 7.6 - Load the Extension and Verify Port Connect / Disconnect / Keepalive
+
+How to run: execute the WXT dev build in Terminal C, then load the unpacked dev bundle in Chrome or Edge.
+
+```bash
+cd /root/insta_prompt/extension
+npm run dev
+```
+
+Then open the browser on the host system and do the following:
+
+1. Go to `chrome://extensions`.
+2. Turn on Developer mode.
+3. Click Load unpacked.
+4. Select `extension/.output/chrome-mv3-dev`.
+5. Pin the PromptCompiler extension if needed.
+6. Open any supported page tab, such as `https://example.com`, so the content script connects.
+7. Open DevTools on that page and keep the console visible.
+8. Open the extension service worker DevTools from `chrome://extensions` and keep that console visible too.
+9. Reload the page once.
+
+Sunny day expected:
+
+1. The service worker console logs `Accepted bridge port connection` when the tab loads.
+2. Reloading the tab logs `Bridge port disconnected` and then a new `Accepted bridge port connection`.
+3. `await chrome.alarms.get("keepalive")` in the service worker console returns the keepalive alarm with `periodInMinutes: 1`.
+4. If you leave the worker open long enough, `Keepalive alarm tick` appears on the alarm cadence.
+
+Rainy day expected:
+
+1. If the extension is not loaded, no bridge logs appear and the content script never connects.
+2. If `keepalive` is missing after startup, restart the worker and rerun the alarm check before moving on.
+
+### Test 7.7 - Manual SEGMENT Bridge Probe
+
+How to run: Open your browser DevTools on any supported webpage (like example.com). Crucial: Change the Javascript execution context dropdown from top to the PromptCompiler extension. Paste the following Promise-based script into the console, ensuring you replace "YOUR_JWT_HERE" with your LOCAL_ACCESS_VALUE.
+
+Note: bridgePort.postMessage() intentionally returns undefined. We must wait for the onMessage listener to catch the response asynchronously.
+
+```JavaScript
+(async () => {
+	console.log("Starting SEGMENT probe...");
+	const bridgePort = chrome.runtime.connect({ name: "insta_prompt_bridge" });
+  
+	const responsePromise = new Promise((resolve, reject) => {
+		const timeout = setTimeout(() => reject(new Error("Timeout: No response after 10 seconds")), 10000);
+    
+		bridgePort.onMessage.addListener((msg) => {
+			clearTimeout(timeout);
+			resolve(msg);
+		});
+    
+		bridgePort.onDisconnect.addListener(() => {
+			clearTimeout(timeout);
+			reject(new Error("Port disconnected before response"));
+		});
+	});
+
+	const requestId = crypto.randomUUID();
+	bridgePort.postMessage({
+		verb: "SEGMENT",
+		jwt: "YOUR_JWT_HERE", 
+		requestId,
+		payload: {
+			segments: ["build a keyboard-accessible dark mode toggle"],
+			mode: "balanced"
+		}
+	});
+
+	try {
+		const response = await responsePromise;
+		console.log("✅ Received bridge response:", response);
+		return response; // Expand [[PromiseResult]] to view the sections!
+	} catch (err) {
+		console.error("❌ Probe failed:", err);
+		return { error: err.message };
+	} finally {
+		bridgePort.disconnect();
+	}
+})();
+```
+Sunny day expected:
+
+The background service worker console logs Received bridge verb with SEGMENT.
+
+The page console script resolves the Promise successfully and logs the segment response.
+
+Expanding [[PromiseResult]] in the console reveals data.sections as a non-empty array with accurate goal_type classifications.
+
+No token frames are emitted for SEGMENT.
+
+In the service worker console, await chrome.storage.session.get(null) shows a promptcompiler.tabState. key while the request is active, which clears after the response finishes.
+
+Rainy day expected:
+
+A missing or invalid token returns one error message with the backend 401 envelope. (If this happens, verify SUPABASE_SERVICE_KEY is correctly exported in the backend terminal).
+
+A response of "HTTP 404" means the Vite/WXT dev server grabbed port 3000 instead of the Hono backend.
+
+Redis outage returns deterministic 503 RATE_LIMIT_UNAVAILABLE before any backend work.
+
+### Test 7.8 - Manual ENHANCE / BIND Streaming, CANCEL, and Cleanup
+
+How to run: Ensure your DevTools context is still set to the PromptCompiler extension. Because these routes stream data, the test script collects multiple token frames and resolves only when it receives done or error.
+
+ENHANCE Probe
+
+```JavaScript
+(async () => {
+	console.log("Starting ENHANCE stream probe...");
+	const bridgePort = chrome.runtime.connect({ name: "insta_prompt_bridge" });
+	const tokens = [];
+  
+	const streamPromise = new Promise((resolve, reject) => {
+		const timeout = setTimeout(() => reject(new Error("Timeout: Stream stalled")), 20000);
+		bridgePort.onMessage.addListener((msg) => {
+			if (msg.type === "token") {
+				tokens.push(msg.data.text);
+				console.log("Received token chunk...");
+			}
+			if (msg.type === "done" || msg.type === "error") {
+				clearTimeout(timeout);
+				resolve({ finalMessage: msg, assembledText: tokens.join("") });
+			}
+		});
+	});
+
+	bridgePort.postMessage({
+		verb: "ENHANCE",
+		jwt: "YOUR_JWT_HERE",
+		requestId: crypto.randomUUID(),
+		section: { id: "s1", text: "Build a keyboard-accessible dark mode toggle.", goal_type: "action" },
+		siblings: [{ id: "s2", text: "Use React and TypeScript.", goal_type: "tech_stack" }],
+		mode: "balanced",
+		project_id: null,
+	});
+
+	try {
+		const result = await streamPromise;
+		console.log("✅ ENHANCE stream complete!", result);
+		return result; 
+	} catch (err) {
+		console.error("❌ Probe failed:", err);
+	} finally {
+		bridgePort.disconnect();
+	}
+})();
+```
+Sunny day expected (ENHANCE & BIND):
+
+The background console logs Received bridge verb with ENHANCE or BIND.
+
+The page console logs multiple "Received token chunk..." lines as the stream arrives.
+
+The stream resolves with exactly one done event.
+
+Expanding [[PromiseResult]] shows the smoothly joined string in assembledText.
+
+await chrome.storage.session.get(null) shows the tab-state key while active and clears after completion.
+
+BIND Probe
+
+```JavaScript
+(async () => {
+	console.log("Starting BIND stream probe...");
+	const bridgePort = chrome.runtime.connect({ name: "insta_prompt_bridge" });
+	const tokens = [];
+  
+	const streamPromise = new Promise((resolve) => {
+		bridgePort.onMessage.addListener((msg) => {
+			if (msg.type === "token") tokens.push(msg.data.text);
+			if (msg.type === "done" || msg.type === "error") resolve({ finalMessage: msg, assembledText: tokens.join("") });
+		});
+	});
+
+	bridgePort.postMessage({
+		verb: "BIND",
+		jwt: "YOUR_JWT_HERE",
+		requestId: crypto.randomUUID(),
+		sections: [
+				{ canonical_order: 4, goal_type: "action", expansion: "Implement a keyboard-accessible dark mode toggle." },
+				{ canonical_order: 2, goal_type: "tech_stack", expansion: "Use React 18 with TypeScript." },
+		],
+		mode: "balanced",
+	});
+
+	const result = await streamPromise;
+	console.log("✅ BIND stream complete!", result);
+	bridgePort.disconnect();
+	return result;
+})();
+```
+CANCEL Probe
+
+How to run: This script triggers a long, detailed ENHANCE generation and uses setTimeout to fire a CANCEL verb exactly 1 second later to abort the stream mid-flight.
+
+```JavaScript
+(async () => {
+	console.log("Starting CANCEL interrupt probe...");
+	const bridgePort = chrome.runtime.connect({ name: "insta_prompt_bridge" });
+	const reqId = crypto.randomUUID();
+	let tokenCount = 0;
+
+	const promise = new Promise((resolve) => {
+		bridgePort.onMessage.addListener((msg) => {
+			if (msg.type === "token") tokenCount++;
+			if (msg.type === "done" || msg.type === "error") resolve(msg);
+		});
+	});
+
+	// Start a verbose stream to guarantee it takes longer than 1 second
+	bridgePort.postMessage({
+		verb: "ENHANCE",
+		jwt: "YOUR_JWT_HERE",
+		requestId: reqId,
+		section: { id: "s1", text: "Write a highly detailed, 500-word explanation about keyboard-accessible dark mode toggles with ARIA attributes and CSS variables.", goal_type: "action" },
+		siblings: [],
+		mode: "detailed",
+		project_id: null
+	});
+
+	// Interrupt the stream
+	setTimeout(() => {
+		console.log(`Sending CANCEL... (collected ${tokenCount} tokens so far)`);
+		bridgePort.postMessage({ verb: "CANCEL", jwt: "YOUR_JWT_HERE", requestId: reqId });
+	}, 1000);
+
+	const result = await promise;
+	console.log(`✅ Stream successfully aborted after ${tokenCount} tokens. Final message:`, result);
+	bridgePort.disconnect();
+	return { tokenCount, finalMessage: result };
+})();
+```
+Sunny day expected (CANCEL):
+
+The background console logs Received bridge verb { verb: 'CANCEL' }.
+
+The page console receives exactly one terminal done matching the aborted request ID immediately after the cancellation.
+
+No second terminal event or late error appears after the cancel.
+
+The tab-state key safely clears from chrome.storage.session after the abort path runs.
+
+Rainy day expected (CANCEL):
+
+If the stream ends naturally before the 1-second timeout fires, the cancel will act as a no-op. (If this happens, increase the prompt complexity or lower the timeout).
+
+If the LLM provider key is missing in the backend environment, the request should immediately return a deterministic provider error instead of a stream.
+
+### Test 7.9 (Optional) - Restart-Recovery Drill
+
+How to run: start an `ENHANCE` or `BIND` stream from Test 7.8, then terminate the worker without closing the tab.
+
+1. Keep the page tab open while the stream is active.
+2. Open `chrome://extensions` and terminate the PromptCompiler service worker, or use the DevTools terminate button for the worker.
+3. Reload the page so the content script reconnects.
+4. In the service worker console, inspect `await chrome.storage.session.get(null)`.
+
+Sunny day expected:
+
+1. The next connection logs `Accepted bridge port connection` again.
+2. The worker emits `Recovered tab state was cleared after a worker restart.` with `recovery: "orphaned_tab"` exactly once.
+3. The stale tab-state entry is cleared from `chrome.storage.session` after recovery.
+
+Rainy day expected:
+
+1. If the request had already completed before termination, rerun with a longer detailed prompt.
+2. If the recovery message never appears after the worker restart and page reload, the session-state recovery path regressed.
+
+### Test 7.10 (Optional) - Rainy Day Drill for Missing Token, Redis Outage, and Malformed Bridge Messages
+
+How to run: intentionally break one input at a time and confirm the worker fails deterministically.
+
+1. Replace `jwt` with a known-invalid token and resend the `SEGMENT` probe.
+2. Stop Redis with `docker compose stop redis`, then resend the `ENHANCE` probe.
+3. Send a malformed bridge message such as `bridgePort.postMessage({ verb: "ENHANCE", jwt: "<token>" })` with no request body.
+
+Rainy drill expected:
+
+1. Invalid JWTs produce deterministic `401` bridge errors.
+2. Redis outage produces deterministic `503 RATE_LIMIT_UNAVAILABLE` before streaming starts.
+3. Malformed bridge messages are rejected without crashing the worker, and the service worker console logs `Ignoring malformed bridge message`.
+
+Recovery:
+
+1. Restart Redis with `docker compose up -d redis`.
+2. Refresh the page tab to restore the content-script connection.
+3. Rerun the Step 7.7 and Step 7.8 probes.
+
+## Step 7 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date: 2026-04-23
 - Sunny path result:
 - Rainy path result:
 - Bugs found:
