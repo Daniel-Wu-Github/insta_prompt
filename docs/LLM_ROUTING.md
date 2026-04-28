@@ -18,12 +18,13 @@ Canonical model identifiers in this doc are exact provider model IDs; descriptiv
 |---|---|---|---|---|---|
 | `/segment` | Groq `llama-3.1-8b-instant` | Groq `llama-3.1-8b-instant` | Groq `llama-3.1-8b-instant` | Groq `llama-3.1-8b-instant` | Groq `llama-3.1-8b-instant` via user key |
 | `/enhance` | Groq `llama-3.3-70b-versatile` | Anthropic `claude-haiku-4-5-20251001` | Anthropic `claude-sonnet-4-6` | Anthropic `claude-sonnet-4-6` | User-configured provider/model |
-| `/enhance` | Groq `llama-3.3-70b-versatile` | Anthropic `claude-haiku-4-5-20251001` | Anthropic `claude-sonnet-4-6` | Anthropic `claude-sonnet-4-6` | User-configured provider/model |
 | `/bind` | Groq `llama-3.3-70b-versatile` | Anthropic `claude-haiku-4-5-20251001` | Anthropic `claude-sonnet-4-6` | Anthropic `claude-sonnet-4-6` | User-configured provider/model |
 
 The `/segment` call always uses the cheapest fast model — its job is JSON classification, not quality generation.
 
 BYOK keeps the same route contract as managed tiers. It changes the credential source and user-configured provider/model selection, not the endpoint shape or SSE envelope.
+
+Current runtime note: production `/enhance` and `/bind` route handlers still need BYOK preference injection wiring; the router and adapters already support BYOK model selection inputs.
 
 ---
 
@@ -41,10 +42,8 @@ BYOK keeps the same route contract as managed tiers. It changes the credential s
 ### Free tier COGS
 A typical free tier enhancement (1 segment call + 2 expand calls + 1 bind):
 - `~$0.0001 + (2 × $0.0008) + $0.0008 = ~$0.0025/session`
-- `~$0.0001 + (2 × $0.0008) + $0.0008 = ~$0.0025/session`
 - 30 sessions/day/user = ~$0.075/user/day max
 - 1,000 daily active free users = ~$75/day
-  return { provider: 'groq', model: 'llama-3.3-70b-versatile', maxTokens: modeTokens(mode) };
 - Well within manageable range; upgrade conversion keeps this profitable
 
 ---
@@ -91,7 +90,7 @@ function selectModel({ tier, mode, callType, byokConfig }: RouteKey): ModelConfi
 }
 
 function modeTokens(mode: Mode): number {
-  return { efficiency: 150, balanced: 300, detailed: 600 }[mode];
+  return { efficiency: 150, balanced: 500, detailed: 1000 }[mode];
 }
 ```
 
@@ -173,7 +172,7 @@ Your job:
 - Remove redundancy between sections
 - Ensure consistent tone throughout
 - Add transitions where needed
-- Output a single ${mode === 'detailed' ? 'XML-structured' : 'markdown'} prompt block
+- Output a single deeply structured prompt block appropriate to mode
 
 Output only the final prompt. No preamble.`;
 }

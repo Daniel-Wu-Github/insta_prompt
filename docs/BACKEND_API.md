@@ -6,13 +6,14 @@ Step scope note:
 
 - Step 1 locks auth/session foundations (`/auth/token` contract + auth context population).
 - Step 2 adds rate-limit and tier-enforcement behavior.
-- Step 3+ implements full `/segment`, `/enhance`, and `/bind` model-routing behavior.
+- Step 3+ provides routing/prompt/provider service-layer contracts used by Step 4-6 route handlers.
 
-Current implementation snapshot (main, Step 0-2):
+Current implementation snapshot (main, Step 0-7):
 
-- `/segment`, `/enhance`, and `/bind` currently keep deterministic placeholder business behavior after validation and middleware checks.
-- `/segment` maps each input segment to `goal_type = action`, `canonical_order = 4`, and `confidence = 0.5`.
-- `/enhance` and `/bind` currently stream tokenized placeholder output in the standard SSE envelope.
+- `/segment` validates input, classifies through provider-backed intermediate output, and normalizes taxonomy/canonical order/dependencies with deterministic fallback behavior.
+- `/enhance` validates payloads, resolves mode/tier model routing, builds prompt handoff, and streams provider output through the shared SSE envelope.
+- `/bind` canonicalizes server-side section order, streams provider output through shared SSE semantics, and writes exactly one successful `enhancement_history` row on successful completion.
+- Step 7 background transport bridge is active in the extension service worker; content script UX instrumentation remains a separate Step 8+ concern.
 
 ---
 
@@ -36,9 +37,9 @@ Current implementation snapshot (main, Step 0-2):
 | Method | Path | Step | Notes |
 |---|---|---|---|
 | POST | `/auth/token` | Step 1 | Public refresh-session proxy; no custom JWT issuer |
-| POST | `/segment` | Step 3+ | Production classifier behavior lands after Step 1 foundations |
-| POST | `/enhance` | Step 3+ | Production model routing and prompt expansion lands after Step 1 foundations |
-| POST | `/bind` | Step 3+ | Production bind orchestration lands after Step 1 foundations |
+| POST | `/segment` | Step 4 | Production classifier behavior is active |
+| POST | `/enhance` | Step 5 | Production model routing and prompt expansion are active |
+| POST | `/bind` | Step 6 | Production bind orchestration and history persistence are active |
 | GET | `/projects` | v2-ready | Schema and contracts may exist before full v2 behavior |
 | POST | `/projects/:id/context` | v2-ready | Schema and contracts may exist before full v2 behavior |
 
@@ -46,10 +47,12 @@ BYOK does not introduce alternate request or response shapes for `/segment`, `/e
 
 Step 3 service boundary contract: route handlers pass resolved BYOK preferences into the pure model-router surface and serialize SSE at the transport boundary. Provider adapters emit normalized object events and do not emit raw SSE strings directly.
 
+Current runtime note: BYOK preference injection into production `/enhance` and `/bind` handlers is not fully wired yet; route contracts remain stable and tier checks still apply.
+
 ### POST `/enhance`
 Expand a single classified section. Returns SSE stream.
 
-Current Step 0-2 behavior: validates the request and streams a deterministic placeholder expansion.
+Current runtime behavior: validates request shape, routes model selection via tier/mode, injects sibling context, and streams provider tokens through the shared SSE envelope.
 
 **Request**
 ```json
@@ -67,6 +70,8 @@ Current Step 0-2 behavior: validates the request and streams a deterministic pla
 }
 ```
 
+`project_id` is nullable. Use `null` when no project context is available.
+
 **Response** — `text/event-stream`
 ```
 data: {"type":"token","data":"Implement a fully "}
@@ -81,10 +86,10 @@ Streaming rule: the response status and headers are committed when the first SSE
 ### POST `/segment`
 Classify raw text segments into sections with goal_type, canonical_order, and confidence.
 
-Current Step 0-2 behavior: deterministic placeholder classifier.
+Current runtime behavior: provider-backed classification plus deterministic normalization.
 
-Step 4 contract note: endpoint transport and JSON shape stay the same while placeholder classifier internals are replaced.
-Backend normalization responsibilities in Step 4: emit only `context`, `tech_stack`, `constraint`, `action`, `output_format`, `edge_case`, and derive `canonical_order` from normalized `goal_type`.
+Step 4 contract note: endpoint transport and JSON shape remain stable while classifier internals normalize to allowed taxonomy and canonical slots.
+Backend normalization responsibilities: emit only `context`, `tech_stack`, `constraint`, `action`, `output_format`, `edge_case`, and derive `canonical_order` from normalized `goal_type`.
 
 **Request**
 ```json
@@ -98,9 +103,9 @@ Backend normalization responsibilities in Step 4: emit only `context`, `tech_sta
 ```json
 {
   "sections": [
-    { "id": "s1", "text": "build a dark mode toggle", "goal_type": "action", "canonical_order": 4, "confidence": 0.5, "depends_on": [] },
-    { "id": "s2", "text": "use react", "goal_type": "action", "canonical_order": 4, "confidence": 0.5, "depends_on": [] },
-    { "id": "s3", "text": "deploy to vercel", "goal_type": "action", "canonical_order": 4, "confidence": 0.5, "depends_on": [] }
+    { "id": "s1", "text": "build a dark mode toggle", "goal_type": "action", "canonical_order": 4, "confidence": 0.93, "depends_on": [] },
+    { "id": "s2", "text": "use react", "goal_type": "tech_stack", "canonical_order": 2, "confidence": 0.97, "depends_on": [] },
+    { "id": "s3", "text": "deploy to vercel", "goal_type": "output_format", "canonical_order": 5, "confidence": 0.82, "depends_on": ["s1"] }
   ]
 }
 ```
@@ -209,6 +214,7 @@ Redis keys:
 
 - `rate:daily:{user_id}` — free-tier protected-route quota, reset to next UTC midnight.
 - `rate:auth-token-ip:{encoded_ip}` — public `/auth/token` IP quota, `20` requests per `60` seconds.
+- `rate:burst:{user_id}` — short-window per-account burst guard for protected LLM routes.
 
 ---
 
@@ -251,10 +257,10 @@ backend/
 │   │   ├── auth.ts           # POST /auth/token
 │   │   └── projects.ts       # GET/POST /projects (v2)
 │   ├── services/
-│   │   ├── context.ts        # Project context lookup (v2-ready placeholder)
+│   │   ├── context.ts        # Project context lookup helper (`project_id` nullable)
 │   │   ├── history.ts        # Enhancement history helpers (v2-ready)
 │   │   ├── llm.ts            # LLM router/adapter surface (Step 3+)
-│   │   ├── rateLimit.ts      # Redis quota primitives (daily + auth-token IP)
+│   │   ├── rateLimit.ts      # Redis quota primitives (daily + auth-token IP + burst)
 │   │   └── supabase.ts       # Supabase auth/session verification
 │   └── middleware/
 │       ├── auth.ts

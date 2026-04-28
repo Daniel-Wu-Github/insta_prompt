@@ -32,6 +32,10 @@ create table profiles (
 alter table profiles enable row level security;
 create policy "Own profile only" on profiles
   using (auth.uid() = id);
+create policy "Own profile writes only" on profiles
+  for update
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
 
 -- Bootstrap: create a profiles row automatically when Supabase Auth inserts a new user
 -- Step 1 planning requires this trigger so tier checks and foreign keys never see a missing profile row.
@@ -64,6 +68,10 @@ create table projects (
 alter table projects enable row level security;
 create policy "Own projects only" on projects
   using (auth.uid() = user_id);
+create policy "Own project writes only" on projects
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 ```
 
 Step 1 RLS intent:
@@ -127,6 +135,10 @@ create table enhancement_history (
 alter table enhancement_history enable row level security;
 create policy "Own history only" on enhancement_history
   using (auth.uid() = user_id);
+create policy "Own history writes only" on enhancement_history
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 ```
 
 Step 1 RLS intent:
@@ -153,15 +165,15 @@ rate:auth-token-ip:{encoded_ip}
   TTL: 60 seconds
   description: public /auth/token IP abuse-protection window
 
-session:{user_id}
-  type: string (JSON)
-  TTL: 7 days
-  description: planned cached user record (tier, limits) to avoid Supabase round-trips
+rate:burst:{user_id}
+  type: string (integer counter)
+  TTL: short sliding window (default 10s)
+  description: per-account burst limiter for protected LLM routes
 
-pending:{tab_id}:{section_id}
-  type: string (JSON)
-  TTL: 30 minutes
-  description: planned in-flight enhancement state (survives SW restarts)
+promptcompiler.tabState.{tab_id}
+  type: chrome.storage.session object (extension background)
+  TTL: browser session
+  description: active per-tab runtime state for bridge recovery/cleanup decisions
 ```
 
 ---
@@ -176,7 +188,7 @@ pending:{tab_id}:{section_id}
 | Context embeddings (v2) | Supabase pgvector | Same DB, no separate vector store needed at v1 scale |
 | Enhancement history | Supabase Postgres | Queryable, user-owned |
 | Rate limit counters | Redis (local via `REDIS_URL` or hosted Upstash) | Atomic INCR, sub-ms, TTL-native |
-| Session cache | Upstash Redis | Planned cache to avoid Supabase round-trips on every request |
+| Burst guard counters | Redis (local via `REDIS_URL` or hosted Upstash) | Short-window protection for protected LLM routes |
 | Extension settings (mode, project) | chrome.storage.local | Current popup setting persistence surface |
-| Per-tab clause state | chrome.storage.session (planned) | Planned state surface that survives SW restarts and clears on browser close |
+| Per-tab clause state | chrome.storage.session (active in Step 7 background bridge) | Runtime state surface that survives SW restarts and clears on browser close |
 | JWT (extension) | chrome.storage.session (planned) | Planned extension session surface; avoid localStorage |

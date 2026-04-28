@@ -71,6 +71,7 @@ Done when:
 Goal: detect live textarea and contenteditable targets and attach exactly one listener bundle per target.
 
 - [ ] Add active-input discovery for textarea and contenteditable elements.
+- [ ] **Mandatory:** Handle text extraction safely for both input types: use `.value` for textarea, and for contenteditable preserve block-level newlines (for example, `div` and `br` boundaries) without relying on heavy reflow-triggering extraction paths.
 - [ ] Use a durable per-element attachment marker to prevent duplicate listeners.
 - [ ] Ensure attachment is rerun safely after rerenders without stacking handlers.
 - [ ] Keep instrumentation local to the content script.
@@ -85,6 +86,7 @@ Done when:
 1. Active inputs are detected consistently.
 2. Duplicate listeners are prevented.
 3. Repeated scans are idempotent.
+4. Contenteditable text extraction preserves newline semantics without reflow-heavy parsing.
 
 ### 8.4 Implement the pipeline state scaffold and stale-work cancellation
 
@@ -112,6 +114,7 @@ Goal: produce immediate, zero-API draft segmentation for the active input.
 
 - [ ] Add a deterministic syntactic split pass for clauses and clause-like segments.
 - [ ] Render draft underlines immediately from the split result.
+- [ ] **Critical:** Render underlines without mutating host text nodes. Use the CSS Custom Highlight API (`CSS.highlights`) where available, or a `pointer-events: none` overlay layer aligned to the input text. Do not wrap active user text nodes in inline tags.
 - [ ] Keep the split logic free of provider calls and network dependency.
 - [ ] Ensure the split output can feed the later semantic pass without changing the raw text.
 
@@ -125,6 +128,7 @@ Done when:
 1. Draft segmentation appears immediately.
 2. No network call is needed for the draft pass.
 3. The split output remains compatible with later semantic expansion.
+4. Underline rendering does not mutate host text nodes or destabilize cursor/selection behavior.
 
 ### 8.6 Implement MutationObserver reattach and rerender resilience
 
@@ -133,6 +137,7 @@ Goal: keep instrumentation alive in rerender-heavy apps.
 - [ ] Add MutationObserver-based reattachment for dynamic DOM replacement.
 - [ ] Re-scan only when the target subtree changes in a way that can affect input ownership.
 - [ ] Preserve attachment idempotency across rerenders.
+- [ ] **Critical:** Explicitly ignore extension-originated mutations (for example idempotency marker updates). The observer should react only to relevant added nodes, and it should pause or disconnect around its own DOM writes when needed to avoid self-trigger loops.
 - [ ] Keep observer behavior narrow so it does not become a second state source.
 
 Allowed files for this slice:
@@ -145,6 +150,7 @@ Done when:
 1. Rerendered inputs are re-instrumented.
 2. Duplicate listeners do not accumulate.
 3. MutationObserver remains a reattach mechanism, not a state authority.
+4. Observer callbacks do not recurse on extension-originated DOM mutations.
 
 ### 8.7 Add the Step 8 validation matrix
 

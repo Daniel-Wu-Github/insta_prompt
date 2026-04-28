@@ -23,11 +23,12 @@ The following decisions are locked for Step 8 and must not be reopened unless a 
 | Decision area | Locked choice (Phase 8) | Why this is locked now | Downstream dependency |
 |---|---|---|---|
 | Input discovery owner | The content script owns active-input discovery for textarea and contenteditable elements. | DOM interaction belongs in the content script, not in the background worker, and Step 8 is the first content-side instrumentation slice. | 8.3 attachment, 8.6 re-attach |
+| Text extraction contract | Text extraction must handle textarea and contenteditable safely: textarea uses `.value`; contenteditable preserves block/newline semantics without reflow-heavy extraction paths. | Clause splitting and semantic payload generation require consistent text shape across host editors. | 8.3 extraction, 8.4 state updates |
 | Attachment idempotency | Each target element gets one instrumentation marker and duplicate listeners are prevented across rerenders. | Dynamic apps rerender often and repeated listeners would break deterministic typing behavior. | 8.3 attachment, 8.6 observer recovery |
 | Pipeline state scaffold | The content script owns the Step 8 pipeline state scaffold and serializes only the minimal state needed for input lifecycle transitions. | Step 8 needs a stable local state model without absorbing acceptance or commit behavior. | 8.4 state transitions, 8.7 validation |
 | Debounce and cancellation | New input cancels stale semantic work with debounce plus AbortController. | The preview pipeline must not lag behind the user’s current text. | 8.4 cancellation, 8.7 validation |
-| Syntactic split contract | Instant syntactic split drives immediate draft underlines without API calls. | Users need immediate visual feedback before any semantic call is made. | 8.5 split pass, 8.7 validation |
-| MutationObserver role | MutationObserver is only a reattachment mechanism and not a second source of truth. | Rerender-heavy sites must remain instrumented without duplicating ownership of input state. | 8.6 observer recovery |
+| Syntactic split contract | Instant syntactic split drives immediate draft underlines without API calls and without mutating host text nodes. | Users need immediate visual feedback before any semantic call is made, and cursor stability requires non-mutating underline rendering. | 8.5 split pass, 8.7 validation |
+| MutationObserver role | MutationObserver is only a reattachment mechanism, must ignore extension-originated mutations, and must not become a second source of truth. | Rerender-heavy sites must remain instrumented without duplicate ownership or self-trigger mutation loops. | 8.6 observer recovery |
 | Step boundary rule | Step 8 implements input discovery, listener attachment, draft segmentation, debounce, and state scaffolding only; Step 9 overlay rendering and Step 10/11 acceptance/commit behavior remain deferred. | Preserves the Step 8 / Step 9 / Step 10 / Step 11 split and prevents scope bleed. | 8.2 deferments, 8.8 handoff |
 
 ### Step 8 scope in one paragraph
@@ -125,6 +126,8 @@ Planning rule:
 1. Keep input discovery in `extension/src/content/index.ts`.
 2. Restrict discovery to supported live input surfaces.
 3. Do not add page-wide DOM mutation behavior outside the content script.
+4. Extract textarea text from `.value`.
+5. Extract contenteditable text with newline-preserving logic that respects block boundaries, without relying on reflow-heavy extraction paths.
 
 ### Decision D2: Listener attachment must be idempotent
 
@@ -167,6 +170,8 @@ Planning rule:
 1. Render syntactic underlines immediately on input changes.
 2. Keep the split logic free of provider calls.
 3. Do not mutate the underlying text while rendering the draft pass.
+4. Underline rendering must use non-mutating techniques (CSS Custom Highlight API where supported, or a non-interactive overlay layer).
+5. Do not wrap active user text nodes in inline markup for underline rendering.
 
 ### Decision D5: Debounce and AbortController are the only stale-work controls
 
@@ -194,7 +199,10 @@ Planning rule:
 
 1. Use MutationObserver only to detect when reattachment is required.
 2. Re-scan and reattach with the same idempotent path used on initial discovery.
-3. Do not let the observer create a second, hidden state machine.
+3. Ignore extension-originated mutations so observer callbacks do not recurse on marker writes.
+4. React only to relevant newly added nodes.
+5. Pause or disconnect around extension-owned DOM updates when needed to prevent self-trigger loops.
+6. Do not let the observer create a second, hidden state machine.
 
 ### Decision D7: Step 8 is strictly instrumentation plus draft segmentation
 
@@ -224,6 +232,7 @@ Execution order constraint:
 1. Scan for supported live inputs.
 2. Attach one listener bundle per target.
 3. Keep the attachment path idempotent across rescans.
+4. Normalize text extraction by input type so contenteditable extraction preserves newline semantics.
 
 ### 8.4 Build the pipeline state scaffold and stale-work cancellation
 
@@ -247,7 +256,7 @@ Dependencies: 8.3 input discovery and 8.4 debounce flow complete.
 Execution order constraint:
 
 1. Split the raw text deterministically.
-2. Render draft underlines immediately.
+2. Render draft underlines immediately with non-mutating highlight mechanics.
 3. Keep the split output compatible with later semantic work.
 
 ### 8.6 Add MutationObserver reattachment and duplicate-listener protection
@@ -261,7 +270,8 @@ Execution order constraint:
 
 1. Observe rerender-heavy input containers.
 2. Reattach through the same idempotent path.
-3. Preserve single ownership of each target element.
+3. Ignore extension-originated mutation records and process only relevant added-node changes.
+4. Preserve single ownership of each target element.
 
 ### 8.7 Add the Step 8 validation matrix
 

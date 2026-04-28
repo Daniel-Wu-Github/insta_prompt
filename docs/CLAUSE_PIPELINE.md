@@ -4,14 +4,15 @@
 
 Status note:
 
-- Step 0-2 currently provides deterministic placeholder backend behavior with stable request/response contracts.
-- Step 3+ introduces semantic classification and production model-routing behavior.
+- Step 4-6 backend route behavior is active for `/segment`, `/enhance`, and `/bind`.
+- Step 7 background transport bridge is active in the extension service worker.
+- Content-script UX instrumentation and rendering layers remain Step 8+ work.
 
 ---
 
 ## Overview
 
-The clause pipeline is the intellectual core of PromptCompiler. It runs partially on the client (steps 1-2, 4, 6, 8) and partially on the backend (steps 3, 5, 7). Client-side steps are instant. In Step 0-2, backend steps return placeholders; in Step 3+, backend steps involve production LLM orchestration.
+The clause pipeline is the intellectual core of PromptCompiler. It runs partially on the client (steps 1-2, 4, 6, 8) and partially on the backend (steps 3, 5, 7). Backend steps use production model-router and provider-adapter orchestration. Client-side visual instrumentation for the full UX remains staged after Step 7.
 
 ```
 User types → [1] Syntactic split → [2] Debounce gate
@@ -79,11 +80,9 @@ function handleInput(text: string) {
 ---
 
 ## Step 3 — Semantic Classification (POST /segment)
-**Location:** Backend | **Cost/latency:** placeholder in Step 0-2, model-based in Step 3+
+**Location:** Backend | **Cost/latency:** model-based classification with deterministic normalization/fallback
 
-Current Step 0-2 behavior: request validation plus deterministic placeholder classification.
-
-Target Step 3+ behavior: send draft segments to a small, fast model that returns structured JSON classifying each clause.
+Current runtime behavior: classify draft segments using the fast classifier path, then normalize to allowed taxonomy and canonical slots.
 
 ### Request
 ```json
@@ -162,7 +161,7 @@ Cleans up the classified sections before expansion.
 
 Each section is expanded independently in parallel. Expansions stream back in real time, populating hover previews before the user even looks at them.
 
-Current Step 0-2 behavior: request validation plus deterministic placeholder streaming output.
+Current runtime behavior: request validation plus provider-streamed expansion output via the shared SSE envelope.
 
 ### Request (per section)
 ```json
@@ -187,8 +186,8 @@ Sibling context from `depends_on` references is always injected so expansions ar
 | Mode | Max Output Tokens | Typical Output |
 |---|---|---|
 | Efficiency | 150 | 1 tight paragraph |
-| Balanced | 300 | Structured with 2-3 sections |
-| Detailed | 600 | Full XML/markdown block with edge cases |
+| Balanced | 500 | Structured with 2-3 sections |
+| Detailed | 1000 | Deeply structured prompt fragment with explicit constraints and edge cases |
 
 ---
 
@@ -215,7 +214,7 @@ section.element.style.textDecoration = 'underline dotted'; // change underline s
 
 Triggered by `Cmd+Enter`. All accepted expansions are sent in **canonical order** (by `canonical_order` field, not the order the user accepted them) to a single LLM call.
 
-Current Step 0-2 behavior: deterministic assembly that sorts by `canonical_order` and joins section expansions.
+Current runtime behavior: canonicalized server-side ordering, provider-streamed bind output, and successful history persistence before terminal completion.
 
 ### Request
 ```json

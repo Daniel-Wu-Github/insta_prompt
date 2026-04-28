@@ -5,8 +5,9 @@
 Implementation status (main branch):
 
 - Step 1 and Step 2 backend foundations are active: Supabase auth context, protected-route middleware order (`auth -> ratelimit -> tier`), and `/auth/token` IP abuse protection.
-- `/segment`, `/enhance`, and `/bind` currently run deterministic Step 0 placeholder business behavior behind those foundations.
-- Extension runtime is still bootstrap-level: keepalive background alarm, minimal content-script bootstrap, and popup settings persisted in `chrome.storage.local`.
+- Step 4-6 backend route behavior is active: `/segment` classification normalization, `/enhance` streaming orchestration, and `/bind` canonicalization plus history persistence.
+- Step 7 background bridge behavior is active: Port verb dispatch (`SEGMENT` / `ENHANCE` / `BIND` / `CANCEL`), SSE forwarding, keepalive alarm self-heal, and per-tab `chrome.storage.session` recovery state.
+- Content script UX pipeline remains bootstrap-level pending Step 8+ instrumentation/rendering work.
 
 ---
 
@@ -43,13 +44,13 @@ Implementation status (main branch):
 All LLM calls go through the PromptCompiler backend — the extension never calls Anthropic/Groq/OpenAI directly. This enables:
 - Rate limiting and tier enforcement
 - Key hiding (user never sees the API key)
-- Free tier powered by Groq at $0 COGS
+- Low-COGS free tier routing on Groq
 - Centralized usage tracking and billing
 
 BYOK is available as a paid add-on, not the primary model.
 
 ### 2. Groq Free Tier for Free Users
-Free tier enhancements route to Groq's Llama 3.3 70B (~80ms, ~$0/call). This makes the free tier sustainable indefinitely with no per-user cost until upgrade. Pro tier upgrades to Claude Haiku/Sonnet.
+Free tier enhancements route to Groq's Llama 3.3 70B (~80ms, low per-call cost). This keeps free-tier economics predictable while pro tier routes to Claude Haiku/Sonnet.
 
 ### 3. Supabase from Day One
 Supabase provides: Postgres, Auth (including GitHub OAuth for v2), Row Level Security, and the pgvector extension (for v2 context retrieval). No separate auth service needed.
@@ -112,7 +113,7 @@ Protected request (not `/auth/token`) → Auth (JWT validation)
 
 `/auth/token` is public and remains outside the protected middleware chain; Step 2 adds explicit IP-based rate limiting for this endpoint, with IP extraction from trusted proxy headers on Fly.io deployments.
 
-Current Step 0-2 runtime note: the protected routes currently keep placeholder business logic; full model-routing/orchestration behavior starts in Step 3+.
+Current runtime note: protected LLM routes run production Step 4-6 handler logic behind Step 1-2 middleware guarantees.
 
 ---
 
@@ -136,11 +137,11 @@ enhancement_history id, user_id, project_id, raw_input, final_prompt, mode, mode
 ```
 rate:daily:{user_id}             → int, reset at next UTC midnight (daily enhancement count)
 rate:auth-token-ip:{encoded_ip}  → int, 60s window (public /auth/token abuse protection)
-session:{user_id}                → JSON, TTL 7d (planned cache surface)
-pending:{tab_id}                 → JSON, TTL 30m (planned in-flight state)
+rate:burst:{user_id}             → int, short window burst guard for protected LLM routes
+promptcompiler.tabState.{tab_id} → chrome.storage.session record (extension per-tab runtime state)
 ```
 
-Current Step 0-2 runtime note: `rate:daily:*` and `rate:auth-token-ip:*` are active; `session:*` and `pending:*` remain planned surfaces.
+Current runtime note: `rate:daily:*`, `rate:auth-token-ip:*`, and `rate:burst:*` are active backend guardrails; tab runtime state is extension-owned in `chrome.storage.session`.
 
 ---
 
@@ -161,7 +162,7 @@ See [`LLM_ROUTING.md`](LLM_ROUTING.md) for full routing logic.
   → log to enhancement_history
 ```
 
-Current Step 0-2 runtime note: `/enhance` currently validates payloads and returns deterministic placeholder streaming text; model selection starts in Step 3+.
+Current runtime note: `/enhance` uses provider streaming adapters and mode-aware prompt handoff; `project_id` remains an optional nullable context hook.
 
 ### Prompt Assembly
 

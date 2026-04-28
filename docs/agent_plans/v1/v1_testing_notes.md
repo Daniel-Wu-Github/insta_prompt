@@ -1,5 +1,3 @@
-3. Free generation model is Groq `llama-3.3-70b-versatile`.
-grep -e "FREE_GENERATION_MODEL" -e "llama-3.3-70b-versatile" backend/src/services/llm.ts
 # V1 Testing Notes
 
 ## Extension Popup In WSL
@@ -24,7 +22,7 @@ The bind stream currently splits on words and preserves trailing spaces by desig
 
 Current runtime notes for manual Step 0 probes on main:
 
-1. `/enhance` requires `project_id` in the request payload; use `project_id: null` when no project context exists.
+1. `/enhance` accepts nullable `project_id`; use `project_id: null` when no project context exists.
 2. Protected route probes (`/segment`, `/enhance`, `/bind`) run through the active middleware stack, so authenticated free-tier calls include `X-RateLimit-*` headers.
 
 ## Step 1 Manual Testing Guide (Data Layer and Auth Foundation)

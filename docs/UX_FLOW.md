@@ -4,7 +4,7 @@
 
 Status note:
 
-- Current Step 0-2 extension runtime is bootstrap-level (popup settings, background keepalive, content-script bootstrap).
+- Current runtime is mixed: Step 7 background bridge is active, while full content-script UX instrumentation remains staged after Step 7.
 - The interaction sequence below is the target Step 5+ UX flow.
 
 ---
@@ -90,8 +90,8 @@ Controlled via the popup toggle. Affects token budget and model routing.
 | Mode | Token Budget | Behavior |
 |---|---|---|
 | **Efficiency** | ~150 out | Sharpens prompt, removes ambiguity, stays concise. One paragraph. |
-| **Balanced** | ~300 out | Adds context, constraints, output format. Structured with sections. |
-| **Detailed** | ~600 out | Full scaffold: chain-of-thought, tech stack, edge cases, output format in XML/markdown block. |
+| **Balanced** | ~500 out | Adds context, constraints, output format. Structured with short sections. |
+| **Detailed** | ~1000 out | Deeply structured prompt with explicit constraints, success criteria, and edge-case guidance. |
 
 ---
 

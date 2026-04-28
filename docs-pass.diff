@@ -1,0 +1,522 @@
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 450634b..fc3342b 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -5,8 +5,9 @@
+ Implementation status (main branch):
+ 
+ - Step 1 and Step 2 backend foundations are active: Supabase auth context, protected-route middleware order (`auth -> ratelimit -> tier`), and `/auth/token` IP abuse protection.
+-- `/segment`, `/enhance`, and `/bind` currently run deterministic Step 0 placeholder business behavior behind those foundations.
+-- Extension runtime is still bootstrap-level: keepalive background alarm, minimal content-script bootstrap, and popup settings persisted in `chrome.storage.local`.
++- Step 4-6 backend route behavior is active: `/segment` classification normalization, `/enhance` streaming orchestration, and `/bind` canonicalization plus history persistence.
++- Step 7 background bridge behavior is active: Port verb dispatch (`SEGMENT` / `ENHANCE` / `BIND` / `CANCEL`), SSE forwarding, keepalive alarm self-heal, and per-tab `chrome.storage.session` recovery state.
++- Content script UX pipeline remains bootstrap-level pending Step 8+ instrumentation/rendering work.
+ 
+ ---
+ 
+@@ -43,13 +44,13 @@ Implementation status (main branch):
+ All LLM calls go through the PromptCompiler backend — the extension never calls Anthropic/Groq/OpenAI directly. This enables:
+ - Rate limiting and tier enforcement
+ - Key hiding (user never sees the API key)
+-- Free tier powered by Groq at $0 COGS
++- Low-COGS free tier routing on Groq
+ - Centralized usage tracking and billing
+ 
+ BYOK is available as a paid add-on, not the primary model.
+ 
+ ### 2. Groq Free Tier for Free Users
+-Free tier enhancements route to Groq's Llama 3.3 70B (~80ms, ~$0/call). This makes the free tier sustainable indefinitely with no per-user cost until upgrade. Pro tier upgrades to Claude Haiku/Sonnet.
++Free tier enhancements route to Groq's Llama 3.3 70B (~80ms, low per-call cost). This keeps free-tier economics predictable while pro tier routes to Claude Haiku/Sonnet.
+ 
+ ### 3. Supabase from Day One
+ Supabase provides: Postgres, Auth (including GitHub OAuth for v2), Row Level Security, and the pgvector extension (for v2 context retrieval). No separate auth service needed.
+@@ -112,7 +113,7 @@ Protected request (not `/auth/token`) → Auth (JWT validation)
+ 
+ `/auth/token` is public and remains outside the protected middleware chain; Step 2 adds explicit IP-based rate limiting for this endpoint, with IP extraction from trusted proxy headers on Fly.io deployments.
+ 
+-Current Step 0-2 runtime note: the protected routes currently keep placeholder business logic; full model-routing/orchestration behavior starts in Step 3+.
++Current runtime note: protected LLM routes run production Step 4-6 handler logic behind Step 1-2 middleware guarantees.
+ 
+ ---
+ 
+@@ -136,11 +137,11 @@ enhancement_history id, user_id, project_id, raw_input, final_prompt, mode, mode
+ ```
+ rate:daily:{user_id}             → int, reset at next UTC midnight (daily enhancement count)
+ rate:auth-token-ip:{encoded_ip}  → int, 60s window (public /auth/token abuse protection)
+-session:{user_id}                → JSON, TTL 7d (planned cache surface)
+-pending:{tab_id}                 → JSON, TTL 30m (planned in-flight state)
++rate:burst:{user_id}             → int, short window burst guard for protected LLM routes
++promptcompiler.tabState.{tab_id} → chrome.storage.session record (extension per-tab runtime state)
+ ```
+ 
+-Current Step 0-2 runtime note: `rate:daily:*` and `rate:auth-token-ip:*` are active; `session:*` and `pending:*` remain planned surfaces.
++Current runtime note: `rate:daily:*`, `rate:auth-token-ip:*`, and `rate:burst:*` are active backend guardrails; tab runtime state is extension-owned in `chrome.storage.session`.
+ 
+ ---
+ 
+@@ -161,7 +162,7 @@ See [`LLM_ROUTING.md`](LLM_ROUTING.md) for full routing logic.
+   → log to enhancement_history
+ ```
+ 
+-Current Step 0-2 runtime note: `/enhance` currently validates payloads and returns deterministic placeholder streaming text; model selection starts in Step 3+.
++Current runtime note: `/enhance` uses provider streaming adapters and mode-aware prompt handoff; `project_id` remains an optional nullable context hook.
+ 
+ ### Prompt Assembly
+ 
+diff --git a/docs/BACKEND_API.md b/docs/BACKEND_API.md
+index 6fd9b0e..83b1576 100644
+--- a/docs/BACKEND_API.md
++++ b/docs/BACKEND_API.md
+@@ -6,13 +6,14 @@ Step scope note:
+ 
+ - Step 1 locks auth/session foundations (`/auth/token` contract + auth context population).
+ - Step 2 adds rate-limit and tier-enforcement behavior.
+-- Step 3+ implements full `/segment`, `/enhance`, and `/bind` model-routing behavior.
++- Step 3+ provides routing/prompt/provider service-layer contracts used by Step 4-6 route handlers.
+ 
+-Current implementation snapshot (main, Step 0-2):
++Current implementation snapshot (main, Step 0-7):
+ 
+-- `/segment`, `/enhance`, and `/bind` currently keep deterministic placeholder business behavior after validation and middleware checks.
+-- `/segment` maps each input segment to `goal_type = action`, `canonical_order = 4`, and `confidence = 0.5`.
+-- `/enhance` and `/bind` currently stream tokenized placeholder output in the standard SSE envelope.
++- `/segment` validates input, classifies through provider-backed intermediate output, and normalizes taxonomy/canonical order/dependencies with deterministic fallback behavior.
++- `/enhance` validates payloads, resolves mode/tier model routing, builds prompt handoff, and streams provider output through the shared SSE envelope.
++- `/bind` canonicalizes server-side section order, streams provider output through shared SSE semantics, and writes exactly one successful `enhancement_history` row on successful completion.
++- Step 7 background transport bridge is active in the extension service worker; content script UX instrumentation remains a separate Step 8+ concern.
+ 
+ ---
+ 
+@@ -36,9 +37,9 @@ Current implementation snapshot (main, Step 0-2):
+ | Method | Path | Step | Notes |
+ |---|---|---|---|
+ | POST | `/auth/token` | Step 1 | Public refresh-session proxy; no custom JWT issuer |
+-| POST | `/segment` | Step 3+ | Production classifier behavior lands after Step 1 foundations |
+-| POST | `/enhance` | Step 3+ | Production model routing and prompt expansion lands after Step 1 foundations |
+-| POST | `/bind` | Step 3+ | Production bind orchestration lands after Step 1 foundations |
++| POST | `/segment` | Step 4 | Production classifier behavior is active |
++| POST | `/enhance` | Step 5 | Production model routing and prompt expansion are active |
++| POST | `/bind` | Step 6 | Production bind orchestration and history persistence are active |
+ | GET | `/projects` | v2-ready | Schema and contracts may exist before full v2 behavior |
+ | POST | `/projects/:id/context` | v2-ready | Schema and contracts may exist before full v2 behavior |
+ 
+@@ -46,10 +47,12 @@ BYOK does not introduce alternate request or response shapes for `/segment`, `/e
+ 
+ Step 3 service boundary contract: route handlers pass resolved BYOK preferences into the pure model-router surface and serialize SSE at the transport boundary. Provider adapters emit normalized object events and do not emit raw SSE strings directly.
+ 
++Current runtime note: BYOK preference injection into production `/enhance` and `/bind` handlers is not fully wired yet; route contracts remain stable and tier checks still apply.
++
+ ### POST `/enhance`
+ Expand a single classified section. Returns SSE stream.
+ 
+-Current Step 0-2 behavior: validates the request and streams a deterministic placeholder expansion.
++Current runtime behavior: validates request shape, routes model selection via tier/mode, injects sibling context, and streams provider tokens through the shared SSE envelope.
+ 
+ **Request**
+ ```json
+@@ -67,6 +70,8 @@ Current Step 0-2 behavior: validates the request and streams a deterministic pla
+ }
+ ```
+ 
++`project_id` is nullable. Use `null` when no project context is available.
++
+ **Response** — `text/event-stream`
+ ```
+ data: {"type":"token","data":"Implement a fully "}
+@@ -81,10 +86,10 @@ Streaming rule: the response status and headers are committed when the first SSE
+ ### POST `/segment`
+ Classify raw text segments into sections with goal_type, canonical_order, and confidence.
+ 
+-Current Step 0-2 behavior: deterministic placeholder classifier.
++Current runtime behavior: provider-backed classification plus deterministic normalization.
+ 
+-Step 4 contract note: endpoint transport and JSON shape stay the same while placeholder classifier internals are replaced.
+-Backend normalization responsibilities in Step 4: emit only `context`, `tech_stack`, `constraint`, `action`, `output_format`, `edge_case`, and derive `canonical_order` from normalized `goal_type`.
++Step 4 contract note: endpoint transport and JSON shape remain stable while classifier internals normalize to allowed taxonomy and canonical slots.
++Backend normalization responsibilities: emit only `context`, `tech_stack`, `constraint`, `action`, `output_format`, `edge_case`, and derive `canonical_order` from normalized `goal_type`.
+ 
+ **Request**
+ ```json
+@@ -98,9 +103,9 @@ Backend normalization responsibilities in Step 4: emit only `context`, `tech_sta
+ ```json
+ {
+   "sections": [
+-    { "id": "s1", "text": "build a dark mode toggle", "goal_type": "action", "canonical_order": 4, "confidence": 0.5, "depends_on": [] },
+-    { "id": "s2", "text": "use react", "goal_type": "action", "canonical_order": 4, "confidence": 0.5, "depends_on": [] },
+-    { "id": "s3", "text": "deploy to vercel", "goal_type": "action", "canonical_order": 4, "confidence": 0.5, "depends_on": [] }
++    { "id": "s1", "text": "build a dark mode toggle", "goal_type": "action", "canonical_order": 4, "confidence": 0.93, "depends_on": [] },
++    { "id": "s2", "text": "use react", "goal_type": "tech_stack", "canonical_order": 2, "confidence": 0.97, "depends_on": [] },
++    { "id": "s3", "text": "deploy to vercel", "goal_type": "output_format", "canonical_order": 5, "confidence": 0.82, "depends_on": ["s1"] }
+   ]
+ }
+ ```
+@@ -209,6 +214,7 @@ Redis keys:
+ 
+ - `rate:daily:{user_id}` — free-tier protected-route quota, reset to next UTC midnight.
+ - `rate:auth-token-ip:{encoded_ip}` — public `/auth/token` IP quota, `20` requests per `60` seconds.
++- `rate:burst:{user_id}` — short-window per-account burst guard for protected LLM routes.
+ 
+ ---
+ 
+@@ -251,10 +257,10 @@ backend/
+ │   │   ├── auth.ts           # POST /auth/token
+ │   │   └── projects.ts       # GET/POST /projects (v2)
+ │   ├── services/
+-│   │   ├── context.ts        # Project context lookup (v2-ready placeholder)
++│   │   ├── context.ts        # Project context lookup helper (`project_id` nullable)
+ │   │   ├── history.ts        # Enhancement history helpers (v2-ready)
+ │   │   ├── llm.ts            # LLM router/adapter surface (Step 3+)
+-│   │   ├── rateLimit.ts      # Redis quota primitives (daily + auth-token IP)
++│   │   ├── rateLimit.ts      # Redis quota primitives (daily + auth-token IP + burst)
+ │   │   └── supabase.ts       # Supabase auth/session verification
+ │   └── middleware/
+ │       ├── auth.ts
+diff --git a/docs/CLAUSE_PIPELINE.md b/docs/CLAUSE_PIPELINE.md
+index 15c8d73..f0d4b97 100644
+--- a/docs/CLAUSE_PIPELINE.md
++++ b/docs/CLAUSE_PIPELINE.md
+@@ -4,14 +4,15 @@
+ 
+ Status note:
+ 
+-- Step 0-2 currently provides deterministic placeholder backend behavior with stable request/response contracts.
+-- Step 3+ introduces semantic classification and production model-routing behavior.
++- Step 4-6 backend route behavior is active for `/segment`, `/enhance`, and `/bind`.
++- Step 7 background transport bridge is active in the extension service worker.
++- Content-script UX instrumentation and rendering layers remain Step 8+ work.
+ 
+ ---
+ 
+ ## Overview
+ 
+-The clause pipeline is the intellectual core of PromptCompiler. It runs partially on the client (steps 1-2, 4, 6, 8) and partially on the backend (steps 3, 5, 7). Client-side steps are instant. In Step 0-2, backend steps return placeholders; in Step 3+, backend steps involve production LLM orchestration.
++The clause pipeline is the intellectual core of PromptCompiler. It runs partially on the client (steps 1-2, 4, 6, 8) and partially on the backend (steps 3, 5, 7). Backend steps use production model-router and provider-adapter orchestration. Client-side visual instrumentation for the full UX remains staged after Step 7.
+ 
+ ```
+ User types → [1] Syntactic split → [2] Debounce gate
+@@ -79,11 +80,9 @@ function handleInput(text: string) {
+ ---
+ 
+ ## Step 3 — Semantic Classification (POST /segment)
+-**Location:** Backend | **Cost/latency:** placeholder in Step 0-2, model-based in Step 3+
++**Location:** Backend | **Cost/latency:** model-based classification with deterministic normalization/fallback
+ 
+-Current Step 0-2 behavior: request validation plus deterministic placeholder classification.
+-
+-Target Step 3+ behavior: send draft segments to a small, fast model that returns structured JSON classifying each clause.
++Current runtime behavior: classify draft segments using the fast classifier path, then normalize to allowed taxonomy and canonical slots.
+ 
+ ### Request
+ ```json
+@@ -162,7 +161,7 @@ Cleans up the classified sections before expansion.
+ 
+ Each section is expanded independently in parallel. Expansions stream back in real time, populating hover previews before the user even looks at them.
+ 
+-Current Step 0-2 behavior: request validation plus deterministic placeholder streaming output.
++Current runtime behavior: request validation plus provider-streamed expansion output via the shared SSE envelope.
+ 
+ ### Request (per section)
+ ```json
+@@ -187,8 +186,8 @@ Sibling context from `depends_on` references is always injected so expansions ar
+ | Mode | Max Output Tokens | Typical Output |
+ |---|---|---|
+ | Efficiency | 150 | 1 tight paragraph |
+-| Balanced | 300 | Structured with 2-3 sections |
+-| Detailed | 600 | Full XML/markdown block with edge cases |
++| Balanced | 500 | Structured with 2-3 sections |
++| Detailed | 1000 | Deeply structured prompt fragment with explicit constraints and edge cases |
+ 
+ ---
+ 
+@@ -215,7 +214,7 @@ section.element.style.textDecoration = 'underline dotted'; // change underline s
+ 
+ Triggered by `Cmd+Enter`. All accepted expansions are sent in **canonical order** (by `canonical_order` field, not the order the user accepted them) to a single LLM call.
+ 
+-Current Step 0-2 behavior: deterministic assembly that sorts by `canonical_order` and joins section expansions.
++Current runtime behavior: canonicalized server-side ordering, provider-streamed bind output, and successful history persistence before terminal completion.
+ 
+ ### Request
+ ```json
+diff --git a/docs/DATA_MODELS.md b/docs/DATA_MODELS.md
+index 0b9d6eb..1081cc0 100644
+--- a/docs/DATA_MODELS.md
++++ b/docs/DATA_MODELS.md
+@@ -32,6 +32,10 @@ create table profiles (
+ alter table profiles enable row level security;
+ create policy "Own profile only" on profiles
+   using (auth.uid() = id);
++create policy "Own profile writes only" on profiles
++  for update
++  using (auth.uid() = id)
++  with check (auth.uid() = id);
+ 
+ -- Bootstrap: create a profiles row automatically when Supabase Auth inserts a new user
+ -- Step 1 planning requires this trigger so tier checks and foreign keys never see a missing profile row.
+@@ -64,6 +68,10 @@ create table projects (
+ alter table projects enable row level security;
+ create policy "Own projects only" on projects
+   using (auth.uid() = user_id);
++create policy "Own project writes only" on projects
++  for all
++  using (auth.uid() = user_id)
++  with check (auth.uid() = user_id);
+ ```
+ 
+ Step 1 RLS intent:
+@@ -127,6 +135,10 @@ create table enhancement_history (
+ alter table enhancement_history enable row level security;
+ create policy "Own history only" on enhancement_history
+   using (auth.uid() = user_id);
++create policy "Own history writes only" on enhancement_history
++  for all
++  using (auth.uid() = user_id)
++  with check (auth.uid() = user_id);
+ ```
+ 
+ Step 1 RLS intent:
+@@ -153,15 +165,15 @@ rate:auth-token-ip:{encoded_ip}
+   TTL: 60 seconds
+   description: public /auth/token IP abuse-protection window
+ 
+-session:{user_id}
+-  type: string (JSON)
+-  TTL: 7 days
+-  description: planned cached user record (tier, limits) to avoid Supabase round-trips
++rate:burst:{user_id}
++  type: string (integer counter)
++  TTL: short sliding window (default 10s)
++  description: per-account burst limiter for protected LLM routes
+ 
+-pending:{tab_id}:{section_id}
+-  type: string (JSON)
+-  TTL: 30 minutes
+-  description: planned in-flight enhancement state (survives SW restarts)
++promptcompiler.tabState.{tab_id}
++  type: chrome.storage.session object (extension background)
++  TTL: browser session
++  description: active per-tab runtime state for bridge recovery/cleanup decisions
+ ```
+ 
+ ---
+@@ -176,7 +188,7 @@ pending:{tab_id}:{section_id}
+ | Context embeddings (v2) | Supabase pgvector | Same DB, no separate vector store needed at v1 scale |
+ | Enhancement history | Supabase Postgres | Queryable, user-owned |
+ | Rate limit counters | Redis (local via `REDIS_URL` or hosted Upstash) | Atomic INCR, sub-ms, TTL-native |
+-| Session cache | Upstash Redis | Planned cache to avoid Supabase round-trips on every request |
++| Burst guard counters | Redis (local via `REDIS_URL` or hosted Upstash) | Short-window protection for protected LLM routes |
+ | Extension settings (mode, project) | chrome.storage.local | Current popup setting persistence surface |
+-| Per-tab clause state | chrome.storage.session (planned) | Planned state surface that survives SW restarts and clears on browser close |
++| Per-tab clause state | chrome.storage.session (active in Step 7 background bridge) | Runtime state surface that survives SW restarts and clears on browser close |
+ | JWT (extension) | chrome.storage.session (planned) | Planned extension session surface; avoid localStorage |
+\ No newline at end of file
+diff --git a/docs/EXTENSION.md b/docs/EXTENSION.md
+index f39cdad..7462e61 100644
+--- a/docs/EXTENSION.md
++++ b/docs/EXTENSION.md
+@@ -4,14 +4,14 @@
+ 
+ ---
+ 
+-## Current Status (Step 0-2)
++## Current Status (Step 0-7 Mixed)
+ 
+-The extension is currently a bootstrap surface, not the full clause UX runtime.
++The extension is currently split between an active Step 7 background bridge and a bootstrap-level content UX layer.
+ 
+ - Manifest permissions: `storage`, `alarms`
+ - Manifest host permissions: `<all_urls>`
+-- Background service worker: keepalive alarm (`0.4` minutes / `24s`) only
+-- Content script: bootstrap registration and debug log
++- Background service worker: Port bridge (`SEGMENT`, `ENHANCE`, `BIND`, `CANCEL`), SSE forwarding, keepalive alarm self-heal, and tab-state recovery/clear behavior via `chrome.storage.session`
++- Content script: bootstrap registration and bridge logging (full instrumentation deferred to Step 8+)
+ - Popup: React UI for mode/project controls and account CTA
+ - Popup settings storage: `chrome.storage.local` key `promptcompiler.settings`
+ 
+@@ -30,7 +30,7 @@ Current extension files:
+ {
+   "manifest_version": 3,
+   "name": "PromptCompiler",
+-  "description": "Step 0 bootstrap extension surface for PromptCompiler.",
++  "description": "PromptCompiler extension surface (manifest text may lag behind runtime step status).",
+   "version": "0.1.0",
+   "permissions": ["storage", "alarms"],
+   "host_permissions": ["<all_urls>"]
+@@ -63,20 +63,20 @@ No direct provider calls from content script or popup are allowed.
+ 
+ ---
+ 
+-## Target Runtime (Step 5+)
++## Target Runtime (Step 8+)
+ 
+-Planned Step 5+ behavior:
++Planned Step 8+ behavior:
+ 
+ - Content script detects active text inputs and manages underlines/ghost text/hotkeys.
+-- Background service worker proxies `/segment`, `/enhance`, and `/bind` through backend APIs.
+-- Background streams SSE token events to content script over runtime ports.
++- Background service worker already proxies `/segment`, `/enhance`, and `/bind` through backend APIs.
++- Background already streams SSE token events to content script over runtime ports.
+ - Tab and section state follows shared contracts (`TabStatus`, `SectionStatus`) from `shared/contracts/domain.ts`.
+ - `/auth/token` session exchange remains backend-mediated; extension stores only app-consumable session state.
+ 
+ Target storage split:
+ 
+ - Popup settings: `chrome.storage.local` (current) unless a future migration to sync is explicitly approved.
+-- Runtime tab/session state: `chrome.storage.session` (planned).
++- Runtime tab/session state: `chrome.storage.session` (active in background worker).
+ 
+ ---
+ 
+diff --git a/docs/LLM_ROUTING.md b/docs/LLM_ROUTING.md
+index 87fd374..e894215 100644
+--- a/docs/LLM_ROUTING.md
++++ b/docs/LLM_ROUTING.md
+@@ -18,13 +18,14 @@ Canonical model identifiers in this doc are exact provider model IDs; descriptiv
+ |---|---|---|---|---|---|
+ | `/segment` | Groq `llama-3.1-8b-instant` | Groq `llama-3.1-8b-instant` | Groq `llama-3.1-8b-instant` | Groq `llama-3.1-8b-instant` | Groq `llama-3.1-8b-instant` via user key |
+ | `/enhance` | Groq `llama-3.3-70b-versatile` | Anthropic `claude-haiku-4-5-20251001` | Anthropic `claude-sonnet-4-6` | Anthropic `claude-sonnet-4-6` | User-configured provider/model |
+-| `/enhance` | Groq `llama-3.3-70b-versatile` | Anthropic `claude-haiku-4-5-20251001` | Anthropic `claude-sonnet-4-6` | Anthropic `claude-sonnet-4-6` | User-configured provider/model |
+ | `/bind` | Groq `llama-3.3-70b-versatile` | Anthropic `claude-haiku-4-5-20251001` | Anthropic `claude-sonnet-4-6` | Anthropic `claude-sonnet-4-6` | User-configured provider/model |
+ 
+ The `/segment` call always uses the cheapest fast model — its job is JSON classification, not quality generation.
+ 
+ BYOK keeps the same route contract as managed tiers. It changes the credential source and user-configured provider/model selection, not the endpoint shape or SSE envelope.
+ 
++Current runtime note: production `/enhance` and `/bind` route handlers still need BYOK preference injection wiring; the router and adapters already support BYOK model selection inputs.
++
+ ---
+ 
+ ## Cost Model
+@@ -41,10 +42,8 @@ BYOK keeps the same route contract as managed tiers. It changes the credential s
+ ### Free tier COGS
+ A typical free tier enhancement (1 segment call + 2 expand calls + 1 bind):
+ - `~$0.0001 + (2 × $0.0008) + $0.0008 = ~$0.0025/session`
+-- `~$0.0001 + (2 × $0.0008) + $0.0008 = ~$0.0025/session`
+ - 30 sessions/day/user = ~$0.075/user/day max
+ - 1,000 daily active free users = ~$75/day
+-  return { provider: 'groq', model: 'llama-3.3-70b-versatile', maxTokens: modeTokens(mode) };
+ - Well within manageable range; upgrade conversion keeps this profitable
+ 
+ ---
+@@ -91,7 +90,7 @@ function selectModel({ tier, mode, callType, byokConfig }: RouteKey): ModelConfi
+ }
+ 
+ function modeTokens(mode: Mode): number {
+-  return { efficiency: 150, balanced: 300, detailed: 600 }[mode];
++  return { efficiency: 150, balanced: 500, detailed: 1000 }[mode];
+ }
+ ```
+ 
+@@ -173,7 +172,7 @@ Your job:
+ - Remove redundancy between sections
+ - Ensure consistent tone throughout
+ - Add transitions where needed
+-- Output a single ${mode === 'detailed' ? 'XML-structured' : 'markdown'} prompt block
++- Output a single deeply structured prompt block appropriate to mode
+ 
+ Output only the final prompt. No preamble.`;
+ }
+diff --git a/docs/UX_FLOW.md b/docs/UX_FLOW.md
+index d988f1b..5e7634e 100644
+--- a/docs/UX_FLOW.md
++++ b/docs/UX_FLOW.md
+@@ -4,7 +4,7 @@
+ 
+ Status note:
+ 
+-- Current Step 0-2 extension runtime is bootstrap-level (popup settings, background keepalive, content-script bootstrap).
++- Current runtime is mixed: Step 7 background bridge is active, while full content-script UX instrumentation remains staged after Step 7.
+ - The interaction sequence below is the target Step 5+ UX flow.
+ 
+ ---
+@@ -90,8 +90,8 @@ Controlled via the popup toggle. Affects token budget and model routing.
+ | Mode | Token Budget | Behavior |
+ |---|---|---|
+ | **Efficiency** | ~150 out | Sharpens prompt, removes ambiguity, stays concise. One paragraph. |
+-| **Balanced** | ~300 out | Adds context, constraints, output format. Structured with sections. |
+-| **Detailed** | ~600 out | Full scaffold: chain-of-thought, tech stack, edge cases, output format in XML/markdown block. |
++| **Balanced** | ~500 out | Adds context, constraints, output format. Structured with short sections. |
++| **Detailed** | ~1000 out | Deeply structured prompt with explicit constraints, success criteria, and edge-case guidance. |
+ 
+ ---
+ 
+diff --git a/docs/agent_plans/v1/v1_testing_notes.md b/docs/agent_plans/v1/v1_testing_notes.md
+index 68101a9..4084fec 100644
+--- a/docs/agent_plans/v1/v1_testing_notes.md
++++ b/docs/agent_plans/v1/v1_testing_notes.md
+@@ -1,5 +1,3 @@
+-3. Free generation model is Groq `llama-3.3-70b-versatile`.
+-grep -e "FREE_GENERATION_MODEL" -e "llama-3.3-70b-versatile" backend/src/services/llm.ts
+ # V1 Testing Notes
+ 
+ ## Extension Popup In WSL
+@@ -24,7 +22,7 @@ The bind stream currently splits on words and preserves trailing spaces by desig
+ 
+ Current runtime notes for manual Step 0 probes on main:
+ 
+-1. `/enhance` requires `project_id` in the request payload; use `project_id: null` when no project context exists.
++1. `/enhance` accepts nullable `project_id`; use `project_id: null` when no project context exists.
+ 2. Protected route probes (`/segment`, `/enhance`, `/bind`) run through the active middleware stack, so authenticated free-tier calls include `X-RateLimit-*` headers.
+ 
+ ## Step 1 Manual Testing Guide (Data Layer and Auth Foundation)
+diff --git a/logging/commit_log.md b/logging/commit_log.md
+index f2adcd6..3d22498 100644
+--- a/logging/commit_log.md
++++ b/logging/commit_log.md
+@@ -1092,3 +1092,56 @@ Entries are grouped by branch and extend commit messages with file-level change
+     - Files:
+       - M docs/agent_plans/v1_testing_notes.md
+       - M logging/commit_log.md
++
++### 2026-04-24 19:16:55Z - Push to origin
++- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
++- Remote ref: refs/heads/main
++- Range: bb8905dbf52c7ccfcc89ca11facb6abd060a00e5..5574e13ec8e70d59f452ce55c31b0ba23f2659da
++- Commits:
++  - 5574e13 v1 v2 separation, step 8 planning
++    - Author: dwu764160 <d.wu764160@gmail.com>
++    - Commit date: 2026-04-24T14:16:51-05:00
++    - Purpose: This commit adds 22, modifies 1, deletes 19 across docs, logging.
++    - Files:
++      - D docs/agent_plans/integration_audits/steps0-2.md
++      - A docs/agent_plans/v1/integration_audits/steps0-2.md
++      - A docs/agent_plans/v1/v1_overarching_plan.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_0.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_0_planning.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_1.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_1_planning.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_2.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_2_planning.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_3.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_3_planning.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_4.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_4_planning.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_5.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_5_planning.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_6.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_6_planning.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_7.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_7_planning.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_8.md
++      - A docs/agent_plans/v1/v1_step_by_step/v1_step_8_planning.md
++      - A docs/agent_plans/v1/v1_testing_notes.md
++      - D docs/agent_plans/v1_overarching_plan.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_0.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_0_planning.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_1.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_1_planning.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_2.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_2_planning.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_3.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_3_planning.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_4.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_4_planning.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_5.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_5_planning.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_6.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_6_planning.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_7.md
++      - D docs/agent_plans/v1_step_by_step/v1_step_7_planning.md
++      - D docs/agent_plans/v1_testing_notes.md
++      - A docs/agent_plans/v2/v2_suggestions.md
++      - M logging/commit_log.md

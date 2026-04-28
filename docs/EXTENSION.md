@@ -4,14 +4,14 @@
 
 ---
 
-## Current Status (Step 0-2)
+## Current Status (Step 0-7 Mixed)
 
-The extension is currently a bootstrap surface, not the full clause UX runtime.
+The extension is currently split between an active Step 7 background bridge and a bootstrap-level content UX layer.
 
 - Manifest permissions: `storage`, `alarms`
 - Manifest host permissions: `<all_urls>`
-- Background service worker: keepalive alarm (`0.4` minutes / `24s`) only
-- Content script: bootstrap registration and debug log
+- Background service worker: Port bridge (`SEGMENT`, `ENHANCE`, `BIND`, `CANCEL`), SSE forwarding, keepalive alarm self-heal, and tab-state recovery/clear behavior via `chrome.storage.session`
+- Content script: bootstrap registration and bridge logging (full instrumentation deferred to Step 8+)
 - Popup: React UI for mode/project controls and account CTA
 - Popup settings storage: `chrome.storage.local` key `promptcompiler.settings`
 
@@ -30,7 +30,7 @@ Current extension files:
 {
   "manifest_version": 3,
   "name": "PromptCompiler",
-  "description": "Step 0 bootstrap extension surface for PromptCompiler.",
+  "description": "PromptCompiler extension surface (manifest text may lag behind runtime step status).",
   "version": "0.1.0",
   "permissions": ["storage", "alarms"],
   "host_permissions": ["<all_urls>"]
@@ -63,20 +63,20 @@ No direct provider calls from content script or popup are allowed.
 
 ---
 
-## Target Runtime (Step 5+)
+## Target Runtime (Step 8+)
 
-Planned Step 5+ behavior:
+Planned Step 8+ behavior:
 
 - Content script detects active text inputs and manages underlines/ghost text/hotkeys.
-- Background service worker proxies `/segment`, `/enhance`, and `/bind` through backend APIs.
-- Background streams SSE token events to content script over runtime ports.
+- Background service worker already proxies `/segment`, `/enhance`, and `/bind` through backend APIs.
+- Background already streams SSE token events to content script over runtime ports.
 - Tab and section state follows shared contracts (`TabStatus`, `SectionStatus`) from `shared/contracts/domain.ts`.
 - `/auth/token` session exchange remains backend-mediated; extension stores only app-consumable session state.
 
 Target storage split:
 
 - Popup settings: `chrome.storage.local` (current) unless a future migration to sync is explicitly approved.
-- Runtime tab/session state: `chrome.storage.session` (planned).
+- Runtime tab/session state: `chrome.storage.session` (active in background worker).
 
 ---
 
