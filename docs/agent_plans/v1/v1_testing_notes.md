@@ -2309,3 +2309,231 @@ Use this section to log your own observations while running the guide:
 - Sunny path result:
 - Rainy path result:
 - Bugs found:
+
+## Step 8 Manual Testing Guide (Content Script Input Instrumentation)
+
+Use this guide to validate Step 8 content-script instrumentation end-to-end in the browser. It aligns with [v1_step_8.md](v1_step_by_step/v1_step_8.md).
+
+Current main-branch note: Step 8 is browser-local. No Supabase, Redis, or backend server setup is required. The only runtime dependency is the extension dev bundle plus a supported browser page.
+
+### What This Covers
+
+1. Live discovery of textarea and contenteditable inputs.
+2. Idempotent listener attachment with `data-insta-instrumented`.
+3. Contenteditable extraction that preserves block-level newlines.
+4. Debounce plus AbortController cancellation for stale typing work.
+5. Draft underline rendering through CSS Custom Highlights or a `pointer-events: none` overlay, without mutating the active input subtree.
+6. MutationObserver reattachment that ignores extension-originated marker churn.
+7. The Vitest/JSDOM matrix that uses fake timers and dynamic DOM mutation to prove the Step 8 behavior.
+8. No Step 9 overlay or ghost text, Step 10 acceptance graph, or Step 11 commit behavior.
+
+### Terminal Setup
+
+1. Terminal A: `/root/insta_prompt/extension` for preflight, dev server, and test runs.
+2. Browser A: `chrome://extensions` plus a supported page tab such as `https://example.com`.
+3. Browser B: the page DevTools console if you want to inspect logs and run the manual fixture snippet.
+
+No backend terminal is required because Step 8 does not call Supabase, Redis, or any backend route.
+
+### Test 8.1 - Preflight
+
+How to run: run from the extension folder before loading the browser bundle or tests.
+
+```bash
+cd /root/insta_prompt/extension
+bun --version
+node --version
+npm --version
+```
+
+Sunny day expected:
+
+1. All commands print a version.
+2. No command-not-found errors.
+
+Rainy day expected:
+
+1. Missing Bun, Node, or npm causes command-not-found or version errors.
+2. Recovery: install the missing dependency, then rerun preflight.
+3. If the extension package dependencies are missing, run `bun install` in `extension/` and rerun the checks.
+
+### Test 8.2 - Load the Extension Dev Bundle
+
+How to run: start the WXT dev server, then load or reload the unpacked extension in the browser.
+
+**Terminal A**
+
+```bash
+cd /root/insta_prompt/extension
+bun run dev
+```
+
+Wait for the dev server to finish building `extension/.output/chrome-mv3-dev`.
+
+Then in the browser:
+
+1. Open `chrome://extensions`.
+2. Turn on Developer mode.
+3. Click Load unpacked, or Reload if the extension is already loaded.
+4. Select `extension/.output/chrome-mv3-dev`.
+5. Pin the PromptCompiler extension if needed.
+6. Open `https://example.com` or another page where you can open DevTools.
+
+Sunny day expected:
+
+1. The unpacked dev bundle loads without browser errors.
+2. Reloading the page produces content-script activity in the page console.
+3. The page remains usable and no prompt text is rewritten before an explicit commit step.
+
+Rainy day expected:
+
+1. If the extension fails to load, rerun `bun run dev` and reload the unpacked bundle.
+2. If no content-script logs appear on page load, the wrong directory was loaded or the page was not refreshed.
+
+### Test 8.3 - Verify Source-Level Invariants Manually
+
+How to run: execute from repo root and confirm the content-script surface matches the Step 8 contract.
+
+```bash
+cd /root/insta_prompt
+grep -n -E 'data-insta-instrumented|AbortController|clearTimeout|MutationObserver|attributeFilter' extension/src/content/index.ts
+grep -n -E 'extractContenteditableText|BLOCK_LEVEL_TAGS|tagName === "BR"|contenteditable' extension/src/content/index.ts
+grep -n -E 'CSS.highlights|Highlight|pointerEvents = "none"|renderHighlightedDraftOverlay|renderFallbackDraftaOverlay' extension/src/content/index.ts
+grep -n 'innerHTML' extension/src/content/index.ts
+grep -n -C 2 'document.createElement("span")' extension/src/content/index.ts
+grep -n -E 'useFakeTimers|advanceTimersByTimeAsync|MutationObserver|data-insta-instrumented' extension/src/content/__tests__/instrumentation.test.ts
+```
+
+Sunny day expected:
+
+1. The content script shows a durable marker, a debounce timer clear path, and AbortController cancellation.
+2. The extraction path handles `BR` and block-level elements explicitly.
+3. Draft rendering is backed by CSS Custom Highlights first and a non-interactive overlay fallback second.
+4. There are no `innerHTML` mutations on the active input path.
+5. Any `document.createElement("span")` match is confined to `renderFallbackDraftOverlay`; it must not appear in the active input discovery or extraction path.
+6. The test file uses fake timers plus a MutationObserver harness.
+
+Rainy day expected:
+
+1. Missing marker, abort, or attribute-filter lines indicate the instrumentation contract drifted.
+2. Any `innerHTML` mutation outside the overlay fallback is a DOM-safety regression.
+3. If the test file no longer uses fake timers or the MutationObserver shim, the debounce or reattach proof is no longer deterministic.
+
+### Test 8.4 - Run the Test Matrix
+
+How to run: execute from the extension folder. This matrix is isolated from backend calls.
+
+```bash
+cd /root/insta_prompt/extension
+bun run test
+bun run typecheck
+```
+
+Current baseline on main: `3 pass, 0 fail`.
+
+Sunny day expected:
+
+1. The Vitest suite passes with zero failures.
+2. The discovery/idempotency test confirms the marker prevents duplicate listener bundles.
+3. The debounce test confirms stale work is aborted and contenteditable newlines are preserved.
+4. The MutationObserver test confirms dynamically added inputs are reattached and marker churn does not duplicate listeners.
+5. TypeScript typecheck passes with no errors.
+
+Rainy day expected:
+
+1. Any failing test points to a Step 8 instrumentation regression.
+2. If debounce or newline assertions fail, inspect `extension/src/content/index.ts` first.
+3. If the MutationObserver test fails, inspect the marker guard and attribute-filter path first.
+4. Recovery: fix the failing slice, rerun `bun run test`, then rerun `bun run typecheck`.
+
+### Test 8.5 - Manual End-to-End Check for Discovery, Debounce, and Reattach
+
+How to run: use a supported page tab after the extension is loaded, then append a textarea and a contenteditable fixture from the page console.
+
+1. Open `https://example.com` or another page where you can open DevTools.
+2. Open the page console, paste the fixture below, and press Enter.
+3. Watch the console for `Found valid input:` logs, then wait for the debounced extraction logs.
+
+```javascript
+const textarea = document.createElement("textarea");
+textarea.id = "step8-textarea";
+textarea.value = "alpha";
+document.body.appendChild(textarea);
+
+const editor = document.createElement("div");
+editor.id = "step8-editor";
+editor.setAttribute("contenteditable", "true");
+editor.innerHTML = "<div>First clause</div><div>Second clause<br>Third clause</div>";
+document.body.appendChild(editor);
+
+const editorHtmlBefore = editor.innerHTML;
+
+setTimeout(() => {
+	textarea.value = "alpha. beta";
+	textarea.dispatchEvent(new Event("input", { bubbles: true }));
+	textarea.value = "alpha. beta? gamma";
+	textarea.dispatchEvent(new Event("input", { bubbles: true }));
+
+	editor.dispatchEvent(new Event("input", { bubbles: true }));
+
+	setTimeout(() => {
+		textarea.setAttribute("data-insta-instrumented", "pending");
+		textarea.setAttribute("data-insta-instrumented", "true");
+	}, 50);
+
+	setTimeout(() => {
+		console.log("step8 textarea markers", textarea.getAttribute("data-insta-instrumented"));
+		console.log("step8 editor span count", editor.querySelectorAll("span").length);
+		console.log("step8 editor html unchanged", editor.innerHTML === editorHtmlBefore);
+	}, 1000);
+}, 0);
+```
+
+Sunny day expected:
+
+1. The page console shows exactly one `Found valid input:` log for the textarea and one for the contenteditable fixture.
+2. The rapid textarea input only produces one debounced extraction log after the final event.
+3. The contenteditable extraction log preserves block-level newlines, so the logged text reads like three lines rather than a flat block.
+4. Changing the marker attribute does not produce a second registration log or duplicate listeners.
+5. `editor.querySelectorAll("span").length` stays `0`, and `editor.innerHTML === editorHtmlBefore` stays `true`, proving the active text subtree was not rewritten.
+6. If `CSS.highlights` is supported in the browser, the draft underlines come from the custom highlight path; otherwise, the overlay fallback is still non-interactive and outside the active input subtree.
+7. No Step 9 acceptance UI or Step 11 commit behavior should appear while typing.
+
+Rainy day expected:
+
+1. No `Found valid input:` logs means the extension was not loaded on the page or the page was not refreshed after loading.
+2. Duplicate registration logs after marker churn indicate the observer guard regressed.
+3. More than one debounced extraction log for the rapid textarea burst indicates stale typing work is not being cancelled correctly.
+4. `editor.innerHTML` changing or span wrappers appearing in the editor indicates a DOM-safety regression.
+
+### Test 8.6 (Optional) - Rainy Day Drill
+
+How to run: intentionally stress the observer and debounce paths from the page console.
+
+1. Run the fixture from Test 8.5 again.
+2. After the first `Found valid input:` log appears, append another textarea dynamically:
+
+```javascript
+const lateTextarea = document.createElement("textarea");
+lateTextarea.id = "step8-late-textarea";
+lateTextarea.value = "late input";
+document.body.appendChild(lateTextarea);
+```
+
+3. Change `data-insta-instrumented` on the late textarea and confirm the console does not show a duplicate registration log.
+4. Rapid-fire three `input` events at the late textarea and confirm only one debounced extraction log appears after 400ms.
+
+Rainy drill expected:
+
+1. The late textarea is instrumented once, not repeatedly.
+2. The marker churn does not trigger a reattach loop.
+3. The rapid inputs produce one debounced extraction log, not three.
+4. Recovery: reload the page, reload the extension if necessary, and rerun the Step 8 test matrix.
+
+## Step 8 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date:
+- Sunny path result:
+- Rainy path result:
+- Bugs found:
