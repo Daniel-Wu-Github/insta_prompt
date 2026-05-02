@@ -47,14 +47,18 @@ Primary files:
 2. Input attachment survives common SPA re-render and node replacement paths.
 3. New input changes cancel stale in-flight work before starting new work.
 4. Instrumentation logic does not perform privileged background-only operations.
+5. Host text nodes MUST NOT be mutated with `<span>` wrappers to render draft states; use the CSS Custom Highlights API (`CSS.highlights`) or an invisible overlay instead.
+6. Safe text extraction from contenteditable MUST preserve block-level newlines (for example, converting `<br>` and `<div>` to `\n`) and MUST NOT rely on `.textContent`.
+7. MutationObserver callbacks MUST explicitly ignore mutations caused by the extension (for example, adding `data-insta-instrumented` attributes) to prevent infinite browser crash loops.
 
 ## Implementation Procedure
 
-1. Build input discovery selectors for textarea and contenteditable targets.
+1. Build input discovery selectors for textarea and contenteditable targets, and choose a render path that uses CSS Custom Highlights (`CSS.highlights`) or an invisible overlay instead of span wrappers.
 2. Add attachment marker strategy to prevent duplicate listeners.
 3. Register MutationObserver with bounded scope and deterministic teardown.
-4. On relevant mutations, re-run discovery and attach only where missing.
-5. Use debounce windows for segment-trigger scheduling.
+4. On relevant mutations, re-run discovery and attach only where missing; explicitly ignore extension-caused mutations such as `data-insta-instrumented` markers.
+5. Safely extract contenteditable text while preserving block-level newlines (for example, converting `<br>` and `<div>` to `\n`) instead of using `.textContent`.
+6. Use debounce windows for segment-trigger scheduling.
 6. Pair each scheduled request with `AbortController` for stale cancellation.
 7. Emit consistent hooks/events for downstream preview and acceptance layers.
 

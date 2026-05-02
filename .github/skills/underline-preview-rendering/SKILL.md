@@ -42,17 +42,18 @@ Primary files:
 ## Core Invariants
 
 1. Rendering derives from section state and confidence; it does not redefine state semantics.
-2. Overlay alignment updates with layout and scroll changes.
-3. Preview content is rendered as text-safe content, not unsafe HTML.
-4. Stale and low-confidence signals remain visually distinct and consistent.
+2. Overlay alignment MUST perfectly track the host using `window.getComputedStyle`, `ResizeObserver`, and `scroll` event listeners.
+3. The mirror overlay MUST be strictly `pointer-events: none` to prevent stealing focus or clicks from the host input.
+4. Preview content is rendered as text-safe content, not unsafe HTML, and MUST be isolated from host CSS using Shadow DOM or aggressive CSS resets (e.g., `all: initial`).
+5. Stale and low-confidence signals remain visually distinct and consistent.
 
 ## Implementation Procedure
 
-1. Build mirror overlay synchronization for typography and spacing.
+1. Build mirror overlay synchronization: you MUST extract and copy `font-family`, `font-size`, `line-height`, `padding`, `border-width`, and `white-space` from the host input via `getComputedStyle`.
 2. Map `goal_type` to stable color tokens.
 3. Map confidence and stale status to underline style tokens.
 4. Implement preview card lifecycle states: loading, ready, stale, error.
-5. Recompute geometry on relevant layout events.
+5. Recompute geometry: you MUST wire a `scroll` listener to sync `scrollTop`/`scrollLeft`, and a `ResizeObserver` to sync dimensions.
 6. Add fallback rendering behavior when precise caret anchoring is unavailable.
 
 ## Verification Checklist

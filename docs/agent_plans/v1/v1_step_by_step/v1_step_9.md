@@ -69,6 +69,8 @@ Done when:
 Goal: keep visual overlays aligned with the source input across typing, scrolling, and rerenders.
 
 - [ ] Add or refine mirror overlay geometry sync for textarea and contenteditable targets.
+- [ ] **CRITICAL Mirror Sync:** To keep the overlay aligned, the script MUST extract and apply the exact `window.getComputedStyle(element)` properties from the host input to the overlay, specifically typography, padding, borders, line-height, letter-spacing, and white-space.
+- [ ] **CRITICAL Scroll Sync:** You MUST attach a scroll event listener to the host input element. Whenever the host scrolls, you must immediately sync the overlay's `scrollTop` and `scrollLeft` properties so the underlines move with the text.
 - [ ] Keep overlay positioning tied to the source input scroll and resize lifecycle.
 - [ ] Preserve the non-mutating render path for all underline output.
 - [ ] Keep overlay DOM isolated from the host input tree.
@@ -110,6 +112,7 @@ Done when:
 Goal: surface expansion previews without committing anything into the text box.
 
 - [ ] Add hover-triggered preview popovers for underlined clauses.
+- [ ] **CRITICAL CSS Isolation:** The hover popover MUST be isolated from the host page's CSS. Mount it inside a Shadow DOM attached to `document.body`, or use aggressive CSS resets such as `all: initial`, and position it with fixed coordinates from `getBoundingClientRect()` for the hovered underline.
 - [ ] Model preview states for loading, ready, and stale content.
 - [ ] Keep hover content text-only and safe to render.
 - [ ] Avoid stealing focus from the active editor or interfering with selection.
@@ -132,8 +135,11 @@ Done when:
 Goal: prove geometry, style, and hover behavior.
 
 - [ ] Add deterministic validation for overlay alignment on scroll, resize, and rerender paths.
+- [ ] Add deterministic validation that computed-style mirroring includes typography, padding, borders, line-height, letter-spacing, and white-space.
+- [ ] Add deterministic validation that host scroll events immediately update the overlay's scroll offset.
 - [ ] Add deterministic validation for confidence-to-style mapping and stale treatment.
 - [ ] Add deterministic validation for hover preview lifecycles and dismissal behavior.
+- [ ] Add deterministic validation that hover popovers are isolated from host CSS bleed and are not clipped by host stacking or overflow contexts.
 - [ ] Add deterministic validation that safe rendering does not mutate host text nodes or introduce unsafe HTML.
 - [ ] Keep validation isolated from live backend calls.
 

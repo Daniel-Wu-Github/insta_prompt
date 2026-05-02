@@ -46,16 +46,19 @@ Primary files:
 2. `Cmd+Enter` only binds when guard conditions are satisfied.
 3. `Enter` commit path is deterministic and input-type aware.
 4. `Esc` aborts pending transient behavior and clears temporary UI state.
+5. Every keyboard event listener MUST check `event.isComposing` before handling hotkeys so IME input for Chinese, Japanese, and Korean users is never broken.
+6. Hotkey interception MUST explicitly manage `event.preventDefault()` and `event.stopPropagation()` so host shortcuts in apps like Notion or Gmail do not fire in parallel.
 
 ## Implementation Procedure
 
-1. Define key handling table by current tab/section state.
+1. Define key handling table by current tab/section state, and make every keyboard listener exit early when `event.isComposing` is true.
 2. Implement stale-aware guard checks before bind trigger.
-3. Route bind output into preview state until explicit commit event.
-4. Implement commit path for textarea with input event dispatch.
-5. Implement commit path for contenteditable with safe text replacement semantics.
-6. Implement cancel/reset path that clears active stream, preview, and queue focus.
-7. Add transition tests for repeated key sequences and interruption paths.
+3. When a hotkey is intercepted, call `event.preventDefault()` and `event.stopPropagation()` before routing the extension action so host shortcuts do not compete.
+4. Route bind output into preview state until explicit commit event.
+5. Implement commit path for textarea with input event dispatch.
+6. Implement commit path for contenteditable with safe text replacement semantics.
+7. Implement cancel/reset path that clears active stream, preview, and queue focus.
+8. Add transition tests for repeated key sequences, IME composition, and interruption paths.
 
 ## Verification Checklist
 

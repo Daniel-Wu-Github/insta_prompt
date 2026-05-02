@@ -132,8 +132,10 @@ Rationale:
 Planning rule:
 
 1. Keep overlay positioning tied to the source input geometry.
-2. Render underline visuals without mutating host text nodes.
-3. Keep the overlay DOM isolated from the host input tree.
+2. **CRITICAL Mirror Sync:** Copy the host input's exact computed styles onto the overlay, including typography, padding, borders, line-height, letter-spacing, and white-space, so wrapping behavior matches the source input.
+3. **CRITICAL Scroll Sync:** Attach a scroll listener to the host input and immediately mirror the host's scroll offset into the overlay content so the underlines move with the text.
+4. Render underline visuals without mutating host text nodes.
+5. Keep the overlay DOM isolated from the host input tree.
 
 ### Decision D3: `goal_type`, confidence, and stale state drive visual semantics
 
@@ -156,14 +158,16 @@ Rationale:
 
 1. Hover previews are a view layer, not a second source of truth.
 2. Preview content should not steal focus or require DOM rewriting.
-3. Safe rendering avoids HTML injection and layout instability.
+3. Host-page CSS bleed and clipping can corrupt popovers unless the rendering surface is isolated.
+4. Safe rendering avoids HTML injection and layout instability.
 
 Planning rule:
 
 1. Keep preview state local to the content script.
 2. Surface only `loading`, `ready`, and `stale` preview states.
-3. Keep hover content text-only and safe to render.
-4. Dismiss previews deterministically on blur, scroll, escape, or rerender.
+3. **CRITICAL CSS Isolation:** Mount the hover popover in a Shadow DOM attached to `document.body`, or use aggressive CSS resets such as `all: initial`, and position it with fixed coordinates from `getBoundingClientRect()` for the hovered underline.
+4. Keep hover content text-only and safe to render.
+5. Dismiss previews deterministically on blur, scroll, escape, or rerender.
 
 ### Decision D5: Preview state should follow existing section metadata
 
@@ -219,8 +223,10 @@ Dependencies: Step 8 input instrumentation and draft segmentation are complete.
 Execution order constraint:
 
 1. Derive geometry from the active input.
-2. Keep the overlay aligned across scroll and resize.
-3. Preserve the non-mutating render path.
+2. Copy the host input's computed styles precisely enough to preserve wrapping, including typography, padding, borders, line-height, letter-spacing, and white-space.
+3. Attach host scroll handling so the overlay content tracks scrollTop and scrollLeft immediately.
+4. Keep the overlay aligned across scroll and resize.
+5. Preserve the non-mutating render path.
 
 ### 9.4 Add visual semantics for `goal_type`, confidence, and stale state
 
@@ -245,8 +251,9 @@ Dependencies: 9.3 geometry and 9.4 visual semantics complete.
 Execution order constraint:
 
 1. Show preview content on hover.
-2. Keep preview state limited to loading, ready, and stale.
-3. Dismiss preview surfaces deterministically.
+2. Isolate the hover surface from host CSS using Shadow DOM or an equivalent aggressive reset, and position it with fixed coordinates from `getBoundingClientRect()`.
+3. Keep preview state limited to loading, ready, and stale.
+4. Dismiss preview surfaces deterministically.
 
 ### 9.6 Add the Step 9 validation matrix
 
@@ -260,8 +267,10 @@ Dependencies: 9.3 through 9.5 complete.
 Execution order constraint:
 
 1. Prove overlay alignment on the happy path and rerender path.
-2. Prove style mapping and stale visuals.
-3. Prove hover preview lifecycle and safe render behavior.
+2. Prove exact computed-style mirroring, including typography, padding, borders, line-height, letter-spacing, and white-space.
+3. Prove host scroll handling updates the overlay content immediately.
+4. Prove style mapping and stale visuals.
+5. Prove hover preview lifecycle, CSS isolation, and safe render behavior.
 
 ### 9.7 Final review and handoff
 
