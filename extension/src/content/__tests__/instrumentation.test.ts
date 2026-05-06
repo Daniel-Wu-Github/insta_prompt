@@ -10,6 +10,7 @@ type ListenerRegistration = {
 };
 
 type ChromeConnectHandle = {
+	postMessage: ReturnType<typeof vi.fn>;
 	onMessage: { addListener: ReturnType<typeof vi.fn> };
 	onDisconnect: { addListener: ReturnType<typeof vi.fn> };
 };
@@ -32,6 +33,7 @@ const nativeMutationObserver = globalThis.MutationObserver;
 let listenerRegistrations: ListenerRegistration[] = [];
 let trackedObservers: MutationObserver[] = [];
 let trackedResizeObservers: TrackedResizeObserver[] = [];
+let lastConnectMock: ReturnType<typeof vi.fn> | undefined;
 
 function defineContentEditable(element: HTMLElement): void {
 	Object.defineProperty(element, "isContentEditable", {
@@ -42,6 +44,19 @@ function defineContentEditable(element: HTMLElement): void {
 
 function countListenerRegistrations(target: EventTarget, type: string): number {
 	return listenerRegistrations.filter((registration) => registration.target === target && registration.type === type).length;
+}
+
+function getLastBridgePort(): ChromeConnectHandle {
+	if (!lastConnectMock) {
+		throw new Error("Expected chrome.runtime.connect to be installed");
+	}
+
+	const lastResult = lastConnectMock.mock.results[lastConnectMock.mock.results.length - 1];
+	if (!lastResult || lastResult.type !== "return") {
+		throw new Error("Expected chrome.runtime.connect to return a bridge port mock");
+	}
+
+	return lastResult.value as ChromeConnectHandle;
 }
 
 function normalizeLoggedText(value: unknown): string {
@@ -105,10 +120,12 @@ function createMockComputedStyle(overrides: Partial<Record<string, string>> = {}
 function installTestGlobals(): { connectMock: ReturnType<typeof vi.fn> } {
 	const connectMock = vi.fn((): ChromeConnectHandle => {
 		return {
+			postMessage: vi.fn(),
 			onMessage: { addListener: vi.fn() },
 			onDisconnect: { addListener: vi.fn() },
 		};
 	});
+	lastConnectMock = connectMock;
 
 	class TrackingMutationObserver {
 		private readonly observer: MutationObserver;
@@ -145,7 +162,14 @@ function installTestGlobals(): { connectMock: ReturnType<typeof vi.fn> } {
 	}
 
 	vi.stubGlobal("defineContentScript", (config: unknown) => config);
-	vi.stubGlobal("chrome", { runtime: { connect: connectMock } });
+	const storageGetMock = vi.fn(async () => ({}));
+	vi.stubGlobal("chrome", {
+		runtime: { connect: connectMock },
+		storage: {
+			local: { get: storageGetMock },
+			session: { get: storageGetMock },
+		},
+	});
 	vi.stubGlobal("CSS", { highlights: undefined });
 	vi.stubGlobal("ResizeObserver", TrackingResizeObserver as unknown as typeof ResizeObserver);
 	vi.stubGlobal("MutationObserver", TrackingMutationObserver as unknown as typeof MutationObserver);
@@ -197,6 +221,7 @@ afterEach(() => {
 
 	trackedObservers = [];
 	trackedResizeObservers = [];
+	lastConnectMock = undefined;
 	vi.useRealTimers();
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
@@ -256,6 +281,7 @@ describe("content script instrumentation", () => {
 		const contentScript = await loadContentScript();
 		contentScript.main();
 		consoleLogSpy.mockClear();
+		const bridgePort = getLastBridgePort();
 
 		const firstInput = new Event("input", { bubbles: true });
 		const secondInput = new Event("input", { bubbles: true });
@@ -272,10 +298,23 @@ describe("content script instrumentation", () => {
 		expect(consoleLogSpy.mock.calls.filter((call) => call[0] === "Debounced extracted text:\n")).toHaveLength(0);
 
 		await vi.advanceTimersByTimeAsync(1);
+		await flushMicrotasks();
 
 		const debouncedLogs = consoleLogSpy.mock.calls.filter((call) => call[0] === "Debounced extracted text:\n");
 		expect(debouncedLogs).toHaveLength(1);
 		expect(normalizeLoggedText(debouncedLogs[0]?.[1])).toBe("First clause\nSecond clause\nThird clause");
+		expect(bridgePort.postMessage).toHaveBeenCalledTimes(1);
+		const bridgePayload = bridgePort.postMessage.mock.calls[0]?.[0] as {
+			verb?: string;
+			jwt?: string;
+			payload?: { segments?: string[]; mode?: string };
+		} | undefined;
+
+		expect(bridgePayload?.verb).toBe("SEGMENT");
+		expect(bridgePayload?.jwt).toEqual(expect.any(String));
+		expect(bridgePayload?.payload?.mode).toBe("balanced");
+		expect(bridgePayload?.payload?.segments).toHaveLength(1);
+		expect(normalizeLoggedText(bridgePayload?.payload?.segments?.[0])).toBe("First clause\nSecond clause\nThird clause");
 	});
 
 	it("reattaches to dynamically added inputs and ignores marker attribute churn", async () => {

@@ -1,13 +1,16 @@
-import { GOAL_TYPE_VALUES, type GoalType } from "../../../shared/contracts/domain";
+import { GOAL_TYPE_VALUES, MODE_VALUES, type GoalType, type Mode, type SegmentRequest } from "../../../shared/contracts";
 
 export default defineContentScript({
 	matches: ["<all_urls>"],
 	runAt: "document_idle",
 	main() {
 		const BRIDGE_PORT_NAME = "insta_prompt_bridge";
+		const SETTINGS_STORAGE_KEY = "promptcompiler.settings";
 		const INSTRUMENTED_ATTRIBUTE = "data-insta-instrumented";
 		const INSTRUMENTED_VALUE = "true";
 		const DEBOUNCE_DELAY_MS = 400;
+		const DEFAULT_BRIDGE_MODE: Mode = "balanced";
+		const BRIDGE_FALLBACK_JWT = "promptcompiler-dev-jwt";
 		const DRAFT_HIGHLIGHT_NAME = "insta-prompt-draft-highlight";
 		const DRAFT_HIGHLIGHT_STYLE_ID = "insta-prompt-draft-highlight-style";
 		const DRAFT_OVERLAY_Z_INDEX = "2147483647";
@@ -135,6 +138,7 @@ export default defineContentScript({
 		let activeDraftHoverPreviewState: DraftHoverPreviewState | undefined;
 		let lastDraftHoverPoint: { clientX: number; clientY: number } | undefined;
 		let draftOverlaySyncListenersInstalled = false;
+		const bridgePort = chrome.runtime.connect({ name: BRIDGE_PORT_NAME });
 
 		const isBlockLevelElement = (element: Element): boolean => {
 			return BLOCK_LEVEL_TAGS.has(element.tagName);
@@ -142,6 +146,90 @@ export default defineContentScript({
 
 		const normalizeDraftText = (text: string): string => {
 			return text.replace(/\r\n?/g, "\n");
+		};
+
+		const isModeValue = (value: unknown): value is Mode => {
+			return typeof value === "string" && MODE_VALUES.includes(value as Mode);
+		};
+
+		const extractBridgeJwtCandidate = (value: unknown): string | undefined => {
+			if (typeof value === "string") {
+				const trimmedValue = value.trim();
+				return trimmedValue.length > 0 ? trimmedValue : undefined;
+			}
+
+			if (typeof value !== "object" || value === null || Array.isArray(value)) {
+				return undefined;
+			}
+
+			const record = value as Record<string, unknown>;
+
+			for (const key of ["token", "accessToken", "access_token", "jwt"] as const) {
+				const candidateValue = record[key];
+				if (typeof candidateValue !== "string") {
+					continue;
+				}
+
+				const trimmedCandidate = candidateValue.trim();
+				if (trimmedCandidate.length > 0) {
+					return trimmedCandidate;
+				}
+			}
+
+			for (const key of ["session", "auth", "data"] as const) {
+				const nestedCandidate = extractBridgeJwtCandidate(record[key]);
+				if (nestedCandidate) {
+					return nestedCandidate;
+				}
+			}
+
+			return undefined;
+		};
+
+		const resolveBridgeContext = async (): Promise<{ mode: Mode; jwt: string }> => {
+			const [sessionSnapshot, localSnapshot] = await Promise.all([
+				chrome.storage.session.get(null),
+				chrome.storage.local.get(null),
+			]);
+
+			let mode: Mode = DEFAULT_BRIDGE_MODE;
+			const storedSettings = localSnapshot[SETTINGS_STORAGE_KEY];
+			if (typeof storedSettings === "object" && storedSettings !== null && !Array.isArray(storedSettings)) {
+				const storedMode = (storedSettings as { mode?: unknown }).mode;
+				if (isModeValue(storedMode)) {
+					mode = storedMode;
+				}
+			}
+
+			for (const snapshot of [sessionSnapshot, localSnapshot]) {
+				for (const candidate of Object.values(snapshot)) {
+					const jwt = extractBridgeJwtCandidate(candidate);
+					if (jwt) {
+						return { mode, jwt };
+					}
+				}
+			}
+
+			return { mode, jwt: BRIDGE_FALLBACK_JWT };
+		};
+
+		const buildSegmentBridgeMessage = async (normalizedText: string): Promise<{
+			verb: "SEGMENT";
+			jwt: string;
+			requestId: string;
+			payload: SegmentRequest;
+		}> => {
+			const { mode, jwt } = await resolveBridgeContext();
+
+			return {
+				verb: "SEGMENT",
+				jwt,
+				requestId: crypto.randomUUID(),
+				payload: {
+					segments: [normalizedText],
+					mode,
+				},
+			};
 		};
 
 		const applyDraftGoalTypePalette = (target: HTMLDivElement): void => {
@@ -1075,25 +1163,35 @@ export default defineContentScript({
 			};
 
 			nextState.debounceTimerId = window.setTimeout(() => {
-				if (abortController.signal.aborted) {
-					return;
-				}
+				void (async () => {
+					if (abortController.signal.aborted) {
+						return;
+					}
 
-				if (previousState?.draftOverlayElement) {
-					clearDraftRendering(previousState);
-				}
+					if (previousState?.draftOverlayElement) {
+						clearDraftRendering(previousState);
+					}
 
-				const extractedText = extractInputText(element);
-				const normalizedText = normalizeDraftText(extractedText);
-				const draftSegments = splitTextIntoDraftSegments(normalizedText);
+					const extractedText = extractInputText(element);
+					const normalizedText = normalizeDraftText(extractedText);
+					const draftSegments = splitTextIntoDraftSegments(normalizedText);
+					const bridgeMessage = await buildSegmentBridgeMessage(normalizedText);
 
-				nextState.debounceTimerId = undefined;
-				nextState.abortController = undefined;
-				nextState.status = "SEGMENTING";
-				activeInputState = nextState;
+					if (abortController.signal.aborted) {
+						return;
+					}
 
-				renderDraftSegments(nextState, normalizedText, draftSegments, false);
-				console.log("Debounced extracted text:\n", extractedText);
+					nextState.debounceTimerId = undefined;
+					nextState.abortController = undefined;
+					nextState.status = "SEGMENTING";
+					activeInputState = nextState;
+
+					bridgePort.postMessage(bridgeMessage);
+					renderDraftSegments(nextState, normalizedText, draftSegments, false);
+					console.log("Debounced extracted text:\n", extractedText);
+				})().catch((error) => {
+					console.warn("Failed to send debounced extraction to background", error);
+				});
 			}, DEBOUNCE_DELAY_MS);
 
 			activeInputState = nextState;
@@ -1224,8 +1322,6 @@ export default defineContentScript({
 
 		scanDocumentForInputs();
 		observeForInputDiscovery();
-
-		const bridgePort = chrome.runtime.connect({ name: BRIDGE_PORT_NAME });
 
 		bridgePort.onMessage.addListener((message) => {
 			console.debug("PromptCompiler bridge message", message);

@@ -15,4 +15,4 @@ build/
 Thumbs.db
 *.log
 
-docs/agent_plans/v1/v1_testing_notes.md
+docs-pass.diff
