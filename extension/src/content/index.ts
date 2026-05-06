@@ -1,3 +1,5 @@
+import { GOAL_TYPE_VALUES, type GoalType } from "../../../shared/contracts/domain";
+
 export default defineContentScript({
 	matches: ["<all_urls>"],
 	runAt: "document_idle",
@@ -9,15 +11,57 @@ export default defineContentScript({
 		const DRAFT_HIGHLIGHT_NAME = "insta-prompt-draft-highlight";
 		const DRAFT_HIGHLIGHT_STYLE_ID = "insta-prompt-draft-highlight-style";
 		const DRAFT_OVERLAY_Z_INDEX = "2147483647";
+		const DRAFT_HIGH_CONFIDENCE_THRESHOLD = 0.7;
+		const DRAFT_LOW_CONFIDENCE_THRESHOLD = 0.55;
+		const DRAFT_STALE_OPACITY = "0.45";
 		const DRAFT_UNDERLINE_COLOR = "rgb(37 99 235 / 0.95)";
+
+		const GOAL_TYPE_PALETTE = {
+			context: {
+				cssVariable: "--insta-goal-type-context-color",
+				color: "rgb(15 118 110)",
+			},
+			tech_stack: {
+				cssVariable: "--insta-goal-type-tech-stack-color",
+				color: "rgb(29 78 216)",
+			},
+			constraint: {
+				cssVariable: "--insta-goal-type-constraint-color",
+				color: "rgb(180 83 9)",
+			},
+			action: {
+				cssVariable: "--insta-goal-type-action-color",
+				color: "rgb(21 128 61)",
+			},
+			output_format: {
+				cssVariable: "--insta-goal-type-output-format-color",
+				color: "rgb(109 40 217)",
+			},
+			edge_case: {
+				cssVariable: "--insta-goal-type-edge-case-color",
+				color: "rgb(185 28 28)",
+			},
+		} as const satisfies Record<GoalType, { cssVariable: string; color: string }>;
+
+		const GOAL_TYPE_KEYWORDS: Record<GoalType, readonly string[]> = {
+			context: ["context", "background", "overview", "summary", "this is", "these", "here", "project", "page", "system"],
+			tech_stack: ["react", "typescript", "javascript", "css", "html", "dom", "textarea", "contenteditable", "extension", "observer", "shadow dom", "resizeobserver"],
+			constraint: ["must not", "must", "should not", "should", "never", "only", "without", "require", "cannot", "do not"],
+			action: ["add", "build", "create", "implement", "make", "fix", "render", "show", "paint", "display", "track", "keep", "attach", "apply", "update", "copy", "recompute", "derive", "write", "map", "set", "sync"],
+			output_format: ["json", "markdown", "table", "list", "bullet", "code", "output", "format", "response"],
+			edge_case: ["edge case", "fallback", "error", "stale", "empty", "missing", "invalid", "null", "zero", "unexpected"],
+		};
 
 		type InputLifecycleState = "IDLE" | "TYPING" | "SEGMENTING";
 		type DraftRenderMode = "highlight" | "overlay";
+		type DraftHoverPreviewStatus = "loading" | "ready" | "stale";
 
 		interface DraftSegment {
 			start: number;
 			end: number;
 			text: string;
+			goalType: GoalType;
+			confidence: number;
 		}
 
 		interface ActiveInputState {
@@ -27,9 +71,26 @@ export default defineContentScript({
 			abortController: AbortController | undefined;
 			draftOverlayElement: HTMLDivElement | undefined;
 			draftOverlayContentElement: HTMLDivElement | undefined;
+			draftOverlayResizeObserver: ResizeObserver | undefined;
+			draftIsStale: boolean;
 			draftRenderMode: DraftRenderMode | undefined;
 			draftText: string;
 			draftSegments: DraftSegment[];
+		}
+
+		interface DraftHoverPreviewState {
+			sourceElement: HTMLTextAreaElement | HTMLElement;
+			segment: DraftSegment;
+			status: DraftHoverPreviewStatus;
+			containerElement: HTMLDivElement;
+			shadowRoot: ShadowRoot;
+			panelElement: HTMLDivElement;
+			statusElement: HTMLDivElement;
+			bodyElement: HTMLDivElement;
+			readyTimerId: number | undefined;
+			anchorRect: DOMRectReadOnly;
+			clientX: number;
+			clientY: number;
 		}
 
 		const BLOCK_LEVEL_TAGS = new Set([
@@ -70,6 +131,9 @@ export default defineContentScript({
 		]);
 
 		let activeInputState: ActiveInputState | undefined;
+		let renderedDraftOverlayState: ActiveInputState | undefined;
+		let activeDraftHoverPreviewState: DraftHoverPreviewState | undefined;
+		let lastDraftHoverPoint: { clientX: number; clientY: number } | undefined;
 		let draftOverlaySyncListenersInstalled = false;
 
 		const isBlockLevelElement = (element: Element): boolean => {
@@ -78,6 +142,396 @@ export default defineContentScript({
 
 		const normalizeDraftText = (text: string): string => {
 			return text.replace(/\r\n?/g, "\n");
+		};
+
+		const applyDraftGoalTypePalette = (target: HTMLDivElement): void => {
+			for (const goalType of GOAL_TYPE_VALUES) {
+				const paletteEntry = GOAL_TYPE_PALETTE[goalType];
+				target.style.setProperty(paletteEntry.cssVariable, paletteEntry.color);
+			}
+		};
+
+		const applyDraftOverlayFreshness = (target: HTMLDivElement, isStale: boolean): void => {
+			target.dataset.draftStale = isStale ? "true" : "false";
+			target.style.opacity = isStale ? DRAFT_STALE_OPACITY : "1";
+		};
+
+		const getDraftHoverPreviewBodyText = (segment: DraftSegment): string => {
+			const readableGoalType = segment.goalType.replace(/_/g, " ");
+			return `${readableGoalType} preview: ${segment.text}`;
+		};
+
+		const isSameDraftSegment = (left: DraftSegment, right: DraftSegment): boolean => {
+			return left.start === right.start && left.end === right.end && left.text === right.text && left.goalType === right.goalType && left.confidence === right.confidence;
+		};
+
+		const createDraftHoverPopoverShell = (): {
+			containerElement: HTMLDivElement;
+			panelElement: HTMLDivElement;
+			statusElement: HTMLDivElement;
+			bodyElement: HTMLDivElement;
+		} => {
+			const containerElement = document.createElement("div");
+			containerElement.setAttribute("aria-hidden", "true");
+			containerElement.dataset.instaDraftHoverPopover = "true";
+			containerElement.style.position = "fixed";
+			containerElement.style.left = "0px";
+			containerElement.style.top = "0px";
+			containerElement.style.zIndex = DRAFT_OVERLAY_Z_INDEX;
+			containerElement.style.pointerEvents = "none";
+			containerElement.style.contain = "layout paint style";
+
+			const shadowRoot = containerElement.attachShadow({ mode: "open" });
+			const styleElement = document.createElement("style");
+			styleElement.textContent = `
+:host {
+	all: initial;
+	position: fixed;
+	left: 0;
+	top: 0;
+	z-index: ${DRAFT_OVERLAY_Z_INDEX};
+	pointer-events: none;
+	contain: layout paint style;
+}
+
+[data-draft-hover-panel] {
+	all: initial;
+	display: block;
+	box-sizing: border-box;
+	max-width: min(320px, calc(100vw - 24px));
+	border-radius: 12px;
+	border: 1px solid rgba(148, 163, 184, 0.24);
+	background: rgba(15, 23, 42, 0.98);
+	color: rgb(248, 250, 252);
+	box-shadow: 0 16px 40px rgba(15, 23, 42, 0.24);
+	padding: 10px 12px;
+	font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 13px;
+	line-height: 1.45;
+	letter-spacing: 0;
+	white-space: pre-wrap;
+	pointer-events: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+[data-draft-hover-status] {
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	margin-bottom: 6px;
+	color: rgb(165, 180, 252);
+}
+
+[data-draft-hover-body] {
+	display: block;
+	white-space: pre-wrap;
+	color: rgb(226, 232, 240);
+}
+
+[data-draft-hover-panel][data-state="loading"] [data-draft-hover-status] {
+	color: rgb(125, 211, 252);
+}
+
+[data-draft-hover-panel][data-state="ready"] [data-draft-hover-status] {
+	color: rgb(134, 239, 172);
+}
+
+[data-draft-hover-panel][data-state="stale"] [data-draft-hover-status] {
+	color: rgb(248, 113, 113);
+}
+
+[data-draft-hover-panel][data-state="stale"] [data-draft-hover-body] {
+	color: rgb(226, 232, 240);
+}
+`;
+
+			const panelElement = document.createElement("div");
+			panelElement.dataset.draftHoverPanel = "true";
+			panelElement.dataset.state = "loading";
+			panelElement.setAttribute("role", "tooltip");
+
+			const statusElement = document.createElement("div");
+			statusElement.dataset.draftHoverStatus = "true";
+
+			const bodyElement = document.createElement("div");
+			bodyElement.dataset.draftHoverBody = "true";
+
+			panelElement.append(statusElement, bodyElement);
+			shadowRoot.append(styleElement, panelElement);
+			getOverlayContainer().appendChild(containerElement);
+
+			return { containerElement, panelElement, statusElement, bodyElement };
+		};
+
+		const clearDraftHoverPreview = (options?: { preservePointer?: boolean }): void => {
+			const hoverState = activeDraftHoverPreviewState;
+
+			if (!hoverState) {
+				if (!options?.preservePointer) {
+					lastDraftHoverPoint = undefined;
+				}
+				return;
+			}
+
+			if (hoverState.readyTimerId !== undefined) {
+				window.clearTimeout(hoverState.readyTimerId);
+				hoverState.readyTimerId = undefined;
+			}
+
+			hoverState.containerElement.remove();
+			activeDraftHoverPreviewState = undefined;
+
+			if (!options?.preservePointer) {
+				lastDraftHoverPoint = undefined;
+			}
+		};
+
+		const renderDraftHoverPreview = (hoverState: DraftHoverPreviewState): void => {
+			const { statusElement, bodyElement, panelElement, segment, status } = hoverState;
+
+			panelElement.dataset.state = status;
+
+			switch (status) {
+				case "loading":
+					statusElement.textContent = "Loading";
+					bodyElement.textContent = "Loading preview...";
+					break;
+				case "stale":
+					statusElement.textContent = "Stale";
+					bodyElement.textContent = "This preview is outdated because the text changed.";
+					break;
+				case "ready":
+					statusElement.textContent = "Ready";
+					bodyElement.textContent = getDraftHoverPreviewBodyText(segment);
+					break;
+			}
+		};
+
+		const positionDraftHoverPreview = (hoverState: DraftHoverPreviewState): void => {
+			const viewportPadding = 12;
+			const anchorRect = hoverState.anchorRect;
+			const estimatedWidth = 320;
+			const estimatedHeight = hoverState.panelElement.getBoundingClientRect().height || 96;
+			const clampedLeft = Math.max(viewportPadding, Math.min(anchorRect.left, window.innerWidth - estimatedWidth - viewportPadding));
+			const belowTop = anchorRect.bottom + 10;
+			const aboveTop = anchorRect.top - estimatedHeight - 10;
+			const shouldPlaceAbove = belowTop + estimatedHeight > window.innerHeight - viewportPadding && aboveTop >= viewportPadding;
+
+			hoverState.containerElement.style.left = `${clampedLeft}px`;
+			hoverState.containerElement.style.top = `${Math.max(viewportPadding, shouldPlaceAbove ? aboveTop : belowTop)}px`;
+		};
+
+		const scheduleDraftHoverPreviewReady = (hoverState: DraftHoverPreviewState): void => {
+			if (hoverState.readyTimerId !== undefined) {
+				window.clearTimeout(hoverState.readyTimerId);
+			}
+
+			hoverState.readyTimerId = window.setTimeout(() => {
+				if (activeDraftHoverPreviewState !== hoverState || hoverState.status !== "loading") {
+					return;
+				}
+
+				hoverState.readyTimerId = undefined;
+				hoverState.status = "ready";
+				renderDraftHoverPreview(hoverState);
+				positionDraftHoverPreview(hoverState);
+			}, 120);
+		};
+
+		const setDraftHoverPreviewStale = (sourceElement: HTMLTextAreaElement | HTMLElement): void => {
+			if (!activeDraftHoverPreviewState || activeDraftHoverPreviewState.sourceElement !== sourceElement) {
+				return;
+			}
+
+			if (activeDraftHoverPreviewState.readyTimerId !== undefined) {
+				window.clearTimeout(activeDraftHoverPreviewState.readyTimerId);
+				activeDraftHoverPreviewState.readyTimerId = undefined;
+			}
+
+			if (activeDraftHoverPreviewState.status !== "stale") {
+				activeDraftHoverPreviewState.status = "stale";
+				renderDraftHoverPreview(activeDraftHoverPreviewState);
+				positionDraftHoverPreview(activeDraftHoverPreviewState);
+			}
+		};
+
+		const findDraftHoverTargetAtPoint = (
+			overlayState: ActiveInputState,
+			clientX: number,
+			clientY: number,
+		): { segment: DraftSegment; rect: DOMRect } | undefined => {
+			const contentElement = overlayState.draftOverlayContentElement;
+			if (!contentElement) {
+				return undefined;
+			}
+
+			const segmentSpans = Array.from(contentElement.querySelectorAll("span[data-goal-type][data-segment-index]"));
+
+			for (const segmentSpan of segmentSpans) {
+				const rect = segmentSpan.getBoundingClientRect();
+				if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+					continue;
+				}
+
+				const segmentIndex = Number.parseInt(segmentSpan.getAttribute("data-segment-index") ?? "", 10);
+				if (!Number.isFinite(segmentIndex) || segmentIndex < 0 || segmentIndex >= overlayState.draftSegments.length) {
+					continue;
+				}
+
+				const segment = overlayState.draftSegments[segmentIndex];
+				if (!segment) {
+					continue;
+				}
+
+				return { segment, rect };
+			}
+
+			return undefined;
+		};
+
+		const syncDraftHoverPreviewFromPoint = (
+			sourceElement: HTMLTextAreaElement | HTMLElement,
+			clientX: number,
+			clientY: number,
+		): void => {
+			const overlayState = renderedDraftOverlayState;
+			if (!overlayState || overlayState.element !== sourceElement || !overlayState.draftOverlayContentElement) {
+				clearDraftHoverPreview();
+				return;
+			}
+
+			const hitTarget = findDraftHoverTargetAtPoint(overlayState, clientX, clientY);
+			if (!hitTarget) {
+				clearDraftHoverPreview();
+				return;
+			}
+
+			lastDraftHoverPoint = { clientX, clientY };
+
+			const isStale = overlayState.draftIsStale;
+			const existingHoverState = activeDraftHoverPreviewState;
+
+			if (existingHoverState && existingHoverState.sourceElement === sourceElement && isSameDraftSegment(existingHoverState.segment, hitTarget.segment)) {
+				existingHoverState.anchorRect = hitTarget.rect;
+				existingHoverState.clientX = clientX;
+				existingHoverState.clientY = clientY;
+				positionDraftHoverPreview(existingHoverState);
+
+				if (isStale && existingHoverState.status !== "stale") {
+					setDraftHoverPreviewStale(sourceElement);
+				}
+
+				return;
+			}
+
+			clearDraftHoverPreview({ preservePointer: true });
+
+			const hoverState: DraftHoverPreviewState = {
+				sourceElement,
+				segment: hitTarget.segment,
+				status: isStale ? "stale" : "loading",
+				containerElement: undefined as unknown as HTMLDivElement,
+				shadowRoot: undefined as unknown as ShadowRoot,
+				panelElement: undefined as unknown as HTMLDivElement,
+				statusElement: undefined as unknown as HTMLDivElement,
+				bodyElement: undefined as unknown as HTMLDivElement,
+				readyTimerId: undefined,
+				anchorRect: hitTarget.rect,
+				clientX,
+				clientY,
+			};
+
+			const hoverShell = createDraftHoverPopoverShell();
+			hoverState.containerElement = hoverShell.containerElement;
+			hoverState.shadowRoot = hoverShell.containerElement.shadowRoot as ShadowRoot;
+			hoverState.panelElement = hoverShell.panelElement;
+			hoverState.statusElement = hoverShell.statusElement;
+			hoverState.bodyElement = hoverShell.bodyElement;
+			activeDraftHoverPreviewState = hoverState;
+
+			renderDraftHoverPreview(hoverState);
+			positionDraftHoverPreview(hoverState);
+
+			if (hoverState.status === "loading") {
+				scheduleDraftHoverPreviewReady(hoverState);
+			}
+		};
+
+		const restoreDraftHoverPreviewFromLastPointer = (sourceElement: HTMLTextAreaElement | HTMLElement): void => {
+			if (!lastDraftHoverPoint) {
+				return;
+			}
+
+			syncDraftHoverPreviewFromPoint(sourceElement, lastDraftHoverPoint.clientX, lastDraftHoverPoint.clientY);
+		};
+
+		const classifyDraftSegment = (segmentText: string): { goalType: GoalType; confidence: number } => {
+			const normalizedText = segmentText.trim().toLowerCase();
+			const goalTypeScores = new Map<GoalType, number>();
+
+			for (const goalType of GOAL_TYPE_VALUES) {
+				goalTypeScores.set(goalType, 0);
+			}
+
+			for (const goalType of GOAL_TYPE_VALUES) {
+				const keywords = GOAL_TYPE_KEYWORDS[goalType];
+				let score = goalTypeScores.get(goalType) ?? 0;
+
+				for (const keyword of keywords) {
+					if (!normalizedText.includes(keyword)) {
+						continue;
+					}
+
+					score += keyword.includes(" ") ? 2 : 1;
+				}
+
+				if (goalType === "action" && /^(add|build|create|implement|make|fix|render|show|paint|display|track|keep|attach|apply|update|copy|recompute|derive|write|map|set|sync)\b/.test(normalizedText)) {
+					score += 2;
+				}
+
+				if (goalType === "constraint" && /\b(must|should|never|only|without|require|cannot|do not)\b/.test(normalizedText)) {
+					score += 2;
+				}
+
+				goalTypeScores.set(goalType, score);
+			}
+
+			let winningGoalType: GoalType = GOAL_TYPE_VALUES[0];
+			let winningScore = -1;
+			let runnerUpScore = -1;
+
+			for (const goalType of GOAL_TYPE_VALUES) {
+				const score = goalTypeScores.get(goalType) ?? 0;
+
+				if (score > winningScore) {
+					runnerUpScore = winningScore;
+					winningGoalType = goalType;
+					winningScore = score;
+					continue;
+				}
+
+				if (score > runnerUpScore) {
+					runnerUpScore = score;
+				}
+			}
+
+			if (winningScore <= 0) {
+				return {
+					goalType: winningGoalType,
+					confidence: 0.42,
+				};
+			}
+
+			const conflictPenalty = runnerUpScore > 0 ? Math.min(0.16, runnerUpScore * 0.08) : 0;
+			const confidence = Math.max(0.35, Math.min(0.97, 0.62 + winningScore * 0.12 - conflictPenalty));
+
+			return {
+				goalType: winningGoalType,
+				confidence,
+			};
 		};
 
 		const extractContenteditableText = (element: HTMLElement): string => {
@@ -132,6 +586,7 @@ export default defineContentScript({
 					start,
 					end,
 					text: normalizedText.slice(start, end),
+					...classifyDraftSegment(normalizedText.slice(start, end)),
 				});
 			};
 
@@ -199,6 +654,12 @@ export default defineContentScript({
 			const computedStyle = window.getComputedStyle(source);
 
 			target.style.boxSizing = computedStyle.boxSizing;
+			target.style.font = computedStyle.font;
+			target.style.fontFamily = computedStyle.fontFamily;
+			target.style.fontSize = computedStyle.fontSize;
+			target.style.fontStyle = computedStyle.fontStyle;
+			target.style.fontWeight = computedStyle.fontWeight;
+			target.style.fontStretch = computedStyle.fontStretch;
 			target.style.borderTopStyle = computedStyle.borderTopStyle;
 			target.style.borderRightStyle = computedStyle.borderRightStyle;
 			target.style.borderBottomStyle = computedStyle.borderBottomStyle;
@@ -212,20 +673,19 @@ export default defineContentScript({
 			target.style.borderBottomColor = "transparent";
 			target.style.borderLeftColor = "transparent";
 			target.style.borderRadius = computedStyle.borderRadius;
-			target.style.font = computedStyle.font;
-			target.style.lineHeight = computedStyle.lineHeight;
-			target.style.letterSpacing = computedStyle.letterSpacing;
 			target.style.fontKerning = computedStyle.fontKerning;
 			target.style.fontVariant = computedStyle.fontVariant;
 			target.style.fontFeatureSettings = computedStyle.fontFeatureSettings;
 			target.style.fontVariationSettings = computedStyle.fontVariationSettings;
+			target.style.lineHeight = computedStyle.lineHeight;
+			target.style.letterSpacing = computedStyle.letterSpacing;
 			target.style.textAlign = computedStyle.textAlign;
 			target.style.textIndent = computedStyle.textIndent;
 			target.style.textTransform = computedStyle.textTransform;
 			target.style.direction = computedStyle.direction;
-			target.style.whiteSpace = "pre-wrap";
-			target.style.wordBreak = "break-word";
-			target.style.overflowWrap = "anywhere";
+			target.style.whiteSpace = computedStyle.whiteSpace;
+			target.style.wordBreak = computedStyle.wordBreak;
+			target.style.overflowWrap = computedStyle.overflowWrap;
 			target.style.paddingTop = computedStyle.paddingTop;
 			target.style.paddingRight = computedStyle.paddingRight;
 			target.style.paddingBottom = computedStyle.paddingBottom;
@@ -245,6 +705,14 @@ export default defineContentScript({
 				return;
 			}
 
+			if (renderedDraftOverlayState === state) {
+				renderedDraftOverlayState = undefined;
+			}
+
+			if (activeDraftHoverPreviewState?.sourceElement === state.element) {
+				clearDraftHoverPreview({ preservePointer: true });
+			}
+
 			const highlightRegistry = getDraftHighlightRegistry();
 			highlightRegistry?.delete(DRAFT_HIGHLIGHT_NAME);
 
@@ -254,6 +722,9 @@ export default defineContentScript({
 			}
 
 			state.draftOverlayContentElement = undefined;
+			state.draftOverlayResizeObserver?.disconnect();
+			state.draftOverlayResizeObserver = undefined;
+			state.draftIsStale = false;
 			state.draftRenderMode = undefined;
 			state.draftText = "";
 			state.draftSegments = [];
@@ -278,6 +749,8 @@ export default defineContentScript({
 			hostElement.style.setProperty("-webkit-text-fill-color", "transparent");
 			hostElement.style.contain = "layout paint style";
 			copyDraftOverlayStyles(sourceElement, hostElement);
+			applyDraftGoalTypePalette(hostElement);
+			applyDraftOverlayFreshness(hostElement, false);
 
 			const contentElement = document.createElement("div");
 			contentElement.style.position = "absolute";
@@ -288,6 +761,10 @@ export default defineContentScript({
 			contentElement.style.userSelect = "none";
 			contentElement.style.setProperty("-webkit-user-select", "none");
 			contentElement.style.setProperty("-webkit-text-fill-color", "transparent");
+			contentElement.style.font = "inherit";
+			contentElement.style.lineHeight = "inherit";
+			contentElement.style.letterSpacing = "inherit";
+			contentElement.style.whiteSpace = "inherit";
 			contentElement.style.transformOrigin = "top left";
 
 			hostElement.appendChild(contentElement);
@@ -306,11 +783,31 @@ export default defineContentScript({
 			hostElement.style.top = `${rect.top}px`;
 			hostElement.style.width = `${rect.width}px`;
 			hostElement.style.height = `${rect.height}px`;
+			hostElement.scrollTop = sourceElement.scrollTop;
+			hostElement.scrollLeft = sourceElement.scrollLeft;
+			contentElement.scrollTop = sourceElement.scrollTop;
+			contentElement.scrollLeft = sourceElement.scrollLeft;
 			contentElement.style.transform = `translate(${-sourceElement.scrollLeft}px, ${-sourceElement.scrollTop}px)`;
 		};
 
+		const installDraftOverlayResizeObserver = (state: ActiveInputState): void => {
+			state.draftOverlayResizeObserver?.disconnect();
+
+			if (typeof ResizeObserver === "undefined") {
+				state.draftOverlayResizeObserver = undefined;
+				return;
+			}
+
+			const resizeObserver = new ResizeObserver(() => {
+				syncActiveDraftOverlayPosition();
+			});
+
+			resizeObserver.observe(state.element);
+			state.draftOverlayResizeObserver = resizeObserver;
+		};
+
 		const syncActiveDraftOverlayPosition = (): void => {
-			const state = activeInputState;
+			const state = renderedDraftOverlayState;
 
 			if (!state?.draftOverlayElement || !state.draftOverlayContentElement) {
 				return;
@@ -334,30 +831,76 @@ export default defineContentScript({
 			window.addEventListener("resize", syncActiveDraftOverlayPosition);
 		};
 
-		const renderFallbackDraftOverlay = (
+		const renderDraftOverlaySegments = (
 			contentElement: HTMLDivElement,
 			extractedText: string,
 			segments: DraftSegment[],
+			isStale: boolean,
 		): void => {
 			contentElement.replaceChildren();
+
+			const segmentRoot = document.createElement("div");
+			segmentRoot.dataset.instaDraftSegmentRoot = "true";
+			segmentRoot.dataset.instaDraftSegments = String(segments.length);
+			segmentRoot.style.position = "relative";
+			segmentRoot.style.width = "100%";
+			segmentRoot.style.minHeight = "100%";
+			segmentRoot.style.boxSizing = "border-box";
+			segmentRoot.style.border = "0";
+			segmentRoot.style.borderRadius = "inherit";
+			segmentRoot.style.background = "transparent";
+			segmentRoot.style.color = "transparent";
+			segmentRoot.style.caretColor = "transparent";
+			segmentRoot.style.font = "inherit";
+			segmentRoot.style.lineHeight = "inherit";
+			segmentRoot.style.letterSpacing = "inherit";
+			segmentRoot.style.whiteSpace = "inherit";
+			segmentRoot.style.wordBreak = "inherit";
+			segmentRoot.style.overflowWrap = "inherit";
+			segmentRoot.style.margin = "0";
+			segmentRoot.style.padding = "0";
+			segmentRoot.style.pointerEvents = "none";
+			segmentRoot.style.userSelect = "none";
+			segmentRoot.style.setProperty("-webkit-user-select", "none");
+			segmentRoot.style.setProperty("-webkit-text-fill-color", "transparent");
+			segmentRoot.style.opacity = isStale ? DRAFT_STALE_OPACITY : "1";
 
 			const fragment = document.createDocumentFragment();
 			let cursor = 0;
 
-			for (const segment of segments) {
+			for (const [segmentIndex, segment] of segments.entries()) {
 				if (cursor < segment.start) {
 					fragment.appendChild(document.createTextNode(extractedText.slice(cursor, segment.start)));
 				}
 
 				const segmentSpan = document.createElement("span");
-				segmentSpan.style.textDecorationLine = "underline";
-				segmentSpan.style.textDecorationColor = DRAFT_UNDERLINE_COLOR;
-				segmentSpan.style.textDecorationThickness = "2px";
-				segmentSpan.style.textDecorationSkipInk = "none";
-				segmentSpan.style.textUnderlineOffset = "2px";
+				const paletteEntry = GOAL_TYPE_PALETTE[segment.goalType];
+				const isHighConfidence = segment.confidence >= DRAFT_HIGH_CONFIDENCE_THRESHOLD;
+
+				segmentSpan.dataset.goalType = segment.goalType;
+				segmentSpan.dataset.segmentIndex = String(segmentIndex);
+				segmentSpan.dataset.confidence = segment.confidence.toFixed(2);
+				segmentSpan.dataset.draftStale = isStale ? "true" : "false";
+				segmentSpan.style.display = "inline";
 				segmentSpan.style.color = "transparent";
+				segmentSpan.style.background = "transparent";
+				segmentSpan.style.caretColor = "transparent";
+				segmentSpan.style.font = "inherit";
+				segmentSpan.style.lineHeight = "inherit";
+				segmentSpan.style.letterSpacing = "inherit";
+				segmentSpan.style.whiteSpace = "inherit";
+				segmentSpan.style.wordBreak = "inherit";
+				segmentSpan.style.overflowWrap = "inherit";
+				segmentSpan.style.pointerEvents = "none";
+				segmentSpan.style.userSelect = "none";
+				segmentSpan.style.setProperty("-webkit-user-select", "none");
 				segmentSpan.style.setProperty("-webkit-text-fill-color", "transparent");
-				segmentSpan.textContent = extractedText.slice(segment.start, segment.end);
+				segmentSpan.style.textDecorationLine = "underline";
+				segmentSpan.style.textDecorationColor = `var(${paletteEntry.cssVariable})`;
+				segmentSpan.style.textDecorationStyle = isHighConfidence ? "solid" : "dashed";
+				segmentSpan.style.textDecorationThickness = isHighConfidence ? "2px" : "1.5px";
+				segmentSpan.style.textUnderlineOffset = "2px";
+				segmentSpan.textContent = segment.text;
 				fragment.appendChild(segmentSpan);
 				cursor = segment.end;
 			}
@@ -366,7 +909,8 @@ export default defineContentScript({
 				fragment.appendChild(document.createTextNode(extractedText.slice(cursor)));
 			}
 
-			contentElement.appendChild(fragment);
+			segmentRoot.appendChild(fragment);
+			contentElement.appendChild(segmentRoot);
 		};
 
 		const renderHighlightedDraftOverlay = (
@@ -419,8 +963,9 @@ export default defineContentScript({
 			state: ActiveInputState,
 			extractedText: string,
 			segments: DraftSegment[],
+			isStale: boolean,
 		): void => {
-			if (!state.element.isConnected || extractedText.length === 0 || segments.length === 0) {
+			if (!state.element.isConnected || extractedText.length === 0) {
 				clearDraftRendering(state);
 				return;
 			}
@@ -429,24 +974,19 @@ export default defineContentScript({
 			clearDraftRendering(state);
 
 			const overlayShell = createDraftOverlayShell(state.element);
+			installDraftOverlayResizeObserver(state);
 			updateDraftOverlayGeometry(state.element, overlayShell.hostElement, overlayShell.contentElement);
-
-			let renderedWithHighlights = false;
-			if (canUseCustomHighlights()) {
-				renderedWithHighlights = renderHighlightedDraftOverlay(overlayShell.contentElement, extractedText, segments);
-			}
-
-			if (!renderedWithHighlights) {
-				renderFallbackDraftOverlay(overlayShell.contentElement, extractedText, segments);
-				state.draftRenderMode = "overlay";
-			} else {
-				state.draftRenderMode = "highlight";
-			}
+			renderDraftOverlaySegments(overlayShell.contentElement, extractedText, segments, isStale);
+			applyDraftOverlayFreshness(overlayShell.hostElement, isStale);
+			state.draftIsStale = isStale;
+			state.draftRenderMode = "overlay";
 
 			state.draftOverlayElement = overlayShell.hostElement;
 			state.draftOverlayContentElement = overlayShell.contentElement;
 			state.draftText = extractedText;
 			state.draftSegments = segments;
+			renderedDraftOverlayState = state;
+			restoreDraftHoverPreviewFromLastPointer(state.element);
 		};
 
 		const clearActiveInputWork = (state: ActiveInputState | undefined): void => {
@@ -472,9 +1012,35 @@ export default defineContentScript({
 				return;
 			}
 
+			clearDraftHoverPreview();
+
 			if (activeInputState?.element === event.currentTarget) {
 				syncActiveDraftOverlayPosition();
 			}
+		};
+
+		const handleSourceMouseMoveEvent = (event: Event): void => {
+			if (!(event.currentTarget instanceof HTMLElement) || !(event instanceof MouseEvent)) {
+				return;
+			}
+
+			syncDraftHoverPreviewFromPoint(event.currentTarget, event.clientX, event.clientY);
+		};
+
+		const handleSourceMouseLeaveEvent = (): void => {
+			clearDraftHoverPreview();
+		};
+
+		const handleSourceBlurEvent = (): void => {
+			clearDraftHoverPreview();
+		};
+
+		const handleSourceKeyDownEvent = (event: Event): void => {
+			if (!(event instanceof KeyboardEvent) || event.key !== "Escape") {
+				return;
+			}
+
+			clearDraftHoverPreview();
 		};
 
 		const scheduleDebouncedExtraction = (element: HTMLTextAreaElement | HTMLElement): void => {
@@ -486,7 +1052,11 @@ export default defineContentScript({
 			const previousState = activeInputState;
 			if (previousState?.element === element) {
 				clearActiveInputWork(previousState);
-				clearDraftRendering(previousState);
+				previousState.draftIsStale = true;
+				if (previousState.draftOverlayElement) {
+					applyDraftOverlayFreshness(previousState.draftOverlayElement, true);
+				}
+				setDraftHoverPreviewStale(element);
 			}
 
 			const abortController = new AbortController();
@@ -497,6 +1067,8 @@ export default defineContentScript({
 				abortController,
 				draftOverlayElement: undefined,
 				draftOverlayContentElement: undefined,
+				draftOverlayResizeObserver: undefined,
+				draftIsStale: false,
 				draftRenderMode: undefined,
 				draftText: "",
 				draftSegments: [],
@@ -505,6 +1077,10 @@ export default defineContentScript({
 			nextState.debounceTimerId = window.setTimeout(() => {
 				if (abortController.signal.aborted) {
 					return;
+				}
+
+				if (previousState?.draftOverlayElement) {
+					clearDraftRendering(previousState);
 				}
 
 				const extractedText = extractInputText(element);
@@ -516,7 +1092,7 @@ export default defineContentScript({
 				nextState.status = "SEGMENTING";
 				activeInputState = nextState;
 
-				renderDraftSegments(nextState, normalizedText, draftSegments);
+				renderDraftSegments(nextState, normalizedText, draftSegments, false);
 				console.log("Debounced extracted text:\n", extractedText);
 			}, DEBOUNCE_DELAY_MS);
 
@@ -566,6 +1142,10 @@ export default defineContentScript({
 
 			element.addEventListener("input", handleInputEvent);
 			element.addEventListener("scroll", handleSourceScrollEvent, { passive: true });
+			element.addEventListener("mousemove", handleSourceMouseMoveEvent);
+			element.addEventListener("mouseleave", handleSourceMouseLeaveEvent);
+			element.addEventListener("blur", handleSourceBlurEvent);
+			element.addEventListener("keydown", handleSourceKeyDownEvent);
 			element.setAttribute(INSTRUMENTED_ATTRIBUTE, INSTRUMENTED_VALUE);
 			console.log("Found valid input:", element);
 		};
@@ -605,6 +1185,10 @@ export default defineContentScript({
 				if (activeInputState?.element && !activeInputState.element.isConnected) {
 					clearActiveInputWork(activeInputState);
 					clearDraftRendering(activeInputState);
+				}
+
+				if (renderedDraftOverlayState?.element && !renderedDraftOverlayState.element.isConnected) {
+					clearDraftRendering(renderedDraftOverlayState);
 				}
 
 				for (const mutation of mutationList) {
