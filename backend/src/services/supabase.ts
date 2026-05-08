@@ -10,6 +10,16 @@ export type VerifiedAuthContext = {
 	tier: Tier;
 };
 
+export type VerifyBearerTokenResult =
+	| {
+		ok: true;
+		data: VerifiedAuthContext;
+	}
+	| {
+		ok: false;
+		reason: string;
+	};
+
 export type RefreshTokenProxyResult =
 	| {
 			ok: true;
@@ -99,22 +109,31 @@ async function resolveTierForUser(supabase: SupabaseClient, userId: string): Pro
 	return isTier(tierValue) ? tierValue : null;
 }
 
-export async function verifyBearerToken(token: string): Promise<VerifiedAuthContext | null> {
+export async function verifyBearerToken(token: string): Promise<VerifyBearerTokenResult> {
 	const supabase = getSupabaseClient();
 	if (!supabase) {
-		return null;
+		return {
+			ok: false,
+			reason: "Auth service unavailable",
+		};
 	}
 
 	const { data, error } = await supabase.auth.getUser(token);
 	if (error || !data.user) {
-		return null;
+		return {
+			ok: false,
+			reason: error?.message ?? "Invalid access token",
+		};
 	}
 
 	const tier = (await resolveTierForUser(supabase, data.user.id)) ?? DEFAULT_TIER;
 
 	return {
-		userId: data.user.id,
-		tier,
+		ok: true,
+		data: {
+			userId: data.user.id,
+			tier,
+		},
 	};
 }
 

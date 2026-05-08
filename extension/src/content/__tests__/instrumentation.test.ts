@@ -59,6 +59,17 @@ function getLastBridgePort(): ChromeConnectHandle {
 	return lastResult.value as ChromeConnectHandle;
 }
 
+function getChromeStorageGetMock(area: "local" | "session"): ReturnType<typeof vi.fn> {
+	const chromeStorage = chrome as unknown as {
+		storage: {
+			local: { get: ReturnType<typeof vi.fn> };
+			session: { get: ReturnType<typeof vi.fn> };
+		};
+	};
+
+	return chromeStorage.storage[area].get;
+}
+
 function normalizeLoggedText(value: unknown): string {
 	return String(value)
 		.replace(/\r\n?/g, "\n")
@@ -162,12 +173,13 @@ function installTestGlobals(): { connectMock: ReturnType<typeof vi.fn> } {
 	}
 
 	vi.stubGlobal("defineContentScript", (config: unknown) => config);
-	const storageGetMock = vi.fn(async () => ({}));
+	const storageLocalGetMock = vi.fn(async () => ({}));
+	const storageSessionGetMock = vi.fn(async () => ({}));
 	vi.stubGlobal("chrome", {
 		runtime: { connect: connectMock },
 		storage: {
-			local: { get: storageGetMock },
-			session: { get: storageGetMock },
+			local: { get: storageLocalGetMock },
+			session: { get: storageSessionGetMock },
 		},
 	});
 	vi.stubGlobal("CSS", { highlights: undefined });
@@ -315,6 +327,45 @@ describe("content script instrumentation", () => {
 		expect(bridgePayload?.payload?.mode).toBe("balanced");
 		expect(bridgePayload?.payload?.segments).toHaveLength(1);
 		expect(normalizeLoggedText(bridgePayload?.payload?.segments?.[0])).toBe("First clause\nSecond clause\nThird clause");
+	});
+
+	it("keeps resolving bridge context when session storage access is blocked", async () => {
+		vi.useFakeTimers();
+
+		document.body.innerHTML = `<textarea id="notes">Build a keyboard-accessible dark mode toggle.</textarea>`;
+		const textarea = document.getElementById("notes") as HTMLTextAreaElement;
+
+		const contentScript = await loadContentScript();
+		contentScript.main();
+
+		getChromeStorageGetMock("local").mockResolvedValue({
+			["promptcompiler.settings"]: {
+				mode: "detailed",
+				projectId: null,
+			},
+			authCache: {
+				access_token: "local-storage-jwt",
+			},
+		});
+		getChromeStorageGetMock("session").mockRejectedValue(new Error("Access to storage is not allowed from this context."));
+
+		textarea.dispatchEvent(new Event("input", { bubbles: true }));
+		await vi.advanceTimersByTimeAsync(400);
+		await flushMicrotasks();
+
+		const bridgePort = getLastBridgePort();
+		expect(bridgePort.postMessage).toHaveBeenCalledTimes(1);
+
+		const bridgePayload = bridgePort.postMessage.mock.calls[0]?.[0] as {
+			verb?: string;
+			jwt?: string;
+			payload?: { segments?: string[]; mode?: string };
+		} | undefined;
+
+		expect(bridgePayload?.verb).toBe("SEGMENT");
+		expect(bridgePayload?.jwt).toBe("local-storage-jwt");
+		expect(bridgePayload?.payload?.mode).toBe("detailed");
+		expect(normalizeLoggedText(bridgePayload?.payload?.segments?.[0])).toBe("Build a keyboard-accessible dark mode toggle.");
 	});
 
 	it("reattaches to dynamically added inputs and ignores marker attribute churn", async () => {

@@ -1,7 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
 
-import { authHeaderSchema } from "../lib/schemas";
-import { parseWithSchema } from "../lib/validation";
 import { verifyBearerToken } from "../services/supabase";
 
 function unauthorizedResponse(c: Context) {
@@ -17,26 +15,33 @@ function unauthorizedResponse(c: Context) {
 }
 
 export const authMiddleware: MiddlewareHandler = async (c, next) => {
-	const parsed = parseWithSchema(authHeaderSchema, {
-		authorization: c.req.header("Authorization") ?? "",
-	});
+	const authHeader = c.req.header("Authorization");
+	console.log("1. Raw Authorization Header:", authHeader);
+	console.log("2. Header Length:", authHeader?.length ?? 0);
 
-	if (!parsed.ok) {
+	if (!authHeader || !authHeader.startsWith("Bearer ")) {
+		console.log("3. FAILED: Missing Bearer token or malformed Authorization header");
 		return unauthorizedResponse(c);
 	}
 
-	const bearerValue = parsed.data.authorization.replace("Bearer ", "").trim();
+	const bearerValue = authHeader.slice("Bearer ".length).trim();
 	if (bearerValue.length === 0) {
+		console.log("3. FAILED: Empty bearer token after prefix removal");
 		return unauthorizedResponse(c);
 	}
+
+	console.log("4. Extracted Token Prefix:", bearerValue.slice(0, 10));
 
 	const verifiedAuth = await verifyBearerToken(bearerValue);
-	if (!verifiedAuth) {
+	if (!verifiedAuth.ok) {
+		console.log("5. SUPABASE REJECTION:", verifiedAuth.reason);
 		return unauthorizedResponse(c);
 	}
 
-	c.set("userId", verifiedAuth.userId);
-	c.set("tier", verifiedAuth.tier);
+	console.log("6. SUCCESS: User ID:", verifiedAuth.data.userId);
+
+	c.set("userId", verifiedAuth.data.userId);
+	c.set("tier", verifiedAuth.data.tier);
 	await next();
 };
 

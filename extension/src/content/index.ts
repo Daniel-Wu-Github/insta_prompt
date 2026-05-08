@@ -186,11 +186,33 @@ export default defineContentScript({
 			return undefined;
 		};
 
+		const isStorageAccessRestrictedError = (error: unknown): boolean => {
+			if (error instanceof Error) {
+				return error.message.includes("Access to storage is not allowed");
+			}
+
+			if (typeof error === "string") {
+				return error.includes("Access to storage is not allowed");
+			}
+
+			return false;
+		};
+
+		const readSessionStorageSnapshot = async (): Promise<Record<string, unknown>> => {
+			try {
+				return await chrome.storage.session.get(null);
+			} catch (error) {
+				if (isStorageAccessRestrictedError(error)) {
+					return {};
+				}
+
+				throw error;
+			}
+		};
+
 		const resolveBridgeContext = async (): Promise<{ mode: Mode; jwt: string }> => {
-			const [sessionSnapshot, localSnapshot] = await Promise.all([
-				chrome.storage.session.get(null),
-				chrome.storage.local.get(null),
-			]);
+			const localSnapshot = await chrome.storage.local.get(null);
+			const sessionSnapshot = await readSessionStorageSnapshot();
 
 			let mode: Mode = DEFAULT_BRIDGE_MODE;
 			const storedSettings = localSnapshot[SETTINGS_STORAGE_KEY];
