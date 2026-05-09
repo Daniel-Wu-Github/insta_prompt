@@ -74,6 +74,7 @@ export default defineContentScript({
 			abortController: AbortController | undefined;
 			draftOverlayElement: HTMLDivElement | undefined;
 			draftOverlayContentElement: HTMLDivElement | undefined;
+			draftOverlaySegmentRootElement: HTMLDivElement | undefined;
 			draftOverlayResizeObserver: ResizeObserver | undefined;
 			draftIsStale: boolean;
 			draftRenderMode: DraftRenderMode | undefined;
@@ -819,6 +820,7 @@ export default defineContentScript({
 			}
 
 			state.draftOverlayContentElement = undefined;
+			state.draftOverlaySegmentRootElement = undefined;
 			state.draftOverlayResizeObserver?.disconnect();
 			state.draftOverlayResizeObserver = undefined;
 			state.draftIsStale = false;
@@ -869,6 +871,56 @@ export default defineContentScript({
 			getOverlayContainer().appendChild(hostElement);
 
 			return { hostElement, contentElement };
+		};
+
+		const ensureDraftOverlayShell = (
+			state: ActiveInputState,
+		): { hostElement: HTMLDivElement; contentElement: HTMLDivElement; segmentRootElement: HTMLDivElement } => {
+			const existingHostElement = state.draftOverlayElement;
+			const existingContentElement = state.draftOverlayContentElement;
+			const existingSegmentRootElement = state.draftOverlaySegmentRootElement;
+
+			if (existingHostElement && existingContentElement && existingHostElement.isConnected && existingContentElement.isConnected) {
+				let segmentRootElement = existingSegmentRootElement;
+
+				if (!segmentRootElement || segmentRootElement.parentElement !== existingContentElement) {
+					const firstChild = existingContentElement.firstElementChild;
+					if (firstChild instanceof HTMLDivElement && firstChild.dataset.instaDraftSegmentRoot === "true") {
+						segmentRootElement = firstChild;
+						state.draftOverlaySegmentRootElement = segmentRootElement;
+					}
+				}
+
+				if (segmentRootElement) {
+					return {
+						hostElement: existingHostElement,
+						contentElement: existingContentElement,
+						segmentRootElement,
+					};
+				}
+			}
+
+			if (existingHostElement || existingContentElement || existingSegmentRootElement) {
+				clearDraftRendering(state);
+			}
+
+			const overlayShell = createDraftOverlayShell(state.element);
+			const segmentRootElement = document.createElement("div");
+			segmentRootElement.dataset.instaDraftSegmentRoot = "true";
+			segmentRootElement.style.margin = "0";
+			segmentRootElement.style.opacity = state.draftIsStale ? DRAFT_STALE_OPACITY : "1";
+			copyDraftOverlaySegmentRootStyles(state.element, segmentRootElement);
+			overlayShell.contentElement.appendChild(segmentRootElement);
+
+			state.draftOverlayElement = overlayShell.hostElement;
+			state.draftOverlayContentElement = overlayShell.contentElement;
+			state.draftOverlaySegmentRootElement = segmentRootElement;
+
+			return {
+				hostElement: overlayShell.hostElement,
+				contentElement: overlayShell.contentElement,
+				segmentRootElement,
+			};
 		};
 
 		const copyDraftOverlaySegmentRootStyles = (source: HTMLElement, target: HTMLDivElement): void => {
@@ -972,19 +1024,15 @@ export default defineContentScript({
 
 		const renderDraftOverlaySegments = (
 			sourceElement: HTMLTextAreaElement | HTMLElement,
-			contentElement: HTMLDivElement,
+			segmentRootElement: HTMLDivElement,
 			extractedText: string,
 			segments: DraftSegment[],
 			isStale: boolean,
 		): void => {
-			contentElement.replaceChildren();
-
-			const segmentRoot = document.createElement("div");
-			segmentRoot.dataset.instaDraftSegmentRoot = "true";
-			segmentRoot.dataset.instaDraftSegments = String(segments.length);
-			segmentRoot.style.margin = "0";
-			segmentRoot.style.opacity = isStale ? DRAFT_STALE_OPACITY : "1";
-			copyDraftOverlaySegmentRootStyles(sourceElement, segmentRoot);
+			segmentRootElement.textContent = "";
+			segmentRootElement.dataset.instaDraftSegments = String(segments.length);
+			segmentRootElement.style.opacity = isStale ? DRAFT_STALE_OPACITY : "1";
+			copyDraftOverlaySegmentRootStyles(sourceElement, segmentRootElement);
 
 			const fragment = document.createDocumentFragment();
 			let cursor = 0;
@@ -1030,8 +1078,7 @@ export default defineContentScript({
 				fragment.appendChild(document.createTextNode(extractedText.slice(cursor)));
 			}
 
-			segmentRoot.appendChild(fragment);
-			contentElement.appendChild(segmentRoot);
+			segmentRootElement.appendChild(fragment);
 		};
 
 		const renderHighlightedDraftOverlay = (
@@ -1092,12 +1139,10 @@ export default defineContentScript({
 			}
 
 			ensureDraftOverlaySyncListenersInstalled();
-			clearDraftRendering(state);
-
-			const overlayShell = createDraftOverlayShell(state.element);
+			const overlayShell = ensureDraftOverlayShell(state);
 			installDraftOverlayResizeObserver(state);
 			updateDraftOverlayGeometry(state.element, overlayShell.hostElement, overlayShell.contentElement);
-			renderDraftOverlaySegments(state.element, overlayShell.contentElement, extractedText, segments, isStale);
+			renderDraftOverlaySegments(state.element, overlayShell.segmentRootElement, extractedText, segments, isStale);
 			applyDraftOverlayFreshness(overlayShell.hostElement, isStale);
 			state.draftIsStale = isStale;
 			state.draftRenderMode = "overlay";
@@ -1181,28 +1226,40 @@ export default defineContentScript({
 			}
 
 			const abortController = new AbortController();
-			const nextState: ActiveInputState = {
-				element,
-				status: "TYPING",
-				debounceTimerId: undefined,
-				abortController,
-				draftOverlayElement: undefined,
-				draftOverlayContentElement: undefined,
-				draftOverlayResizeObserver: undefined,
-				draftIsStale: false,
-				draftRenderMode: undefined,
-				draftText: "",
-				draftSegments: [],
-			};
+			const nextState: ActiveInputState = previousState?.element === element && previousState
+				? {
+					element,
+					status: "TYPING",
+					debounceTimerId: undefined,
+					abortController,
+					draftOverlayElement: previousState.draftOverlayElement,
+					draftOverlayContentElement: previousState.draftOverlayContentElement,
+					draftOverlaySegmentRootElement: previousState.draftOverlaySegmentRootElement,
+					draftOverlayResizeObserver: previousState.draftOverlayResizeObserver,
+					draftIsStale: previousState.draftIsStale,
+					draftRenderMode: previousState.draftRenderMode,
+					draftText: previousState.draftText,
+					draftSegments: previousState.draftSegments,
+				}
+				: {
+					element,
+					status: "TYPING",
+					debounceTimerId: undefined,
+					abortController,
+					draftOverlayElement: undefined,
+					draftOverlayContentElement: undefined,
+					draftOverlaySegmentRootElement: undefined,
+					draftOverlayResizeObserver: undefined,
+					draftIsStale: false,
+					draftRenderMode: undefined,
+					draftText: "",
+					draftSegments: [],
+				};
 
 			nextState.debounceTimerId = window.setTimeout(() => {
 				void (async () => {
 					if (abortController.signal.aborted) {
 						return;
-					}
-
-					if (previousState?.draftOverlayElement) {
-						clearDraftRendering(previousState);
 					}
 
 					const extractedText = extractInputText(element);
