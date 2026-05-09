@@ -72,6 +72,7 @@ export default defineContentScript({
 			status: InputLifecycleState;
 			debounceTimerId: number | undefined;
 			abortController: AbortController | undefined;
+			draftOverlayScrollListener: EventListener | undefined;
 			draftOverlayElement: HTMLDivElement | undefined;
 			draftOverlayContentElement: HTMLDivElement | undefined;
 			draftOverlaySegmentRootElement: HTMLDivElement | undefined;
@@ -819,6 +820,11 @@ export default defineContentScript({
 				state.draftOverlayElement = undefined;
 			}
 
+			if (state.draftOverlayScrollListener) {
+				state.element.removeEventListener("scroll", state.draftOverlayScrollListener);
+				state.draftOverlayScrollListener = undefined;
+			}
+
 			state.draftOverlayContentElement = undefined;
 			state.draftOverlaySegmentRootElement = undefined;
 			state.draftOverlayResizeObserver?.disconnect();
@@ -974,11 +980,14 @@ export default defineContentScript({
 			hostElement.style.top = `${rect.top}px`;
 			hostElement.style.width = `${rect.width}px`;
 			hostElement.style.height = `${rect.height}px`;
-			hostElement.scrollTop = sourceElement.scrollTop;
-			hostElement.scrollLeft = sourceElement.scrollLeft;
-			contentElement.scrollTop = sourceElement.scrollTop;
-			contentElement.scrollLeft = sourceElement.scrollLeft;
-			contentElement.style.transform = `translate(${-sourceElement.scrollLeft}px, ${-sourceElement.scrollTop}px)`;
+			syncDraftOverlayScrollPosition(sourceElement, contentElement);
+		};
+
+		const syncDraftOverlayScrollPosition = (
+			sourceElement: HTMLTextAreaElement | HTMLElement,
+			layer2Element: HTMLDivElement,
+		): void => {
+			layer2Element.style.transform = `translate(-${sourceElement.scrollLeft}px, -${sourceElement.scrollTop}px)`;
 		};
 
 		const installDraftOverlayResizeObserver = (state: ActiveInputState): void => {
@@ -1180,9 +1189,18 @@ export default defineContentScript({
 
 			clearDraftHoverPreview();
 
-			if (activeInputState?.element === event.currentTarget) {
-				syncActiveDraftOverlayPosition();
+			if (activeInputState?.element === event.currentTarget && activeInputState.draftOverlayContentElement) {
+				syncDraftOverlayScrollPosition(event.currentTarget, activeInputState.draftOverlayContentElement);
 			}
+		};
+
+		const ensureSourceScrollListenerInstalled = (state: ActiveInputState): void => {
+			if (state.draftOverlayScrollListener) {
+				return;
+			}
+
+			state.draftOverlayScrollListener = handleSourceScrollEvent;
+			state.element.addEventListener("scroll", state.draftOverlayScrollListener, { passive: true });
 		};
 
 		const handleSourceMouseMoveEvent = (event: Event): void => {
@@ -1232,6 +1250,7 @@ export default defineContentScript({
 					status: "TYPING",
 					debounceTimerId: undefined,
 					abortController,
+					draftOverlayScrollListener: previousState.draftOverlayScrollListener,
 					draftOverlayElement: previousState.draftOverlayElement,
 					draftOverlayContentElement: previousState.draftOverlayContentElement,
 					draftOverlaySegmentRootElement: previousState.draftOverlaySegmentRootElement,
@@ -1246,6 +1265,7 @@ export default defineContentScript({
 					status: "TYPING",
 					debounceTimerId: undefined,
 					abortController,
+					draftOverlayScrollListener: undefined,
 					draftOverlayElement: undefined,
 					draftOverlayContentElement: undefined,
 					draftOverlaySegmentRootElement: undefined,
@@ -1255,6 +1275,8 @@ export default defineContentScript({
 					draftText: "",
 					draftSegments: [],
 				};
+
+			ensureSourceScrollListenerInstalled(nextState);
 
 			nextState.debounceTimerId = window.setTimeout(() => {
 				void (async () => {
@@ -1329,7 +1351,6 @@ export default defineContentScript({
 			}
 
 			element.addEventListener("input", handleInputEvent);
-			element.addEventListener("scroll", handleSourceScrollEvent, { passive: true });
 			element.addEventListener("mousemove", handleSourceMouseMoveEvent);
 			element.addEventListener("mouseleave", handleSourceMouseLeaveEvent);
 			element.addEventListener("blur", handleSourceBlurEvent);
