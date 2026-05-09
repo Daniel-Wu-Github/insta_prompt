@@ -42,14 +42,14 @@ Primary files:
 ## Core Invariants
 
 1. Rendering derives from section state and confidence; it does not redefine state semantics.
-2. Overlay alignment MUST perfectly track the host using `window.getComputedStyle`, `ResizeObserver`, and `scroll` event listeners.
+2. Overlay alignment MUST perfectly track the host using `window.getComputedStyle`, `getBoundingClientRect`, `ResizeObserver`, `scroll` event listeners, and a `border-box` box model.
 3. The mirror overlay MUST be strictly `pointer-events: none` to prevent stealing focus or clicks from the host input.
 4. Preview content is rendered as text-safe content, not unsafe HTML, and MUST be isolated from host CSS using Shadow DOM or aggressive CSS resets (e.g., `all: initial`).
 5. Stale and low-confidence signals remain visually distinct and consistent.
 
 ## Implementation Procedure
 
-1. Build mirror overlay synchronization: you MUST extract and copy `font-family`, `font-size`, `line-height`, `padding`, `border-width`, and `white-space` from the host input via `getComputedStyle`.
+1. Build mirror overlay synchronization: use `getComputedStyle` to copy `font-family`, `font-size`, `line-height`, `letter-spacing`, `word-spacing`, `white-space`, `word-break`, `overflow-wrap`, `padding-*`, and `border-*-width`; force `box-sizing: border-box`; propagate word-spacing through both the shell and inner text layers; set overlay `width`/`height` from `getBoundingClientRect()`; and set `color` plus `-webkit-text-fill-color` to `transparent`.
 2. Map `goal_type` to stable color tokens.
 3. Map confidence and stale status to underline style tokens.
 4. Implement preview card lifecycle states: loading, ready, stale, error.

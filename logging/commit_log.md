@@ -1236,3 +1236,26 @@ Entries are grouped by branch and extend commit messages with file-level change 
       - M extension/src/content/__tests__/instrumentation.test.ts
       - M extension/src/content/index.ts
       - M logging/commit_log.md
+
+### 2026-05-08 00:47:11Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/main
+- Range: 28d4cc7846ab6051ff36b71b3d5fc9d19b80b089..4ff52c3942508e8fd71abc197b70344214b4a12c
+- Commits:
+  - e2bf4b0 Ignore docs-pass.diff
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-05-06T18:20:37-05:00
+    - Purpose: This commit deletes 1 across docs-pass.diff.
+    - Files:
+      - D docs-pass.diff
+  - 4ff52c3 wiring, auth, and segment requests fixed, pre underline overlay fix
+    - Author: dwu764160 <d.wu764160@gmail.com>
+    - Commit date: 2026-05-07T19:47:04-05:00
+    - Purpose: This commit modifies 6 across backend, extension, logging.
+    - Files:
+      - M backend/src/index.ts
+      - M backend/src/middleware/auth.ts
+      - M backend/src/services/supabase.ts
+      - M extension/src/content/__tests__/instrumentation.test.ts
+      - M extension/src/content/index.ts
+      - M logging/commit_log.md

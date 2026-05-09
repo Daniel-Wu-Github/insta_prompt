@@ -600,3 +600,19 @@
 	- Fulfillment: Completes the requested Phase 5 and wraps up the Step 6-11 cycle with explicit closure documentation.
 	- Deviation: None.
 
+## Entry 029 - 2026-05-07 - Synced Overlay Typography and Geometry Guidance
+
+- Task: Fix mirror overlay geometry/font drift in the content script and update frontend skill guidance.
+- What the agent did: Forced overlay sizing to `border-box`, added explicit word-spacing sync, and updated underline-preview skill guidance plus the skill map wording to capture typography/box-model requirements.
+- How the agent did it: Audited the overlay style-copy path against the required CSS properties and geometry rules, then tightened the related skill instructions and registry language.
+- Files edited:
+	- extension/src/content/index.ts
+	- .github/skills/underline-preview-rendering/SKILL.md
+	- .github/skills/SKILL_MAP.md
+	- logging/progress_log.md
+- Verification:
+	- `cd extension && npm run typecheck`
+- Task alignment:
+	- Fulfillment: Implements the requested overlay sync fixes and updates skill guidance.
+	- Deviation: None.
+

@@ -763,25 +763,13 @@ export default defineContentScript({
 		const copyDraftOverlayStyles = (source: HTMLElement, target: HTMLDivElement): void => {
 			const computedStyle = window.getComputedStyle(source);
 
-			target.style.boxSizing = computedStyle.boxSizing;
+			target.style.boxSizing = "border-box";
 			target.style.font = computedStyle.font;
 			target.style.fontFamily = computedStyle.fontFamily;
 			target.style.fontSize = computedStyle.fontSize;
 			target.style.fontStyle = computedStyle.fontStyle;
 			target.style.fontWeight = computedStyle.fontWeight;
 			target.style.fontStretch = computedStyle.fontStretch;
-			target.style.borderTopStyle = computedStyle.borderTopStyle;
-			target.style.borderRightStyle = computedStyle.borderRightStyle;
-			target.style.borderBottomStyle = computedStyle.borderBottomStyle;
-			target.style.borderLeftStyle = computedStyle.borderLeftStyle;
-			target.style.borderTopWidth = computedStyle.borderTopWidth;
-			target.style.borderRightWidth = computedStyle.borderRightWidth;
-			target.style.borderBottomWidth = computedStyle.borderBottomWidth;
-			target.style.borderLeftWidth = computedStyle.borderLeftWidth;
-			target.style.borderTopColor = "transparent";
-			target.style.borderRightColor = "transparent";
-			target.style.borderBottomColor = "transparent";
-			target.style.borderLeftColor = "transparent";
 			target.style.borderRadius = computedStyle.borderRadius;
 			target.style.fontKerning = computedStyle.fontKerning;
 			target.style.fontVariant = computedStyle.fontVariant;
@@ -789,6 +777,7 @@ export default defineContentScript({
 			target.style.fontVariationSettings = computedStyle.fontVariationSettings;
 			target.style.lineHeight = computedStyle.lineHeight;
 			target.style.letterSpacing = computedStyle.letterSpacing;
+			target.style.wordSpacing = computedStyle.wordSpacing;
 			target.style.textAlign = computedStyle.textAlign;
 			target.style.textIndent = computedStyle.textIndent;
 			target.style.textTransform = computedStyle.textTransform;
@@ -796,14 +785,12 @@ export default defineContentScript({
 			target.style.whiteSpace = computedStyle.whiteSpace;
 			target.style.wordBreak = computedStyle.wordBreak;
 			target.style.overflowWrap = computedStyle.overflowWrap;
-			target.style.paddingTop = computedStyle.paddingTop;
-			target.style.paddingRight = computedStyle.paddingRight;
-			target.style.paddingBottom = computedStyle.paddingBottom;
-			target.style.paddingLeft = computedStyle.paddingLeft;
 			target.style.background = "transparent";
 			target.style.color = "transparent";
 			target.style.caretColor = "transparent";
 			target.style.overflow = "hidden";
+			target.style.border = "0";
+			target.style.padding = "0";
 			target.style.pointerEvents = "none";
 			target.style.userSelect = "none";
 			target.style.setProperty("-webkit-user-select", "none");
@@ -874,6 +861,7 @@ export default defineContentScript({
 			contentElement.style.font = "inherit";
 			contentElement.style.lineHeight = "inherit";
 			contentElement.style.letterSpacing = "inherit";
+			contentElement.style.wordSpacing = "inherit";
 			contentElement.style.whiteSpace = "inherit";
 			contentElement.style.transformOrigin = "top left";
 
@@ -881,6 +869,47 @@ export default defineContentScript({
 			getOverlayContainer().appendChild(hostElement);
 
 			return { hostElement, contentElement };
+		};
+
+		const copyDraftOverlaySegmentRootStyles = (source: HTMLElement, target: HTMLDivElement): void => {
+			const computedStyle = window.getComputedStyle(source);
+
+			target.style.position = "relative";
+			target.style.width = "100%";
+			target.style.minHeight = "100%";
+			target.style.boxSizing = "border-box";
+			target.style.borderTopStyle = computedStyle.borderTopStyle;
+			target.style.borderRightStyle = computedStyle.borderRightStyle;
+			target.style.borderBottomStyle = computedStyle.borderBottomStyle;
+			target.style.borderLeftStyle = computedStyle.borderLeftStyle;
+			target.style.borderTopWidth = computedStyle.borderTopWidth;
+			target.style.borderRightWidth = computedStyle.borderRightWidth;
+			target.style.borderBottomWidth = computedStyle.borderBottomWidth;
+			target.style.borderLeftWidth = computedStyle.borderLeftWidth;
+			target.style.borderTopColor = "transparent";
+			target.style.borderRightColor = "transparent";
+			target.style.borderBottomColor = "transparent";
+			target.style.borderLeftColor = "transparent";
+			target.style.borderRadius = computedStyle.borderRadius;
+			target.style.background = "transparent";
+			target.style.color = "transparent";
+			target.style.caretColor = "transparent";
+			target.style.font = "inherit";
+			target.style.lineHeight = "inherit";
+			target.style.letterSpacing = "inherit";
+			target.style.wordSpacing = "inherit";
+			target.style.whiteSpace = "inherit";
+			target.style.wordBreak = "inherit";
+			target.style.overflowWrap = "inherit";
+			target.style.margin = "0";
+			target.style.paddingTop = computedStyle.paddingTop;
+			target.style.paddingRight = computedStyle.paddingRight;
+			target.style.paddingBottom = computedStyle.paddingBottom;
+			target.style.paddingLeft = computedStyle.paddingLeft;
+			target.style.pointerEvents = "none";
+			target.style.userSelect = "none";
+			target.style.setProperty("-webkit-user-select", "none");
+			target.style.setProperty("-webkit-text-fill-color", "transparent");
 		};
 
 		const updateDraftOverlayGeometry = (
@@ -942,6 +971,7 @@ export default defineContentScript({
 		};
 
 		const renderDraftOverlaySegments = (
+			sourceElement: HTMLTextAreaElement | HTMLElement,
 			contentElement: HTMLDivElement,
 			extractedText: string,
 			segments: DraftSegment[],
@@ -952,28 +982,9 @@ export default defineContentScript({
 			const segmentRoot = document.createElement("div");
 			segmentRoot.dataset.instaDraftSegmentRoot = "true";
 			segmentRoot.dataset.instaDraftSegments = String(segments.length);
-			segmentRoot.style.position = "relative";
-			segmentRoot.style.width = "100%";
-			segmentRoot.style.minHeight = "100%";
-			segmentRoot.style.boxSizing = "border-box";
-			segmentRoot.style.border = "0";
-			segmentRoot.style.borderRadius = "inherit";
-			segmentRoot.style.background = "transparent";
-			segmentRoot.style.color = "transparent";
-			segmentRoot.style.caretColor = "transparent";
-			segmentRoot.style.font = "inherit";
-			segmentRoot.style.lineHeight = "inherit";
-			segmentRoot.style.letterSpacing = "inherit";
-			segmentRoot.style.whiteSpace = "inherit";
-			segmentRoot.style.wordBreak = "inherit";
-			segmentRoot.style.overflowWrap = "inherit";
 			segmentRoot.style.margin = "0";
-			segmentRoot.style.padding = "0";
-			segmentRoot.style.pointerEvents = "none";
-			segmentRoot.style.userSelect = "none";
-			segmentRoot.style.setProperty("-webkit-user-select", "none");
-			segmentRoot.style.setProperty("-webkit-text-fill-color", "transparent");
 			segmentRoot.style.opacity = isStale ? DRAFT_STALE_OPACITY : "1";
+			copyDraftOverlaySegmentRootStyles(sourceElement, segmentRoot);
 
 			const fragment = document.createDocumentFragment();
 			let cursor = 0;
@@ -1086,7 +1097,7 @@ export default defineContentScript({
 			const overlayShell = createDraftOverlayShell(state.element);
 			installDraftOverlayResizeObserver(state);
 			updateDraftOverlayGeometry(state.element, overlayShell.hostElement, overlayShell.contentElement);
-			renderDraftOverlaySegments(overlayShell.contentElement, extractedText, segments, isStale);
+			renderDraftOverlaySegments(state.element, overlayShell.contentElement, extractedText, segments, isStale);
 			applyDraftOverlayFreshness(overlayShell.hostElement, isStale);
 			state.draftIsStale = isStale;
 			state.draftRenderMode = "overlay";

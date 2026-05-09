@@ -137,6 +137,18 @@ export async function segmentRouteHandler(c: Context) {
 		signal: c.req.raw.signal,
 	});
 
+	const aiResult = {
+		segments: classifiedIntermediate.sections,
+	};
+
+	console.log("\n=== 🧠 GROQ SEMANTIC ANALYSIS ===");
+	aiResult.segments.forEach((seg, index) => {
+		console.log(`Clause ${index + 1}: "${seg.text}"`);
+		console.log(`  ➔ Goal: ${seg.goal_type}`);
+		console.log(`  ➔ Confidence: ${seg.confidence}`);
+	});
+	console.log("=================================\n");
+
 	const response = normalizeSegmentClassificationIntermediate(classifiedIntermediate);
 
 	const responseCheck = parseWithSchema(segmentResponseSchema, response);
