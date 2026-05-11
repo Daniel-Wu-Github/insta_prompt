@@ -1,0 +1,29 @@
+# PromptCompiler — Claude Code self-improvement configuration
+# Edit these thresholds based on observed signal quality after real sessions.
+# All scripts source this file before running.
+
+# ── Error detection ────────────────────────────────────────────────────────────
+# session-end.sh: TS errors per session that trigger the skill-improvement-loop flag
+TS_ERROR_THRESHOLD=2
+
+# post-edit-check.sh: minimum seconds between tsc runs for the same package
+# Lower = faster feedback, higher CPU cost. Raise to 60+ for slow machines.
+POST_EDIT_RATE_LIMIT_SECS=30
+
+# ── Pattern detection ──────────────────────────────────────────────────────────
+# analyze-patterns.sh: same TS error code seen N+ times across the log → flagged
+PATTERN_TS_ERROR_MIN=2
+
+# analyze-patterns.sh: same file appears in errors N+ times → flagged as "hot file"
+PATTERN_FILE_ERROR_MIN=3
+
+# analyze-patterns.sh / update-skill-memory.sh:
+# same skill named in "Skill gap:" entries N+ times → escalated priority improvement
+SKILL_GAP_ESCALATE_MIN=2
+
+# ── Notification priorities ────────────────────────────────────────────────────
+# ntfy.sh priority for smoke test failures: min | low | default | high | urgent
+SMOKE_FAIL_NOTIFY_PRIORITY=high
+
+# ntfy.sh priority for skill gap escalation
+SKILL_GAP_NOTIFY_PRIORITY=urgent

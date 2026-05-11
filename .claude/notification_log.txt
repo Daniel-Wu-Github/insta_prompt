@@ -1,0 +1,8 @@
+[08:55:33Z] Notification event
+  Message: Tool requires permission to run
+  Env vars: CLAUDE_NOTIFICATION='Tool requires permission to run' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[09:01:46Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+

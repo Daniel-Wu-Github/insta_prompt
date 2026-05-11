@@ -1,6 +1,6 @@
 ---
 name: mv3-extension-boundaries
-description: "Use when implementing Step 5 extension behavior to preserve strict MV3 boundaries across content script, background service worker, and popup."
+description: "Use when implementing extension behavior that crosses MV3 process boundaries: content script DOM listener attachment, background service worker isolation, popup state, and runtime port messaging."
 user-invocable: false
 ---
 
