@@ -1,6 +1,6 @@
 ---
 name: hotkey-bind-commit-ux
-description: "Use when implementing Step 11 hotkey guards, bind-trigger flow, ghost preview behavior, and final commit/reset semantics."
+description: "Use when implementing Tab/Shift+Tab acceptance keybindings (Step 10), Cmd+Enter bind trigger, ghost text streaming preview, Enter commit into textarea or contenteditable, or Esc cancel/reset — the full hotkey-driven UX flow from acceptance through commit."
 user-invocable: false
 ---
 
@@ -8,9 +8,10 @@ user-invocable: false
 
 ## When to Use
 
-Use this skill when implementing or modifying Step 11 interaction behavior, including:
+Use this skill when implementing or modifying hotkey-driven interaction behavior across Steps 10 and 11, including:
 
-- `Tab`, `Shift+Tab`, `Cmd+Enter`, `Enter`, and `Esc` key handling
+- `Tab` and `Shift+Tab` key handling for the acceptance queue (Step 10)
+- `Cmd+Enter`, `Enter`, and `Esc` key handling for bind and commit (Step 11)
 - bind trigger preconditions and stale-blocking guards
 - ghost preview progression from bind stream to final commit
 - commit and reset behavior across textarea and contenteditable targets

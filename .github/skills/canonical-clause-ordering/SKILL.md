@@ -1,6 +1,6 @@
 ---
 name: canonical-clause-ordering
-description: "Use when implementing Step 4-5 clause ordering logic across segment output, bind assembly, and UI clause presentation."
+description: "Use when implementing clause ordering logic across segment output, bind payload assembly, or UI presentation — including the pre-bind canonical sort in the content script before Cmd+Enter fires."
 user-invocable: false
 ---
 

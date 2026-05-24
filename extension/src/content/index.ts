@@ -17,7 +17,17 @@ export default defineContentScript({
 		const DRAFT_HIGH_CONFIDENCE_THRESHOLD = 0.7;
 		const DRAFT_LOW_CONFIDENCE_THRESHOLD = 0.55;
 		const DRAFT_STALE_OPACITY = "0.45";
+		const DRAFT_ACCEPTED_OPACITY = "0.4";
+		const DRAFT_ACCEPTED_STALE_OPACITY = "0.3";
 		const DRAFT_UNDERLINE_COLOR = "rgb(37 99 235 / 0.95)";
+		const CANONICAL_ORDER_BY_GOAL_TYPE: Record<GoalType, number> = {
+			context: 0,
+			tech_stack: 1,
+			constraint: 2,
+			action: 3,
+			output_format: 4,
+			edge_case: 5,
+		};
 
 		const GOAL_TYPE_PALETTE = {
 			context: {
@@ -81,6 +91,17 @@ export default defineContentScript({
 			draftRenderMode: DraftRenderMode | undefined;
 			draftText: string;
 			draftSegments: DraftSegment[];
+			acceptedSegmentIndices: Set<number>;
+			acceptanceOrder: number[];
+			focusedSegmentIndex: number | undefined;
+			hasStaleAccepted: boolean;
+			activeBindRequestId: string | undefined;
+			ghostPanelElement: HTMLDivElement | undefined;
+			ghostPanelBodyElement: HTMLDivElement | undefined;
+			ghostPanelStatusElement: HTMLDivElement | undefined;
+			ghostPanelLayoutListener: EventListener | undefined;
+			pendingGhostText: string;
+			ghostStreamComplete: boolean;
 		}
 
 		interface DraftHoverPreviewState {
@@ -212,16 +233,32 @@ export default defineContentScript({
 			}
 		};
 
+		const readSyncStorageSnapshot = async (): Promise<Record<string, unknown>> => {
+			try {
+				return await chrome.storage.sync.get(null);
+			} catch (error) {
+				if (isStorageAccessRestrictedError(error)) {
+					return {};
+				}
+
+				throw error;
+			}
+		};
+
 		const resolveBridgeContext = async (): Promise<{ mode: Mode; jwt: string }> => {
+			const syncSnapshot = await readSyncStorageSnapshot();
 			const localSnapshot = await chrome.storage.local.get(null);
 			const sessionSnapshot = await readSessionStorageSnapshot();
 
 			let mode: Mode = DEFAULT_BRIDGE_MODE;
-			const storedSettings = localSnapshot[SETTINGS_STORAGE_KEY];
-			if (typeof storedSettings === "object" && storedSettings !== null && !Array.isArray(storedSettings)) {
-				const storedMode = (storedSettings as { mode?: unknown }).mode;
-				if (isModeValue(storedMode)) {
-					mode = storedMode;
+			for (const snapshot of [syncSnapshot, localSnapshot]) {
+				const storedSettings = snapshot[SETTINGS_STORAGE_KEY];
+				if (typeof storedSettings === "object" && storedSettings !== null && !Array.isArray(storedSettings)) {
+					const storedMode = (storedSettings as { mode?: unknown }).mode;
+					if (isModeValue(storedMode)) {
+						mode = storedMode;
+						break;
+					}
 				}
 			}
 
@@ -271,6 +308,14 @@ export default defineContentScript({
 		const getDraftHoverPreviewBodyText = (segment: DraftSegment): string => {
 			const readableGoalType = segment.goalType.replace(/_/g, " ");
 			return `${readableGoalType} preview: ${segment.text}`;
+		};
+
+		const sortByCanonicalOrder = <T extends { goal_type: GoalType }>(sections: readonly T[]): T[] => {
+			return [...sections].sort((left, right) => {
+				const leftOrder = CANONICAL_ORDER_BY_GOAL_TYPE[left.goal_type];
+				const rightOrder = CANONICAL_ORDER_BY_GOAL_TYPE[right.goal_type];
+				return leftOrder - rightOrder;
+			});
 		};
 
 		const isSameDraftSegment = (left: DraftSegment, right: DraftSegment): boolean => {
@@ -974,12 +1019,16 @@ export default defineContentScript({
 			sourceElement: HTMLTextAreaElement | HTMLElement,
 			hostElement: HTMLDivElement,
 			contentElement: HTMLDivElement,
+			segmentRootElement: HTMLDivElement | undefined,
 		): void => {
 			const rect = sourceElement.getBoundingClientRect();
 			hostElement.style.left = `${rect.left}px`;
 			hostElement.style.top = `${rect.top}px`;
 			hostElement.style.width = `${rect.width}px`;
 			hostElement.style.height = `${rect.height}px`;
+			if (segmentRootElement) {
+				segmentRootElement.style.width = `${sourceElement.clientWidth}px`;
+			}
 			syncDraftOverlayScrollPosition(sourceElement, contentElement);
 		};
 
@@ -1018,7 +1067,7 @@ export default defineContentScript({
 				return;
 			}
 
-			updateDraftOverlayGeometry(state.element, state.draftOverlayElement, state.draftOverlayContentElement);
+			updateDraftOverlayGeometry(state.element, state.draftOverlayElement, state.draftOverlayContentElement, state.draftOverlaySegmentRootElement);
 		};
 
 		const ensureDraftOverlaySyncListenersInstalled = (): void => {
@@ -1031,12 +1080,71 @@ export default defineContentScript({
 			window.addEventListener("resize", syncActiveDraftOverlayPosition);
 		};
 
+		const applyAcceptanceVisualsToSpan = (
+			segmentSpan: HTMLSpanElement,
+			segment: DraftSegment,
+			isAccepted: boolean,
+			isFocused: boolean,
+			isStaleAccepted: boolean,
+		): void => {
+			const paletteEntry = GOAL_TYPE_PALETTE[segment.goalType];
+			const isHighConfidence = segment.confidence >= DRAFT_HIGH_CONFIDENCE_THRESHOLD;
+
+			segmentSpan.dataset.accepted = isAccepted ? "true" : "false";
+			segmentSpan.dataset.focused = isFocused ? "true" : "false";
+			segmentSpan.dataset.acceptedStale = isStaleAccepted ? "true" : "false";
+
+			if (isAccepted) {
+				segmentSpan.style.opacity = isStaleAccepted ? DRAFT_ACCEPTED_STALE_OPACITY : DRAFT_ACCEPTED_OPACITY;
+				segmentSpan.style.textDecorationLine = "underline";
+				segmentSpan.style.textDecorationColor = isStaleAccepted ? "rgb(217 119 6)" : `var(${paletteEntry.cssVariable})`;
+				segmentSpan.style.textDecorationStyle = isStaleAccepted ? "dashed" : "solid";
+				segmentSpan.style.textDecorationThickness = "2px";
+				segmentSpan.style.outline = "none";
+			} else {
+				segmentSpan.style.opacity = "1";
+				segmentSpan.style.textDecorationColor = `var(${paletteEntry.cssVariable})`;
+				segmentSpan.style.textDecorationStyle = isHighConfidence ? "solid" : "dashed";
+				segmentSpan.style.textDecorationThickness = isHighConfidence ? "2px" : "1.5px";
+				segmentSpan.style.outline = isFocused ? `1px solid var(${paletteEntry.cssVariable})` : "none";
+				segmentSpan.style.outlineOffset = isFocused ? "1px" : "0";
+			}
+		};
+
+		const restampAcceptedSegmentVisuals = (state: ActiveInputState): void => {
+			const root = state.draftOverlaySegmentRootElement;
+			if (!root) {
+				return;
+			}
+
+			const spans = root.querySelectorAll<HTMLSpanElement>("span[data-segment-index]");
+			for (const span of spans) {
+				const segmentIndex = Number.parseInt(span.dataset.segmentIndex ?? "", 10);
+				if (!Number.isFinite(segmentIndex)) {
+					continue;
+				}
+
+				const segment = state.draftSegments[segmentIndex];
+				if (!segment) {
+					continue;
+				}
+
+				const isAccepted = state.acceptedSegmentIndices.has(segmentIndex);
+				const isFocused = state.focusedSegmentIndex === segmentIndex;
+				const isStaleAccepted = isAccepted && state.hasStaleAccepted;
+				applyAcceptanceVisualsToSpan(span, segment, isAccepted, isFocused, isStaleAccepted);
+			}
+		};
+
 		const renderDraftOverlaySegments = (
 			sourceElement: HTMLTextAreaElement | HTMLElement,
 			segmentRootElement: HTMLDivElement,
 			extractedText: string,
 			segments: DraftSegment[],
 			isStale: boolean,
+			acceptedSegmentIndices: Set<number>,
+			focusedSegmentIndex: number | undefined,
+			hasStaleAccepted: boolean,
 		): void => {
 			segmentRootElement.textContent = "";
 			segmentRootElement.dataset.instaDraftSegments = String(segments.length);
@@ -1054,6 +1162,9 @@ export default defineContentScript({
 				const segmentSpan = document.createElement("span");
 				const paletteEntry = GOAL_TYPE_PALETTE[segment.goalType];
 				const isHighConfidence = segment.confidence >= DRAFT_HIGH_CONFIDENCE_THRESHOLD;
+				const isAccepted = acceptedSegmentIndices.has(segmentIndex);
+				const isFocused = focusedSegmentIndex === segmentIndex;
+				const isStaleAccepted = isAccepted && hasStaleAccepted;
 
 				segmentSpan.dataset.goalType = segment.goalType;
 				segmentSpan.dataset.segmentIndex = String(segmentIndex);
@@ -1078,8 +1189,16 @@ export default defineContentScript({
 				segmentSpan.style.textDecorationStyle = isHighConfidence ? "solid" : "dashed";
 				segmentSpan.style.textDecorationThickness = isHighConfidence ? "2px" : "1.5px";
 				segmentSpan.style.textUnderlineOffset = "2px";
-				segmentSpan.textContent = segment.text;
+				segmentSpan.style.textDecorationSkipInk = "none";
+				applyAcceptanceVisualsToSpan(segmentSpan, segment, isAccepted, isFocused, isStaleAccepted);
+				const trailingSpaces = segment.text.match(/\s+$/)?.[0] ?? "";
+				segmentSpan.textContent = trailingSpaces.length > 0
+					? segment.text.slice(0, segment.text.length - trailingSpaces.length)
+					: segment.text;
 				fragment.appendChild(segmentSpan);
+				if (trailingSpaces.length > 0) {
+					fragment.appendChild(document.createTextNode(trailingSpaces));
+				}
 				cursor = segment.end;
 			}
 
@@ -1150,8 +1269,17 @@ export default defineContentScript({
 			ensureDraftOverlaySyncListenersInstalled();
 			const overlayShell = ensureDraftOverlayShell(state);
 			installDraftOverlayResizeObserver(state);
-			updateDraftOverlayGeometry(state.element, overlayShell.hostElement, overlayShell.contentElement);
-			renderDraftOverlaySegments(state.element, overlayShell.segmentRootElement, extractedText, segments, isStale);
+			updateDraftOverlayGeometry(state.element, overlayShell.hostElement, overlayShell.contentElement, overlayShell.segmentRootElement);
+			renderDraftOverlaySegments(
+				state.element,
+				overlayShell.segmentRootElement,
+				extractedText,
+				segments,
+				isStale,
+				state.acceptedSegmentIndices,
+				state.focusedSegmentIndex,
+				state.hasStaleAccepted,
+			);
 			applyDraftOverlayFreshness(overlayShell.hostElement, isStale);
 			state.draftIsStale = isStale;
 			state.draftRenderMode = "overlay";
@@ -1162,6 +1290,157 @@ export default defineContentScript({
 			state.draftSegments = segments;
 			renderedDraftOverlayState = state;
 			restoreDraftHoverPreviewFromLastPointer(state.element);
+		};
+
+		const ensureGhostPanel = (state: ActiveInputState): void => {
+			if (state.ghostPanelElement && state.ghostPanelElement.isConnected) {
+				positionGhostPanel(state);
+				return;
+			}
+
+			const containerElement = document.createElement("div");
+			containerElement.setAttribute("aria-hidden", "true");
+			containerElement.dataset.instaGhostPanel = "true";
+			containerElement.style.position = "fixed";
+			containerElement.style.left = "0px";
+			containerElement.style.top = "0px";
+			containerElement.style.zIndex = DRAFT_OVERLAY_Z_INDEX;
+			containerElement.style.pointerEvents = "none";
+
+			const shadow = containerElement.attachShadow({ mode: "open" });
+			const style = document.createElement("style");
+			style.textContent = `
+:host {
+	all: initial;
+	position: fixed;
+	left: 0;
+	top: 0;
+	z-index: ${DRAFT_OVERLAY_Z_INDEX};
+	pointer-events: none;
+}
+
+[data-ghost-panel] {
+	all: initial;
+	display: block;
+	box-sizing: border-box;
+	max-width: min(560px, calc(100vw - 24px));
+	border-radius: 10px;
+	border: 1px solid rgba(148, 163, 184, 0.32);
+	background: rgba(15, 23, 42, 0.97);
+	color: rgb(226, 232, 240);
+	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.32);
+	padding: 12px 14px;
+	font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 13px;
+	line-height: 1.5;
+	font-style: italic;
+	white-space: pre-wrap;
+	pointer-events: none;
+	user-select: none;
+}
+
+[data-ghost-status] {
+	display: block;
+	font-size: 11px;
+	font-style: normal;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	margin-bottom: 6px;
+	color: rgb(165, 180, 252);
+}
+
+[data-ghost-body] {
+	display: block;
+	white-space: pre-wrap;
+	font-style: italic;
+	color: rgb(203, 213, 225);
+}
+`;
+
+			const panelElement = document.createElement("div");
+			panelElement.dataset.ghostPanel = "true";
+
+			const statusElement = document.createElement("div");
+			statusElement.dataset.ghostStatus = "true";
+			statusElement.textContent = "Compiling...";
+
+			const bodyElement = document.createElement("div");
+			bodyElement.dataset.ghostBody = "true";
+
+			panelElement.append(statusElement, bodyElement);
+			shadow.append(style, panelElement);
+			getOverlayContainer().appendChild(containerElement);
+
+			state.ghostPanelElement = containerElement;
+			state.ghostPanelStatusElement = statusElement;
+			state.ghostPanelBodyElement = bodyElement;
+
+			const layoutListener: EventListener = () => positionGhostPanel(state);
+			window.addEventListener("scroll", layoutListener, true);
+			window.addEventListener("resize", layoutListener);
+			state.ghostPanelLayoutListener = layoutListener;
+
+			positionGhostPanel(state);
+		};
+
+		const positionGhostPanel = (state: ActiveInputState): void => {
+			const panel = state.ghostPanelElement;
+			if (!panel) {
+				return;
+			}
+
+			const rect = state.element.getBoundingClientRect();
+			const viewportPadding = 12;
+			const top = Math.min(window.innerHeight - viewportPadding - 80, rect.bottom + 8);
+			const left = Math.max(viewportPadding, rect.left);
+			panel.style.left = `${left}px`;
+			panel.style.top = `${Math.max(viewportPadding, top)}px`;
+		};
+
+		const updateGhostPanelStatus = (state: ActiveInputState, text: string): void => {
+			if (state.ghostPanelStatusElement) {
+				state.ghostPanelStatusElement.textContent = text;
+			}
+		};
+
+		const removeGhostPanel = (state: ActiveInputState): void => {
+			if (state.ghostPanelLayoutListener) {
+				window.removeEventListener("scroll", state.ghostPanelLayoutListener, true);
+				window.removeEventListener("resize", state.ghostPanelLayoutListener);
+				state.ghostPanelLayoutListener = undefined;
+			}
+
+			if (state.ghostPanelElement) {
+				state.ghostPanelElement.remove();
+			}
+
+			state.ghostPanelElement = undefined;
+			state.ghostPanelBodyElement = undefined;
+			state.ghostPanelStatusElement = undefined;
+		};
+
+		const handleBindStreamToken = (state: ActiveInputState, token: string): void => {
+			state.pendingGhostText += token;
+			ensureGhostPanel(state);
+			if (state.ghostPanelBodyElement) {
+				state.ghostPanelBodyElement.textContent = state.pendingGhostText;
+			}
+		};
+
+		const handleBindStreamDone = (state: ActiveInputState): void => {
+			state.ghostStreamComplete = true;
+			updateGhostPanelStatus(state, "Press Enter to commit");
+		};
+
+		const handleBindStreamError = (state: ActiveInputState, message: string): void => {
+			state.ghostStreamComplete = false;
+			state.activeBindRequestId = undefined;
+			ensureGhostPanel(state);
+			updateGhostPanelStatus(state, "Bind failed");
+			if (state.ghostPanelBodyElement) {
+				state.ghostPanelBodyElement.textContent = message;
+			}
 		};
 
 		const clearActiveInputWork = (state: ActiveInputState | undefined): void => {
@@ -1219,12 +1498,240 @@ export default defineContentScript({
 			clearDraftHoverPreview();
 		};
 
-		const handleSourceKeyDownEvent = (event: Event): void => {
-			if (!(event instanceof KeyboardEvent) || event.key !== "Escape") {
+		const acceptNextSegment = (state: ActiveInputState): boolean => {
+			if (state.draftSegments.length === 0) {
+				return false;
+			}
+
+			const nextIndex = findNextUnacceptedIndex(state, state.focusedSegmentIndex);
+			if (nextIndex === undefined) {
+				return false;
+			}
+
+			state.acceptedSegmentIndices.add(nextIndex);
+			state.acceptanceOrder.push(nextIndex);
+			state.focusedSegmentIndex = findNextUnacceptedIndex(state, nextIndex + 1) ?? nextIndex;
+			restampAcceptedSegmentVisuals(state);
+			return true;
+		};
+
+		const findNextUnacceptedIndex = (state: ActiveInputState, fromIndex: number | undefined): number | undefined => {
+			const start = typeof fromIndex === "number" && fromIndex >= 0 ? fromIndex : 0;
+			for (let index = start; index < state.draftSegments.length; index += 1) {
+				if (!state.acceptedSegmentIndices.has(index)) {
+					return index;
+				}
+			}
+			for (let index = 0; index < start; index += 1) {
+				if (!state.acceptedSegmentIndices.has(index)) {
+					return index;
+				}
+			}
+			return undefined;
+		};
+
+		const deacceptLastSegment = (state: ActiveInputState): boolean => {
+			const lastAccepted = state.acceptanceOrder.pop();
+			if (lastAccepted === undefined) {
+				return false;
+			}
+
+			state.acceptedSegmentIndices.delete(lastAccepted);
+			state.focusedSegmentIndex = lastAccepted;
+			if (state.acceptedSegmentIndices.size === 0) {
+				state.hasStaleAccepted = false;
+			}
+			restampAcceptedSegmentVisuals(state);
+			return true;
+		};
+
+		const isBindGateOpen = (state: ActiveInputState): boolean => {
+			return state.acceptedSegmentIndices.size > 0 && !state.hasStaleAccepted;
+		};
+
+		const collectAcceptedBindSections = (state: ActiveInputState): Array<{
+			canonical_order: number;
+			goal_type: GoalType;
+			expansion: string;
+		}> => {
+			const sections: Array<{ canonical_order: number; goal_type: GoalType; expansion: string }> = [];
+			for (const index of state.acceptedSegmentIndices) {
+				const segment = state.draftSegments[index];
+				if (!segment) {
+					continue;
+				}
+
+				sections.push({
+					canonical_order: CANONICAL_ORDER_BY_GOAL_TYPE[segment.goalType] + 1,
+					goal_type: segment.goalType,
+					expansion: segment.text,
+				});
+			}
+
+			return sortByCanonicalOrder(sections);
+		};
+
+		const dispatchBindRequest = (state: ActiveInputState): void => {
+			if (!isBindGateOpen(state)) {
+				console.warn("[content] bind blocked", {
+					accepted: state.acceptedSegmentIndices.size,
+					hasStaleAccepted: state.hasStaleAccepted,
+				});
 				return;
 			}
 
-			clearDraftHoverPreview();
+			const sections = collectAcceptedBindSections(state);
+			if (sections.length === 0) {
+				return;
+			}
+
+			void (async () => {
+				const { mode, jwt } = await resolveBridgeContext();
+				const requestId = crypto.randomUUID();
+				state.activeBindRequestId = requestId;
+				state.pendingGhostText = "";
+				state.ghostStreamComplete = false;
+				ensureGhostPanel(state);
+				updateGhostPanelStatus(state, "Compiling...");
+				if (state.ghostPanelBodyElement) {
+					state.ghostPanelBodyElement.textContent = "";
+				}
+
+				bridgePort.postMessage({
+					verb: "BIND",
+					jwt,
+					requestId,
+					payload: {
+						sections,
+						mode,
+					},
+				});
+			})().catch((error) => {
+				console.warn("Failed to dispatch BIND request", error);
+			});
+		};
+
+		const cancelActiveBindStream = (state: ActiveInputState): boolean => {
+			const requestId = state.activeBindRequestId;
+			if (!requestId) {
+				return false;
+			}
+
+			try {
+				bridgePort.postMessage({
+					verb: "CANCEL",
+					jwt: BRIDGE_FALLBACK_JWT,
+					requestId,
+				});
+			} catch (error) {
+				console.warn("Failed to cancel bind stream", error);
+			}
+
+			state.activeBindRequestId = undefined;
+			state.pendingGhostText = "";
+			state.ghostStreamComplete = false;
+			removeGhostPanel(state);
+			return true;
+		};
+
+		const commitGhostTextToInput = (state: ActiveInputState): boolean => {
+			if (!state.ghostStreamComplete || state.pendingGhostText.length === 0) {
+				return false;
+			}
+
+			const element = state.element;
+			const text = state.pendingGhostText;
+
+			if (isValidTextarea(element)) {
+				const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+				if (nativeSetter) {
+					nativeSetter.call(element, text);
+				} else {
+					element.value = text;
+				}
+				element.dispatchEvent(new Event("input", { bubbles: true }));
+				element.dispatchEvent(new Event("change", { bubbles: true }));
+				try {
+					element.setSelectionRange(text.length, text.length);
+				} catch {
+					// Some host pages may guard setSelectionRange — safe to ignore.
+				}
+			} else {
+				element.textContent = text;
+				element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+			}
+
+			resetActiveInputAfterCommit(state);
+			return true;
+		};
+
+		const resetActiveInputAfterCommit = (state: ActiveInputState): void => {
+			removeGhostPanel(state);
+			state.pendingGhostText = "";
+			state.ghostStreamComplete = false;
+			state.activeBindRequestId = undefined;
+			state.acceptedSegmentIndices = new Set<number>();
+			state.acceptanceOrder = [];
+			state.focusedSegmentIndex = undefined;
+			state.hasStaleAccepted = false;
+			clearActiveInputWork(state);
+			clearDraftRendering(state);
+		};
+
+		const handleSourceKeyDownEvent = (event: Event): void => {
+			if (!(event instanceof KeyboardEvent)) {
+				return;
+			}
+
+			if (event.isComposing) {
+				return;
+			}
+
+			const state = activeInputState;
+			const isOwnedState = state !== undefined && state.element === event.currentTarget;
+
+			if (event.key === "Escape") {
+				if (isOwnedState && state) {
+					if (state.activeBindRequestId) {
+						event.preventDefault();
+						event.stopPropagation();
+						cancelActiveBindStream(state);
+						return;
+					}
+				}
+				clearDraftHoverPreview();
+				return;
+			}
+
+			if (!isOwnedState || !state) {
+				return;
+			}
+
+			if (event.key === "Tab") {
+				event.preventDefault();
+				event.stopPropagation();
+
+				if (event.shiftKey) {
+					deacceptLastSegment(state);
+				} else {
+					acceptNextSegment(state);
+				}
+				return;
+			}
+
+			if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+				event.preventDefault();
+				event.stopPropagation();
+				dispatchBindRequest(state);
+				return;
+			}
+
+			if (event.key === "Enter" && state.ghostStreamComplete && state.pendingGhostText.length > 0) {
+				event.preventDefault();
+				event.stopPropagation();
+				commitGhostTextToInput(state);
+				return;
+			}
 		};
 
 		const scheduleDebouncedExtraction = (element: HTMLTextAreaElement | HTMLElement): void => {
@@ -1239,6 +1746,10 @@ export default defineContentScript({
 				previousState.draftIsStale = true;
 				if (previousState.draftOverlayElement) {
 					applyDraftOverlayFreshness(previousState.draftOverlayElement, true);
+				}
+				if (previousState.acceptedSegmentIndices.size > 0) {
+					previousState.hasStaleAccepted = true;
+					restampAcceptedSegmentVisuals(previousState);
 				}
 				setDraftHoverPreviewStale(element);
 			}
@@ -1259,6 +1770,17 @@ export default defineContentScript({
 					draftRenderMode: previousState.draftRenderMode,
 					draftText: previousState.draftText,
 					draftSegments: previousState.draftSegments,
+					acceptedSegmentIndices: previousState.acceptedSegmentIndices,
+					acceptanceOrder: previousState.acceptanceOrder,
+					focusedSegmentIndex: previousState.focusedSegmentIndex,
+					hasStaleAccepted: previousState.hasStaleAccepted,
+					activeBindRequestId: previousState.activeBindRequestId,
+					ghostPanelElement: previousState.ghostPanelElement,
+					ghostPanelBodyElement: previousState.ghostPanelBodyElement,
+					ghostPanelStatusElement: previousState.ghostPanelStatusElement,
+					ghostPanelLayoutListener: previousState.ghostPanelLayoutListener,
+					pendingGhostText: previousState.pendingGhostText,
+					ghostStreamComplete: previousState.ghostStreamComplete,
 				}
 				: {
 					element,
@@ -1274,6 +1796,17 @@ export default defineContentScript({
 					draftRenderMode: undefined,
 					draftText: "",
 					draftSegments: [],
+					acceptedSegmentIndices: new Set<number>(),
+					acceptanceOrder: [],
+					focusedSegmentIndex: undefined,
+					hasStaleAccepted: false,
+					activeBindRequestId: undefined,
+					ghostPanelElement: undefined,
+					ghostPanelBodyElement: undefined,
+					ghostPanelStatusElement: undefined,
+					ghostPanelLayoutListener: undefined,
+					pendingGhostText: "",
+					ghostStreamComplete: false,
 				};
 
 			ensureSourceScrollListenerInstalled(nextState);
@@ -1296,6 +1829,10 @@ export default defineContentScript({
 					nextState.debounceTimerId = undefined;
 					nextState.abortController = undefined;
 					nextState.status = "SEGMENTING";
+					nextState.acceptedSegmentIndices = new Set<number>();
+					nextState.acceptanceOrder = [];
+					nextState.focusedSegmentIndex = draftSegments.length > 0 ? 0 : undefined;
+					nextState.hasStaleAccepted = false;
 					activeInputState = nextState;
 
 					bridgePort.postMessage(bridgeMessage);
@@ -1434,8 +1971,40 @@ export default defineContentScript({
 		scanDocumentForInputs();
 		observeForInputDiscovery();
 
-		bridgePort.onMessage.addListener((message) => {
+		bridgePort.onMessage.addListener((message: unknown) => {
 			console.debug("PromptCompiler bridge message", message);
+
+			if (typeof message !== "object" || message === null) {
+				return;
+			}
+
+			const record = message as Record<string, unknown>;
+			const type = typeof record.type === "string" ? record.type : "";
+			const requestId = typeof record.requestId === "string" ? record.requestId : "";
+			if (type.length === 0 || requestId.length === 0) {
+				return;
+			}
+
+			const state = activeInputState;
+			if (!state || state.activeBindRequestId !== requestId) {
+				return;
+			}
+
+			if (type === "token" && typeof record.data === "string") {
+				handleBindStreamToken(state, record.data);
+				return;
+			}
+
+			if (type === "done") {
+				handleBindStreamDone(state);
+				return;
+			}
+
+			if (type === "error") {
+				const errorMessage = typeof record.message === "string" ? record.message : "Bind stream failed";
+				handleBindStreamError(state, errorMessage);
+				return;
+			}
 		});
 
 		bridgePort.onDisconnect.addListener(() => {

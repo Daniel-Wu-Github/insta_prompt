@@ -2537,3 +2537,1166 @@ Use this section to log your own observations while running the guide:
 - Sunny path result:
 - Rainy path result:
 - Bugs found:
+
+## Step 9 Manual Testing Guide (Underline + Preview Rendering Layer)
+
+Use this guide to validate Step 9 overlay geometry, confidence-aware underline styling, and hover preview behavior with the extension loaded against real pages. It aligns with the Step 9 taskboard in [v1_step_9.md](v1_step_by_step/v1_step_9.md) and the UX Flow doc.
+
+Current main-branch note: geometry sync (scroll alignment, resize cleanup) and goal_type/confidence underline styling are active. The known open issue is long-line wrapping leaving stale underline spans — confirm this is resolved before marking Step 9 complete. Acceptance, dirty-state, bind, and commit remain deferred to Steps 10 and 11.
+
+### What This Covers
+
+1. Extension dev bundle load and Shadow DOM isolation confirmation.
+2. Mirror overlay geometry sync for textarea and contenteditable across scroll, resize, and long-line wrapping.
+3. goal_type color palette and confidence-level underline style (solid vs dashed) correctness.
+4. Hover preview popover lifecycle: loading, ready, stale, and dismissal states.
+5. Non-destructive render invariant: host text nodes are never mutated.
+6. Step 9 visual behavior on high-rerender sites (Notion, Linear pattern).
+7. Optional rainy day drills for geometry edge cases and host CSS bleed.
+
+### Terminal Setup
+
+1. Terminal A: `cd extension && npm run dev` — keep this running throughout.
+2. Terminal B: `cd backend && bun run dev` — backend must be live for segment and enhance calls to resolve underline state.
+
+### Test 9.1 - Preflight
+
+How to run: confirm the dev bundle is built and the backend is live before loading the extension.
+
+```bash
+# Terminal A
+cd extension && npm run dev
+
+# Terminal B — separate terminal
+cd backend && bun run dev
+```
+
+Sunny day expected:
+
+1. WXT dev build completes with no TypeScript errors.
+2. Backend starts on its default port and logs its ready line.
+3. No port conflicts.
+
+Rainy day expected:
+
+1. WXT build TypeScript error means a content script regression — fix before proceeding.
+2. Backend port conflict: kill the stale process and rerun.
+
+### Test 9.2 - Load the Extension Dev Bundle
+
+How to run: load the unpacked extension from the WXT output directory in Chrome.
+
+1. Open Chrome on the host system.
+2. Navigate to `chrome://extensions`.
+3. Enable Developer mode.
+4. Click Load unpacked.
+5. Select `extension/.output/chrome-mv3-dev`.
+6. Verify the PromptCompiler extension appears with no error badge.
+7. Open DevTools on a test page and confirm no uncaught errors in the console on load.
+
+Sunny day expected:
+
+1. Extension loads with no error badge.
+2. No uncaught errors in the page console on extension load.
+3. No `chrome.runtime.lastError` entries in the background service worker console.
+
+Rainy day expected:
+
+1. Error badge on the extension icon means a background SW crash — open the SW DevTools via "Inspect views" and read the stack.
+2. Uncaught content script error on load means an instrumentation regression — read the page console.
+
+### Test 9.3 - Verify Source-Level Invariants Manually
+
+How to run: open a page with a textarea (e.g., `https://example.com`) and paste the inspector fixture in the page console.
+
+```javascript
+// Inspect the overlay and shadow root created for a textarea fixture
+const ta = document.createElement("textarea");
+ta.id = "step9-invariants";
+ta.rows = 4;
+ta.cols = 50;
+ta.value = "Build a dark mode toggle using React and TypeScript. No external libraries.";
+document.body.appendChild(ta);
+ta.focus();
+ta.dispatchEvent(new Event("input", { bubbles: true }));
+
+setTimeout(() => {
+  // 1. Host text node must not be mutated
+  console.log("host value unchanged", ta.value === "Build a dark mode toggle using React and TypeScript. No external libraries.");
+
+  // 2. No span wrappers injected into the textarea
+  console.log("no span children in host", ta.querySelectorAll("span").length === 0);
+
+  // 3. Overlay or shadow root should exist as a sibling, not inside the host
+  const siblings = [...document.querySelectorAll("[data-insta-overlay], [data-insta-shadow]")];
+  console.log("overlay exists outside host", siblings.length > 0);
+
+  // 4. Shadow DOM must be closed to page scripts if present
+  const shadowHost = document.querySelector("[data-insta-shadow-host]");
+  if (shadowHost) {
+    console.log("shadow root mode", shadowHost.shadowRoot ? "open (check isolation)" : "closed or cross-origin");
+  }
+}, 800);
+```
+
+Sunny day expected:
+
+1. `host value unchanged` logs `true`.
+2. `no span children in host` logs `true`.
+3. `overlay exists outside host` logs `true`.
+4. Shadow root is present and isolated from the host page's CSS.
+
+Rainy day expected:
+
+1. `host value unchanged` logs `false` means the content script is mutating the textarea value during instrumentation — critical regression.
+2. Span children found inside the host means underline DOM was injected into the active input tree — critical DOM-safety regression.
+3. No overlay found means underline rendering is not activating — check the debounce timer and segment response path.
+
+### Test 9.4 - Geometry Sync: Scroll, Resize, and Long-Line Wrapping
+
+How to run: use a textarea with forced multi-line content and stress geometry sync paths.
+
+1. On `https://example.com`, open the console and paste:
+
+```javascript
+const ta = document.createElement("textarea");
+ta.id = "step9-geometry";
+ta.style.width = "300px";
+ta.style.height = "80px";
+ta.style.overflow = "auto";
+ta.value = "Build a dark mode toggle using React and TypeScript. No external libraries. Return a JSON object with the component code as a string field named source.";
+document.body.appendChild(ta);
+ta.focus();
+ta.dispatchEvent(new Event("input", { bubbles: true }));
+```
+
+2. Wait ~1 second for underlines to render.
+3. **Scroll test:** Click inside the textarea and scroll it down. The underlines must scroll in sync — no floating orphan lines above the visible text.
+4. **Resize test:** Drag the textarea resize handle to make it taller, then shorter. After each resize, all underline spans must snap to the correct new geometry — no ghost lines outside the textarea boundary.
+5. **Long-line test:** Type a new long sentence that wraps to a third line. Confirm the underline for that clause follows the wrap — it must not paint as a single unbroken horizontal line across the full width.
+6. **Shrink-to-empty test:** Clear the textarea value. All underline overlays must be removed with no orphans remaining.
+
+Sunny day expected:
+
+1. Underlines scroll perfectly in sync with textarea text — no detachment on scroll.
+2. Resize event triggers geometry recalculation — no orphan spans outside the textarea boundary after resize.
+3. Long-line clause underlines follow the text wrap geometry correctly, not as a single flat line.
+4. Clearing the textarea leaves zero underline nodes in the DOM.
+
+Rainy day expected:
+
+1. Underlines detach on scroll: `scrollTop` sync is not wired or is being applied to the wrong element — inspect the scroll listener in `index.ts`.
+2. Ghost lines after resize: `ResizeObserver` callback is not fully clearing stale spans before repainting — check the stale-node cleanup path.
+3. Long-line underline renders as a flat horizontal bar: the span geometry calculation is using the clause bounding rect width instead of following line-break geometry — this is the known open issue; confirm it is resolved.
+4. Orphan overlays after clear: the input observer is not calling the cleanup path when `value` becomes empty.
+
+### Test 9.5 - goal_type Color Palette and Confidence Underline Style
+
+How to run: trigger a real segment call and inspect the rendered underlines.
+
+1. Open a page where the extension is active and has a logged-in user token (or use a dev bypass if auth is not yet wired end-to-end).
+2. In a textarea type: `Build a dark mode toggle using React and TypeScript. No external libraries. Return a JSON object.`
+3. Wait for the segment call to resolve (~600ms idle after last keystroke).
+4. Inspect the overlay DOM in DevTools and confirm each underline span has:
+   - A `data-goal-type` attribute matching the expected classification (action / tech_stack / constraint / output_format / context / edge_case).
+   - A CSS class or inline style that maps to the correct palette color.
+   - A solid border-bottom for spans where the segment confidence is ≥ 0.85.
+   - A dashed border-bottom for spans where the segment confidence is < 0.85.
+
+Sunny day expected:
+
+1. Each clause span has a `data-goal-type` attribute with a valid classification value.
+2. Color palette matches the table in [UX_FLOW.md](../../../UX_FLOW.md): purple for action, teal for tech_stack, coral for constraint, blue for output_format, amber for context, gray for edge_case.
+3. High-confidence clauses render with a solid underline.
+4. Low-confidence clauses render with a dashed underline.
+5. Palette is stable across re-renders — the same clause does not flicker between colors.
+
+Rainy day expected:
+
+1. All underlines are the same color: goal_type is not reaching the render function — check that the SEGMENT response is being forwarded from the SW to the content script correctly.
+2. Dashed/solid distinction is absent: confidence threshold logic is missing or the threshold constant is wrong.
+3. Color flickers on rerender: the render function is not using stable keys — check that clause identity is pinned to the segment result, not recreated on every input event.
+
+### Test 9.6 - Hover Preview Popover Lifecycle
+
+How to run: after underlines are rendered (see Test 9.5), hover over each underlined clause.
+
+1. Hover the mouse over a high-confidence (solid) underlined clause.
+   - If the enhancement for that clause has not yet resolved, the popover must show a loading state (spinner or "Expanding…" text).
+   - Once the enhancement resolves, the popover must update to show the expanded preview text.
+2. Move the mouse to a different underlined clause. The first popover must dismiss; the new one must appear.
+3. Without moving the mouse, scroll the page. The popover must dismiss on scroll.
+4. Hover a clause and press Escape. The popover must dismiss.
+5. Hover a clause and click somewhere outside it. The popover must dismiss.
+6. Check that the popover does not clip to the page's overflow boundary — it must render above or below the underline as fixed-position or with correct viewport coordinates.
+7. Check that the popover CSS is isolated from the host page — font, color, and z-index must not be overridden by the page stylesheet.
+8. Hover the mouse over a low-confidence (dashed) underlined clause and confirm the popover shows the stale or low-confidence treatment (e.g., muted text, a note about uncertainty).
+
+Sunny day expected:
+
+1. Loading state appears immediately on hover if enhancement is pending.
+2. Ready state (full preview text) appears after enhancement resolves, without requiring a second hover.
+3. Popover dismisses correctly on: mouse leave, scroll, Escape, click-outside.
+4. Popover is rendered via Shadow DOM or `all: initial` CSS reset — host page styles do not bleed in.
+5. Popover is positioned using `getBoundingClientRect()` coordinates — it does not clip to the page's overflow or stacking context.
+6. Low-confidence clauses show a visually distinct state in the popover (not identical to a high-confidence ready state).
+
+Rainy day expected:
+
+1. Popover appears but disappears immediately: the mouse-leave event is firing on the overlay span before the popover has time to render — add a small debounce or pointer-events guard.
+2. Popover does not dismiss on scroll: the scroll listener for dismissal is not registered or was detached.
+3. Host page CSS bleeds into the popover (wrong font, color, or z-index): the shadow DOM or CSS reset is incomplete.
+4. Popover is clipped by the page's overflow: the popover is not using `position: fixed` or is not mounted to `document.body` — fix the mount point.
+
+### Test 9.7 (Optional) - Rainy Day Geometry and CSS Bleed Drills
+
+How to run: stress-test geometry and isolation on a rerender-heavy page.
+
+1. Open `https://linear.app` or `https://notion.so` (or equivalent SPA with frequent DOM rerenders).
+2. Focus a text input that the extension instruments.
+3. Type a multi-clause prompt and wait for underlines to render.
+4. Navigate away within the SPA (without a full page reload) and come back to the same input.
+5. Confirm underlines reattach correctly with no orphan overlays from the previous navigation state.
+6. Open the browser's computed styles panel and inspect the popover element — confirm no properties are inherited from the page root.
+7. Resize the browser window while the textarea is focused and underlines are visible. Confirm geometry recalculates correctly.
+
+Rainy drill expected:
+
+1. Orphan overlays after SPA navigation means the `MutationObserver` teardown path for removed inputs is not executing.
+2. CSS inheritance in the popover means the shadow DOM attachment point or the `all: initial` reset is incomplete.
+3. Geometry breaks on window resize means the `ResizeObserver` is not watching the overlay container in addition to the host input.
+
+## Step 9 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date:
+- Sunny path result:
+- Rainy path result:
+- Bugs found:
+
+## Step 10 Manual Testing Guide (Section Acceptance and Dirty-State Graph)
+
+Use this guide to validate Step 10 Tab/Shift+Tab acceptance flow, dirty-state stale propagation, and the bind-gate invariant. It aligns with the Step 10 taskboard in [v1_step_10.md](v1_step_by_step/v1_step_10.md) and the UX Flow doc. This guide assumes Step 9 geometry and hover rendering are verified and stable.
+
+Current main-branch note: acceptance queue, dirty-state graph, and bind gate are implemented at this step. Bind streaming and commit remain deferred to Step 11. No text replacement in the host input occurs during Step 10.
+
+### What This Covers
+
+1. Tab accepts the oldest unaccepted section — visual-only grey-out, no DOM rewrite.
+2. Shift+Tab skips or deselects the currently focused section.
+3. Upstream edit after acceptance marks downstream sections as stale.
+4. The bind action is gated: Cmd+Enter must not fire while any accepted section is stale.
+5. Section accept/skip state is visually legible: accepted (grey), skipped, stale (muted + warning), ready.
+6. State is consistent across rapid Tab presses and after content script reattach.
+
+### Terminal Setup
+
+1. Terminal A: `cd extension && npm run dev` — keep running.
+2. Terminal B: `cd backend && bun run dev` — segment and enhance must resolve so sections have acceptance-eligible state.
+
+### Test 10.1 - Preflight
+
+How to run: confirm Step 9 test matrix passed and no regressions exist before starting Step 10.
+
+1. Verify the Step 9 geometry sync and hover tests pass (run Test 9.4 and 9.6 quickly if uncertain).
+2. Confirm the extension dev bundle has been rebuilt after any Step 10 implementation changes.
+3. Confirm backend is running and `/segment` returns valid classifications.
+
+Sunny day expected:
+
+1. No orphan overlays from Step 9 on a fresh test page.
+2. Underlines render and hover previews appear correctly.
+3. Backend responds to `/segment` and `/enhance` within expected latency.
+
+Rainy day expected:
+
+1. If Step 9 geometry is broken, fix it before adding Step 10 acceptance state — layering acceptance on top of broken geometry creates spaghetti.
+
+### Test 10.2 - Load Extension and Prepare Fixture
+
+How to run: create a test fixture in the page console with a multi-clause prompt and wait for underlines.
+
+```javascript
+const ta = document.createElement("textarea");
+ta.id = "step10-fixture";
+ta.style.width = "400px";
+ta.style.height = "120px";
+ta.value = "Build a dark mode toggle using React and TypeScript. No external libraries. Return a JSON object with a source field.";
+document.body.appendChild(ta);
+ta.focus();
+ta.dispatchEvent(new Event("input", { bubbles: true }));
+console.log("fixture ready — wait ~1.5s for segment + enhance to resolve, then start Tab acceptance");
+```
+
+Wait approximately 1.5 seconds after the last input event before starting Tab tests.
+
+### Test 10.3 - Verify Source-Level Invariants
+
+How to run: after underlines are rendered, inspect the section state in the console before touching Tab.
+
+```javascript
+// Query the acceptance state exposed by the content script (adjust selector to match implementation)
+const spans = document.querySelectorAll("[data-insta-section]");
+console.log("total sections detected", spans.length);
+spans.forEach((s, i) => {
+  console.log(`section ${i}`, {
+    goalType: s.getAttribute("data-goal-type"),
+    state: s.getAttribute("data-section-state"),
+    confidence: s.getAttribute("data-confidence"),
+  });
+});
+```
+
+Sunny day expected:
+
+1. `total sections detected` matches the number of distinct clauses segmented.
+2. All sections start in `ready` or `loading` state — none start as `accepted` or `stale`.
+3. Each section has a `data-goal-type` and `data-confidence` attribute.
+
+Rainy day expected:
+
+1. Zero sections detected: the data attribute is not being set — check that the rendering layer from Step 9 is writing the section attributes.
+2. Sections already accepted before any Tab press: state initialization is wrong — acceptance queue must start empty.
+
+### Test 10.4 - Tab Accept Flow (Sunny Path)
+
+How to run: with the fixture from Test 10.2 loaded and underlines rendered, press Tab repeatedly.
+
+1. Press Tab once while the textarea has focus.
+   - The oldest unaccepted clause must become visually accepted (grey-out, opacity reduction, or similar muted treatment).
+   - The next unaccepted clause must become the focused candidate.
+   - The host textarea text must NOT change — the value must remain byte-for-byte identical to what was typed.
+2. Press Tab again for the next clause. Repeat until all clauses are accepted.
+3. After all clauses are accepted, pressing Tab must have no effect (or cycle to a no-op state).
+
+```javascript
+// After accepting all sections, confirm host value is unchanged
+const ta = document.getElementById("step10-fixture");
+const expected = "Build a dark mode toggle using React and TypeScript. No external libraries. Return a JSON object with a source field.";
+console.log("host value unchanged after Tab accepts", ta.value === expected);
+```
+
+Sunny day expected:
+
+1. Each Tab press accepts exactly one clause in oldest-first order.
+2. Accepted clauses render with a distinct visual state (grey or muted).
+3. Focus highlight moves to the next unaccepted clause automatically.
+4. Host textarea value is byte-for-byte identical before and after all Tab presses.
+
+Rainy day expected:
+
+1. Tab changes the textarea value: the content script is calling `ta.value = ...` during acceptance — critical DOM regression; acceptance must be visual-only until Step 11 commit.
+2. Wrong clause accepts first: the queue ordering is not anchored to segment order — fix the queue sort.
+3. Tab skips a clause: the oldest-unaccepted lookup is off by one.
+4. Focus highlight disappears after first Tab: focus tracking is not advancing to the next candidate.
+
+### Test 10.5 - Shift+Tab Skip and Re-accept
+
+How to run: after accepting one clause, use Shift+Tab to skip it and then re-accept.
+
+1. Press Tab to accept the first clause (it should grey out).
+2. Press Shift+Tab. The first clause must revert to its pre-accept visual state (not grey, not stale — back to ready).
+3. Press Tab again. The first clause must accept again.
+4. Press Tab twice more to accept the remaining clauses.
+5. Confirm all three clauses are in the accepted state.
+
+Sunny day expected:
+
+1. Shift+Tab reverts the most-recently accepted clause to ready state.
+2. Tab after Shift+Tab re-accepts the same clause correctly.
+3. The skip/re-accept cycle can repeat without accumulating stale state or orphaned UI elements.
+
+Rainy day expected:
+
+1. Shift+Tab deselects the wrong clause: the undo pointer is not tracking the most-recently accepted item.
+2. Shift+Tab on the first clause (nothing to undo) throws an error or crashes: add a guard for empty undo stack.
+3. After Shift+Tab and re-Tab, the clause is double-counted in the acceptance queue.
+
+### Test 10.6 - Upstream Edit Triggers Stale Propagation
+
+How to run: accept the first clause, then edit the textarea before the second clause is accepted.
+
+1. Press Tab once to accept clause 1 (grey out).
+2. Click the textarea and prepend "Actually, " to the text (simulating an upstream edit to clause 1's content area).
+3. Dispatch an input event:
+
+```javascript
+const ta = document.getElementById("step10-fixture");
+ta.value = "Actually, " + ta.value;
+ta.dispatchEvent(new Event("input", { bubbles: true }));
+```
+
+4. Observe: clause 1's acceptance state must turn stale (distinct visual warning — not the same as the normal accepted grey).
+5. Any clauses downstream that were also accepted must also turn stale.
+6. The Cmd+Enter bind action must now be blocked (either the keyboard shortcut does nothing or a visual indicator shows the gate is closed).
+
+Sunny day expected:
+
+1. Upstream edit immediately marks the affected accepted clause as stale.
+2. Downstream accepted clauses are also marked stale.
+3. Cmd+Enter does nothing while stale accepted sections exist.
+4. Stale sections have a visually distinct treatment (e.g., warning orange border, strikethrough, or explicit stale label).
+
+Rainy day expected:
+
+1. Stale propagation does not fire: the input event listener for dirty-state detection is not connected — check the event wiring.
+2. Only the edited clause turns stale but downstream accepted clauses do not: the dependency graph is not traversing downstream links.
+3. Cmd+Enter still fires while stale accepted sections exist: the bind gate invariant is not enforced.
+
+### Test 10.7 - Bind Gate: Cmd+Enter Blocked on Stale State
+
+How to run: confirm the bind shortcut is properly gated before Step 11 is implemented.
+
+1. Accept all clauses (Tab × N).
+2. Edit the textarea to make one clause stale (as in Test 10.6).
+3. Press Cmd+Enter.
+4. Confirm: no `/bind` request is made (check the Network tab), no ghost text appears, no state change occurs.
+5. Re-expand the stale clause (trigger a re-enhance cycle) to restore it to ready state.
+6. Accept it again with Tab.
+7. Press Cmd+Enter again.
+8. In Step 10, this must still be a no-op (bind is Step 11) — but confirm no error is thrown and no unintended state mutation occurs.
+
+Sunny day expected:
+
+1. Cmd+Enter while stale sections exist produces zero network requests and zero console errors.
+2. After re-accepting stale sections, Cmd+Enter produces zero network requests (Step 11 not yet implemented) and no errors.
+3. No ghost text or overlay mutation occurs.
+
+Rainy day expected:
+
+1. A `/bind` network request fires from Step 10: Step 11 behavior has leaked in — scope boundary violation.
+2. Cmd+Enter throws a JavaScript error: the key handler is missing a guard for the not-yet-implemented bind path.
+
+### Test 10.8 (Optional) - Rapid Tab and State Consistency Drill
+
+How to run: stress the acceptance queue with rapid Tab presses.
+
+1. Load the Test 10.2 fixture.
+2. Wait for underlines, then press Tab 10 times rapidly (faster than the UI can redraw).
+3. Observe: the accepted count must match the number of actual clauses — no clause should be double-counted or skipped due to race conditions.
+4. Reload the extension (via `chrome://extensions`) and reload the test page.
+5. Confirm the acceptance state resets cleanly — no orphaned state from before the reload.
+
+Rainy drill expected:
+
+1. Rapid Tab causes an accepted count higher than the clause count: the queue is not guarded against duplicate events — add a processing lock or debounce.
+2. State persists across extension reload: `chrome.storage.session` is not being cleared on SW restart — check the session recovery init path.
+
+## Step 10 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date:
+- Sunny path result:
+- Rainy path result:
+- Bugs found:
+
+## Step 11 Manual Testing Guide (Bind + Commit UX)
+
+Use this guide to validate Step 11 Cmd+Enter bind triggering, SSE ghost text streaming, Enter commit into the host input, and Esc cancel behavior. It aligns with the Step 11 taskboard in [v1_step_11.md](v1_step_by_step/v1_step_11.md) and the UX Flow doc. This guide assumes Step 10 acceptance and dirty-state tests are passing.
+
+Current main-branch note: `/bind` backend route and background SW BIND verb dispatch are active from Steps 6 and 7. Step 11 wires the content script keyboard triggers to the SW bridge, streams the response into ghost text, and commits on Enter. Esc must abort the stream and restore pre-bind state.
+
+### What This Covers
+
+1. Cmd+Enter fires `/bind` only when accepted sections exist and none are stale.
+2. Accepted sections are sent to `/bind` in canonical goal_type order.
+3. Ghost text streams into the textarea or contenteditable as SSE tokens arrive.
+4. Enter commits the ghost text into the host input (textarea value or contenteditable text content).
+5. Esc aborts the stream, clears ghost text, and returns to the pre-bind acceptance state.
+6. Post-commit state reset: overlays, ghost text, and section state all clear.
+7. Error path: backend bind error surfaces a user-visible message without corrupting the host input.
+
+### Terminal Setup
+
+1. Terminal A: `cd extension && npm run dev`.
+2. Terminal B: `cd backend && bun run dev` — `/bind` must be live and authenticated.
+3. Terminal C: tail backend logs for bind request IDs and SSE event tracing: `cd backend && bun run dev 2>&1 | tee /tmp/backend.log`.
+
+### Test 11.1 - Preflight
+
+How to run: confirm Step 10 acceptance tests pass and the backend `/bind` route is healthy.
+
+```bash
+# Terminal C — quick bind smoke probe (replace TOKEN with a valid dev token)
+curl -s -N \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"sections":[{"goal_type":"action","text":"Build a dark mode toggle","expansion":"Build a comprehensive dark mode toggle component"}],"mode":"balanced"}' \
+  http://localhost:PORT/bind
+```
+
+Sunny day expected:
+
+1. The curl returns an SSE stream with `data:` lines containing the assembled prompt tokens.
+2. Stream terminates with a `data: [DONE]` line.
+3. No `401` or `429` errors.
+
+Rainy day expected:
+
+1. `401 Unauthorized`: dev token is expired or missing — re-mint from `/auth/token`.
+2. `422 Unprocessable`: section payload is malformed — check the bind route's input validation schema.
+
+### Test 11.2 - Cmd+Enter Bind Trigger (Sunny Path)
+
+How to run: use the Test 10.2 fixture, accept all clauses, then press Cmd+Enter.
+
+1. Create the textarea fixture and wait for underlines.
+2. Press Tab to accept all clauses.
+3. Confirm no stale sections exist.
+4. Press Cmd+Enter (or the configured bind hotkey).
+5. Check the Network tab: a POST to `/bind` must fire within ~100ms of the keypress.
+6. Confirm the bind request body contains the accepted sections in canonical order (context → tech_stack → constraints → action → output_format → edge_cases).
+7. Confirm the request includes the current mode (efficiency / balanced / detailed) from `chrome.storage.sync`.
+
+Sunny day expected:
+
+1. Network tab shows exactly one POST to `/bind` per Cmd+Enter press.
+2. Request body sections match the canonical order from [CLAUSE_PIPELINE.md](../../../CLAUSE_PIPELINE.md).
+3. Mode field in the request matches what is stored in `chrome.storage.sync`.
+4. No duplicate bind requests fire if Cmd+Enter is pressed rapidly.
+
+Rainy day expected:
+
+1. No network request fires: the Cmd+Enter handler is not wired or the bind gate is blocking incorrectly — check that stale state is clean.
+2. Sections arrive out of canonical order: the bind payload is using segment arrival order instead of the canonical sort — fix the pre-bind sort step.
+3. Duplicate bind requests fire on rapid Cmd+Enter: add a processing lock on the bind trigger.
+
+### Test 11.3 - Ghost Text Streams During Bind
+
+How to run: after pressing Cmd+Enter (Test 11.2), observe the ghost text rendering.
+
+1. After Cmd+Enter fires the bind request, watch the textarea or contenteditable.
+2. Ghost text must appear below or after the original text (visually distinct — not merged into the host input value).
+3. Tokens must stream in progressively as each SSE `data:` line arrives — not all-at-once after stream close.
+4. The original textarea value must remain unchanged during streaming.
+5. Ghost text must be visually distinct from the real input text (e.g., muted color, italic, or separate overlay track).
+
+```javascript
+// During streaming — confirm host value is not modified
+const ta = document.getElementById("step10-fixture");
+const original = "Build a dark mode toggle using React and TypeScript. No external libraries. Return a JSON object with a source field.";
+console.log("host value unchanged during stream", ta.value === original);
+```
+
+Sunny day expected:
+
+1. Ghost text appears token by token as SSE data arrives.
+2. The host textarea value is byte-for-byte identical to the original during streaming.
+3. Ghost text is visually distinct — clearly not part of the user's original input.
+4. Ghost text rendering does not cause the textarea to scroll unexpectedly or steal focus.
+
+Rainy day expected:
+
+1. Ghost text replaces the host value during streaming: `ta.value` is being mutated before Enter commit — Step 11 commit must be gated to the Enter keypress, not triggered by SSE arrival.
+2. Ghost text appears all at once after stream close: the SSE token handler is batching instead of rendering incrementally — check the `onmessage` handler.
+3. No ghost text appears at all: the SW-to-content-script forward path for bind SSE is not implemented or is silently failing.
+
+### Test 11.4 - Enter Commits Ghost Text Into Textarea
+
+How to run: after ghost text has finished streaming, press Enter to commit.
+
+1. After the bind stream completes (ghost text is fully rendered), press Enter.
+2. Confirm the host textarea value is replaced with the ghost text content.
+3. Confirm the ghost text overlay is removed.
+4. Confirm all section overlays (underlines) are removed.
+5. Confirm the section state is reset — no leftover `data-insta-*` attributes.
+6. Confirm the textarea can be typed into normally after commit (no locked state).
+
+```javascript
+// After Enter commit
+const ta = document.getElementById("step10-fixture");
+console.log("textarea value after commit", ta.value);
+console.log("overlay nodes remaining", document.querySelectorAll("[data-insta-overlay]").length);
+console.log("section nodes remaining", document.querySelectorAll("[data-insta-section]").length);
+```
+
+Sunny day expected:
+
+1. `ta.value` contains the assembled prompt from the bind stream, not the original user input.
+2. Zero overlay or section nodes remain in the DOM.
+3. Typing into the textarea after commit works normally — no focus lock, no input handler regression.
+4. A new input event in the now-committed textarea begins the segmentation cycle fresh (new underlines appear after the debounce).
+
+Rainy day expected:
+
+1. `ta.value` is still the original text after Enter: the commit step is not writing the ghost text to the textarea value — check the commit handler.
+2. `ta.value` is partially written: stream content was committed mid-token — ensure commit reads the fully accumulated ghost text buffer, not a snapshot.
+3. Overlay nodes remain after commit: the cleanup path is not firing — check that the commit handler calls the full teardown function.
+4. Typing after commit produces no underlines: the instrumentation was torn down on commit but the `MutationObserver` is not reattaching for the now-new input.
+
+### Test 11.5 - Enter Commits Ghost Text Into contenteditable
+
+How to run: repeat Test 11.4 on a contenteditable fixture.
+
+```javascript
+const editor = document.createElement("div");
+editor.id = "step11-ce";
+editor.setAttribute("contenteditable", "true");
+editor.style.width = "400px";
+editor.style.minHeight = "80px";
+editor.style.border = "1px solid #ccc";
+editor.innerText = "Build a dark mode toggle using React and TypeScript. No external libraries.";
+document.body.appendChild(editor);
+editor.focus();
+editor.dispatchEvent(new Event("input", { bubbles: true }));
+```
+
+After accepting all sections and completing the bind stream, press Enter.
+
+Sunny day expected:
+
+1. The contenteditable's `innerText` (or `textContent`) is replaced with the assembled prompt.
+2. No HTML tags are injected into the contenteditable — the commit must use `textContent` assignment or an equivalent safe text-only path.
+3. All overlays and section state reset correctly.
+4. The contenteditable remains editable after commit.
+
+Rainy day expected:
+
+1. The commit injects HTML into the contenteditable (`innerHTML` assignment): this is an XSS surface — the commit path must use `textContent` only.
+2. The cursor is positioned incorrectly after commit (e.g., at the start instead of the end): set cursor position explicitly with a `Range` after commit.
+3. The contenteditable's `input` event does not fire after the programmatic commit: dispatch a synthetic input event to trigger re-instrumentation.
+
+### Test 11.6 - Esc Cancels Bind Stream
+
+How to run: press Cmd+Enter to start the bind stream, then immediately press Esc.
+
+1. Press Cmd+Enter. The bind request begins streaming.
+2. Within the first second of streaming (before ghost text fully renders), press Esc.
+3. Confirm: the stream is aborted (check the Network tab — the request shows `canceled`).
+4. Confirm: ghost text is cleared immediately.
+5. Confirm: the original textarea value is unchanged.
+6. Confirm: accepted section state is restored (sections are still in their accepted state, ready for a new Cmd+Enter attempt).
+
+Sunny day expected:
+
+1. The network request shows `canceled` in DevTools within ~100ms of Esc.
+2. Ghost text disappears immediately on Esc.
+3. The host textarea value is byte-for-byte identical to the pre-bind value.
+4. Accepted sections are still visually accepted (grey) — user does not need to re-accept.
+5. Pressing Cmd+Enter again after Esc starts a new bind stream successfully.
+
+Rainy day expected:
+
+1. Stream is not aborted: the `AbortController` is not wired to the Esc handler — check the cancel path in the SW BIND handler and the `CANCEL` verb forward.
+2. Ghost text persists after Esc: the ghost text clear function is not called in the Esc handler.
+3. Accepted sections reset to unaccepted after Esc: Esc must not wipe acceptance state — only cancel the in-flight stream.
+4. A second Cmd+Enter after Esc fails: the abort signal was not recreated before the next bind attempt — ensure a fresh `AbortController` is constructed per bind call.
+
+### Test 11.7 (Optional) - Backend Error During Bind Stream
+
+How to run: trigger a bind request with a token that causes a backend error (e.g., a malformed payload or an expired token).
+
+1. Temporarily replace the auth token with an invalid one, or inject a bind request with no sections.
+2. Press Cmd+Enter.
+3. Observe the error path: ghost text must not appear, the original value must be unchanged, and a user-visible error state must surface (console warning at minimum; ideally a brief inline notice).
+
+Rainy drill expected:
+
+1. Backend returns `401` or `422`: the error is surfaced to the user without mutating the host input.
+2. SSE stream closes with an error event: the content script handles the error event gracefully — no uncaught promise rejection.
+3. After the error, pressing Cmd+Enter again with a valid token works correctly — no locked bind state.
+
+## Step 11 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date:
+- Sunny path result:
+- Rainy path result:
+- Bugs found:
+
+## Step 12 Manual Testing Guide (Popup and Account UX)
+
+Use this guide to validate Step 12 popup mode toggle, account tier display, usage indicator, and upgrade CTA behavior. It aligns with the Step 12 taskboard in [v1_step_12.md](v1_step_by_step/v1_step_12.md).
+
+Current main-branch note: mode selection (efficiency / balanced / detailed) must persist in `chrome.storage.sync` and be forwarded in outbound segment, enhance, and bind payloads. Tier and usage data is retrieved from the backend or inferred from cached counters. Upgrade CTA appears when the free-tier daily limit is reached.
+
+### What This Covers
+
+1. Popup renders and mode toggle buttons function.
+2. Mode selection persists in `chrome.storage.sync` across popup open/close cycles.
+3. Selected mode is forwarded correctly in outbound SEGMENT, ENHANCE, and BIND payloads.
+4. Tier label and daily usage indicator display correct values.
+5. Upgrade CTA appears for free-tier users at limit and is hidden for pro users.
+6. Popup does not interfere with content script state on the active tab.
+
+### Terminal Setup
+
+1. Terminal A: `cd extension && npm run dev` — popup is served from the WXT dev bundle.
+2. Terminal B: `cd backend && bun run dev` — tier and usage data retrieved from backend.
+
+### Test 12.1 - Preflight
+
+How to run: confirm the popup loads with no errors.
+
+1. Click the PromptCompiler extension icon in the Chrome toolbar.
+2. The popup must render without a blank screen or console error.
+3. Open the popup's DevTools (right-click inside popup → Inspect) and confirm no uncaught errors.
+
+Sunny day expected:
+
+1. Popup renders the mode toggle and account section on first open.
+2. No console errors in popup DevTools.
+3. Popup shows a loading state while fetching tier/usage data, then resolves to the actual values.
+
+Rainy day expected:
+
+1. Blank popup: the popup entry point is not built or has a runtime error — check the WXT build output.
+2. Popup opens but shows infinite loading: the tier/usage fetch is not resolving — check that the backend is running and the auth token in storage is valid.
+
+### Test 12.2 - Mode Toggle Behavior and Storage Persistence
+
+How to run: click each mode toggle and confirm the selection persists.
+
+1. Open the popup. Note the currently selected mode.
+2. Click Efficiency. Close the popup.
+3. Reopen the popup. Confirm Efficiency is still selected.
+4. Click Detailed. Close the popup.
+5. Reopen the popup. Confirm Detailed is still selected.
+6. Inspect `chrome.storage.sync` from the background SW DevTools:
+
+```javascript
+chrome.storage.sync.get("mode", (data) => console.log("stored mode", data));
+```
+
+Sunny day expected:
+
+1. Mode selection updates `chrome.storage.sync` immediately on click.
+2. Selection persists across popup close/reopen.
+3. `chrome.storage.sync.get("mode")` returns the most recently selected mode string.
+4. No mode-change event is dispatched unless the mode actually changes (no spurious writes).
+
+Rainy day expected:
+
+1. Selection resets on popup reopen: the popup is reading from `chrome.storage.local` instead of `sync`, or is not reading from storage at all on mount.
+2. Mode stored but not forwarded in payloads: inspect an ENHANCE or BIND request in the Network tab — confirm the mode field is present.
+3. Mode flickers on popup open: the storage read is async and the UI is rendering a stale default before the read resolves — add a loading guard.
+
+### Test 12.3 - Mode Forwarded in Outbound Payloads
+
+How to run: select Detailed mode, then trigger a segment + enhance + bind cycle and inspect payloads.
+
+1. In the popup, select Detailed.
+2. On a test page with the fixture from Test 10.2, type a prompt and wait for underlines.
+3. Accept all sections and press Cmd+Enter.
+4. Open DevTools → Network and inspect the `/segment`, `/enhance`, and `/bind` requests.
+5. Confirm each request body includes `"mode": "detailed"`.
+
+Sunny day expected:
+
+1. All three outbound requests carry the correct mode value.
+2. Switching mode in the popup to Efficiency and repeating the cycle produces `"mode": "efficiency"` in all requests.
+3. Mode value is read from `chrome.storage.sync` at request time, not cached at extension load.
+
+Rainy day expected:
+
+1. Mode field is missing from one of the requests: that route's payload assembly is not reading the stored mode.
+2. Mode is stale (shows previous selection): the request is using a closure-captured value — ensure the mode is read fresh from storage immediately before each request.
+
+### Test 12.4 - Tier Display and Usage Indicator
+
+How to run: confirm the popup shows the correct tier and usage data for the logged-in user.
+
+1. Open the popup while logged in as a free-tier user.
+2. Confirm the popup shows "Free" or equivalent tier label.
+3. Confirm a usage indicator (e.g., "3 / 10 today") is displayed.
+4. Log in as a pro user (or simulate pro tier in dev) and confirm the tier label updates to "Pro".
+
+Sunny day expected:
+
+1. Free-tier users see the free label and a usage counter with current / limit values.
+2. Pro users see the pro label with no hard usage cap displayed (or "Unlimited").
+3. Usage counter reflects the actual daily enhance count from the backend.
+
+Rainy day expected:
+
+1. Usage shows `0 / 0` or `NaN`: the counter fetch is failing silently — check the backend call and fallback state.
+2. Tier always shows "Free" even for pro users: the tier field is not being read from the auth token or backend response.
+
+### Test 12.5 - Upgrade CTA Behavior
+
+How to run: simulate a free-tier user at their daily limit.
+
+1. In dev, set the user's usage counter to the free-tier daily limit in the local Supabase `usage_daily` table.
+2. Open the popup. Confirm the upgrade CTA is visible (e.g., "Upgrade to Pro" button or banner).
+3. Click the upgrade CTA. Confirm it opens the correct upgrade URL or flow.
+4. For a pro user, confirm the CTA is hidden.
+
+Sunny day expected:
+
+1. Upgrade CTA appears when `enhance_count >= free_tier_daily_limit`.
+2. CTA is hidden for pro users regardless of usage count.
+3. CTA click opens the correct destination without errors.
+
+Rainy day expected:
+
+1. CTA does not appear at limit: the limit check is comparing the wrong field or using a stale count.
+2. CTA appears for pro users: the tier check precondition is missing before the limit check.
+
+### Test 12.6 (Optional) - Popup Does Not Interfere With Content Script
+
+How to run: open the popup while a bind stream is in progress on a test page.
+
+1. Start a bind stream (Cmd+Enter with accepted sections).
+2. While ghost text is streaming, open the popup and change the mode.
+3. Confirm the in-progress stream is not aborted and ghost text continues rendering.
+4. Confirm Enter still commits the ghost text correctly after closing the popup.
+
+Rainy drill expected:
+
+1. Opening the popup aborts the bind stream: the SW is handling the popup's storage read as a tab state change — isolate popup storage reads from per-tab stream state.
+2. Mode change mid-stream retroactively changes the streamed output: the stream is using the live mode value instead of the value captured at bind trigger time.
+
+## Step 12 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date:
+- Sunny path result:
+- Rainy path result:
+- Bugs found:
+
+## Step 13 Manual Testing Guide (Hardening, Security, and Observability)
+
+Use this guide to validate Step 13 message boundary validation, HTML injection safety, request ID traceability, and backend health/smoke endpoints. It aligns with the Step 13 taskboard in [v1_step_13.md](v1_step_by_step/v1_step_13.md).
+
+Current main-branch note: all prior steps are assumed stable. Step 13 adds validation and observability without changing UX behavior. No new user-visible features are introduced.
+
+### What This Covers
+
+1. Content script → SW boundary rejects malformed or unexpected message shapes.
+2. Popover and ghost text rendering is injection-safe (no HTML execution from LLM output or user input).
+3. Request IDs are present in logs and can be used to trace a request across extension and backend.
+4. Backend health endpoint returns a valid response.
+5. Backend smoke endpoint validates core routing (segment → enhance → bind) without hitting real LLM providers.
+6. Structured error logging surfaces actionable context for provider errors and stream aborts.
+
+### Terminal Setup
+
+1. Terminal A: `cd extension && npm run dev`.
+2. Terminal B: `cd backend && bun run dev 2>&1 | tee /tmp/backend-step13.log` — tail logs during tracing tests.
+
+### Test 13.1 - SW Boundary Message Validation
+
+How to run: send malformed messages from the page console to the extension's SW port and confirm rejection.
+
+```javascript
+// Get the port to the SW (adjust to match the extension's port name)
+const port = chrome.runtime.connect({ name: "insta-prompt" });
+
+// Test 1: missing verb
+port.postMessage({ payload: { text: "hello" } });
+
+// Test 2: unknown verb
+port.postMessage({ verb: "UNKNOWN_VERB", payload: {} });
+
+// Test 3: malformed payload (missing required fields)
+port.postMessage({ verb: "SEGMENT", payload: {} });
+
+// Test 4: oversized payload (if a size limit is enforced)
+port.postMessage({ verb: "SEGMENT", payload: { text: "x".repeat(100_000) } });
+```
+
+Sunny day expected:
+
+1. Each malformed message produces a SW log entry indicating rejection (e.g., `[SW] invalid message shape: missing verb`).
+2. No privileged action (no API call) is triggered by any malformed message.
+3. The port remains open — rejection does not crash the SW or disconnect the port.
+4. The content script receives a structured error response (or no response) for each invalid message.
+
+Rainy day expected:
+
+1. A malformed message triggers an API call: the SW is not validating before dispatching — add a Zod or manual shape-check guard at the message router entry point.
+2. Malformed message crashes the SW (port disconnects): unhandled error in the message handler — add a try/catch with structured logging.
+
+### Test 13.2 - HTML Injection Safety in Popovers and Ghost Text
+
+How to run: inject an LLM-style response containing HTML tags and confirm they are rendered as text, not executed.
+
+```javascript
+// Simulate an enhancement response with an XSS payload
+// Inject this into the content script state as if it arrived from the SW
+// (adjust to match the actual API used to set section preview text)
+const xssPayload = '<img src=x onerror="alert(\'XSS\')" /><b>Bold text</b><script>console.log("injected")</script>';
+
+// Manually trigger a popover render with the XSS payload as preview content
+// (exact invocation depends on the content script's exposed render API)
+```
+
+After injecting, verify in the DOM:
+
+1. Open the popover for the affected clause.
+2. Inspect the popover element in DevTools.
+3. Confirm the popover's DOM shows the raw text string, not a rendered `<img>`, `<b>`, or `<script>` element.
+4. Confirm no `alert()` fires and no console.log "injected" message appears.
+
+Sunny day expected:
+
+1. The XSS payload is rendered as visible text characters (e.g., `<img src=x ...>` shown as a string).
+2. No DOM elements are created from the payload.
+3. No alert fires and no script executes.
+4. Ghost text commit path handles the same payload safely — the committed textarea value contains the raw text, not rendered HTML.
+
+Rainy day expected:
+
+1. `<b>Bold text</b>` renders as bold in the popover: `innerHTML` is being used instead of `textContent` — replace with `textContent` assignment throughout the render path.
+2. Alert fires: an `onerror` handler executed — a DOM element was created from the payload, confirming `innerHTML` use.
+3. Script executes in the commit path: `ta.value = innerHTML_string` is being used — ensure commit uses `textContent` or safe string assignment.
+
+### Test 13.3 - Request ID Traceability
+
+How to run: trigger a full segment → enhance → bind cycle and trace the request ID through extension and backend logs.
+
+1. Trigger a bind cycle (accept all sections, press Cmd+Enter).
+2. In the extension background SW DevTools console, search for the request ID logged at bind initiation.
+3. In the backend log (`/tmp/backend-step13.log`), search for the same request ID.
+4. Confirm the request ID is present in:
+   - The SW log at the time the BIND message is sent.
+   - The backend log for the `/bind` route handler entry.
+   - The backend log for the SSE stream close or error event.
+
+Sunny day expected:
+
+1. The same request ID appears in both the SW console and the backend log.
+2. The ID format is consistent (UUID or similar — not auto-incrementing integers that repeat across tabs).
+3. Per-tab isolation: two simultaneous bind calls from different tabs produce different request IDs.
+
+Rainy day expected:
+
+1. Request ID is missing from backend logs: the extension is not forwarding it in request headers — add `X-Request-ID` to outbound fetch headers.
+2. Request ID is present in the extension but not in the backend log: the backend is not reading the `X-Request-ID` header — wire it into the log context.
+3. Same request ID reused across calls: the ID generator is using a counter, not a UUID — switch to `crypto.randomUUID()`.
+
+### Test 13.4 - Health and Smoke Endpoints
+
+How to run: probe the backend health and smoke endpoints directly with curl.
+
+```bash
+# Health endpoint
+curl -s http://localhost:PORT/health | jq .
+
+# Smoke endpoint (no auth, no LLM call — validates routing only)
+curl -s http://localhost:PORT/smoke | jq .
+```
+
+Sunny day expected:
+
+1. `/health` returns `{ "status": "ok" }` with HTTP 200 within 100ms.
+2. `/smoke` returns a payload confirming segment, enhance, and bind route registration (e.g., `{ "routes": ["segment", "enhance", "bind"], "status": "ok" }`).
+3. Neither endpoint requires auth headers.
+4. Neither endpoint triggers an LLM provider call.
+
+Rainy day expected:
+
+1. `/health` returns 404: the route is not registered — add it to the Hono router.
+2. `/smoke` triggers a real LLM call: the smoke handler is using the production route handler instead of a stub — isolate the smoke test path.
+3. `/health` returns 200 but response is empty: add the status JSON body.
+
+### Test 13.5 (Optional) - Provider Error and Stream Abort Logging
+
+How to run: trigger a bind request that fails mid-stream by shutting down the backend after the stream starts.
+
+1. Start a bind stream (Cmd+Enter with accepted sections).
+2. While the ghost text is streaming, kill the backend process (`Ctrl+C` in Terminal B).
+3. Observe the extension behavior: the stream should detect the disconnect, surface an error state (no ghost text commit), and log a structured error entry.
+4. In the SW DevTools console, confirm a log entry with at minimum: request ID, error type (`STREAM_ABORT`), and timestamp.
+
+Rainy drill expected:
+
+1. Extension commits partial ghost text after the stream abort: the commit is triggered on stream close instead of on Enter — the commit handler must be gated to the Enter keypress.
+2. No error logged in the SW console: the `fetch` error event is not caught — add a `.catch` handler on the SSE fetch and forward a structured error log.
+
+## Step 13 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date:
+- Sunny path result:
+- Rainy path result:
+- Bugs found:
+
+## Step 14 Manual Testing Guide (Test Matrix and Launch Readiness)
+
+Use this guide to run the full backend and extension test suites, complete target-site smoke testing across the supported site matrix, and validate the Chrome Web Store submission checklist. It aligns with the Step 14 taskboard in [v1_step_14.md](v1_step_by_step/v1_step_14.md).
+
+Current main-branch note: this is the final gate before Chrome Web Store submission. All prior step tests must have passed at least once before running the Step 14 matrix. No new feature implementation occurs in Step 14 — only validation and submission prep.
+
+### What This Covers
+
+1. Backend test suite: auth, rate limit, tier routing, and SSE contract conformance.
+2. Extension test suite: instrumentation, acceptance, bind, and commit unit tests.
+3. Target site smoke: ChatGPT, Claude.ai, Linear, Notion, and GitHub confirm the happy path works on live pages.
+4. Performance and memory baseline: no memory leaks after a full multi-tab session.
+5. Chrome Web Store submission checklist: manifest, permissions, privacy policy, screenshots, and store listing.
+
+### Terminal Setup
+
+1. Terminal A: repo root for Supabase / Docker setup.
+2. Terminal B: `cd backend` for test runs.
+3. Terminal C: `cd extension` for extension tests.
+4. Terminal D: Chrome with the production (not dev) extension bundle loaded.
+
+### Test 14.1 - Preflight
+
+How to run: confirm all services are running and test dependencies are installed.
+
+```bash
+# Terminal A
+docker compose up -d redis
+npx supabase start
+npx supabase db reset --yes --no-seed
+
+# Terminal B
+cd backend && bun install
+
+# Terminal C
+cd extension && npm install
+```
+
+Sunny day expected:
+
+1. Redis and Supabase start with no errors.
+2. All dependencies install cleanly.
+
+### Test 14.2 - Backend Test Suite
+
+How to run: run the backend test matrix from Terminal B.
+
+```bash
+cd backend && bun test
+```
+
+Specific suites that must pass:
+
+1. Auth failure and success paths (401, 200).
+2. Rate limit boundary (429 at limit, 200 below).
+3. Tier routing matrix (free → Groq, pro → Claude).
+4. SSE contract conformance: segment returns JSON, enhance and bind return valid SSE envelopes with `data: [DONE]` termination.
+5. Burst limiter and abuse telemetry trigger at correct thresholds.
+
+Sunny day expected:
+
+1. All tests pass with zero failures.
+2. No skipped tests unless explicitly marked as optional infrastructure-dependent tests.
+3. Test output includes timing — no individual test exceeds 5 seconds (a sign of an unawaited async or real provider call in tests).
+
+Rainy day expected:
+
+1. Tier routing test fails: the `X-Tier` header or Supabase tier lookup is returning the wrong value — check the middleware order and tier resolution logic.
+2. SSE test fails with missing `[DONE]`: the route handler closes the stream without the terminal event — add the terminal write to the stream close path.
+3. Tests run against a live provider: a test is not using the stub adapter — check that the test environment sets `LLM_ADAPTER=stub`.
+
+### Test 14.3 - Extension Test Suite
+
+How to run: run the extension unit test matrix from Terminal C.
+
+```bash
+cd extension && npm test
+```
+
+Specific areas that must have coverage:
+
+1. Input discovery and idempotent attachment (Step 8 regression).
+2. Segment debounce and cancel (Step 8).
+3. Overlay geometry sync (Step 9).
+4. Section state machine: initial → accepted → stale → ready transitions (Step 10).
+5. Bind trigger guards: gate on stale state, canonical order sort (Step 11).
+6. Commit path: textarea value assignment and contenteditable textContent assignment (Step 11).
+7. SW message shape validation (Step 13).
+
+Sunny day expected:
+
+1. All tests pass with zero failures.
+2. No test touches the real DOM of a live page — all DOM tests use jsdom or a fixture.
+3. Coverage report shows ≥ 80% branch coverage on `index.ts` acceptance and commit paths.
+
+Rainy day expected:
+
+1. A test fails after a refactor: do not skip it — fix the implementation or the test, not both simultaneously.
+2. Coverage is below 80% on critical paths: add branch tests for the stale-guard and canonical-sort paths specifically.
+
+### Test 14.4 - Target Site Smoke Tests
+
+How to run: load the production extension bundle and manually test the happy path on each target site. Use the production bundle (`npm run build` in the extension directory, then load `extension/.output/chrome-mv3`).
+
+For each site, perform:
+
+1. Navigate to a page with a textarea or contenteditable input.
+2. Click into the input and type: `Build a dark mode toggle using React and TypeScript. No external libraries. Return a JSON object.`
+3. Wait for underlines to appear (~600ms after typing stops).
+4. Hover a clause and confirm the popover shows a preview.
+5. Press Tab to accept all clauses.
+6. Press Cmd+Enter. Confirm ghost text streams in.
+7. Press Enter. Confirm the host input value is replaced with the compiled prompt.
+
+Target site matrix:
+
+| Site | Input Type | Known Quirks |
+|---|---|---|
+| `chat.openai.com` | contenteditable (ProseMirror) | Heavy rerender on every keystroke; mutation observer must survive |
+| `claude.ai` | contenteditable | Shadow DOM on the page; confirm extension shadow root does not conflict |
+| `linear.app` | contenteditable | SPA navigation between issues; confirm reattach on route change |
+| `notion.so` | contenteditable (block editor) | Virtualized blocks; underlines must not appear on non-focused blocks |
+| `github.com` | textarea (PR body, issue body) | Standard textarea; simplest case; should be a baseline |
+
+Sunny day expected:
+
+1. All five sites complete the happy path with no console errors.
+2. Underlines appear and stay aligned through typing on all sites.
+3. Commit replaces the correct input's value on all sites.
+4. No page functionality is broken after the extension is active (e.g., Notion block creation, Linear issue save, GitHub file preview).
+
+Rainy day expected:
+
+1. Underlines do not appear on claude.ai: the page's own shadow DOM is interfering — confirm the extension's shadow root is mounted to `document.body`, not inside the page's shadow tree.
+2. Reattach fails on Linear after SPA navigation: the `MutationObserver` is not watching `document.body` for newly added inputs — confirm the observer scope.
+3. Commit replaces the wrong input on Notion: the active input tracking is not pinned to the last-focused element — fix the focus tracking pointer.
+4. GitHub textarea value is not replaced: the textarea commit path is using `dispatchEvent(new InputEvent(...))` but GitHub's React is not picking it up — add a native input setter via `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, value)` before dispatching the event.
+
+### Test 14.5 - Chrome Web Store Submission Checklist
+
+Run through each item and mark done before submitting:
+
+```
+[ ] manifest.json version incremented from last submission.
+[ ] manifest.json permissions list matches the minimum required (no over-requested permissions).
+[ ] host_permissions uses the minimal pattern (specific hostnames, not <all_urls> unless justified).
+[ ] Content Security Policy in manifest does not include 'unsafe-eval' or 'unsafe-inline'.
+[ ] Privacy policy URL is live and accurately describes data collection (auth tokens, usage metrics).
+[ ] Store listing screenshots are current (at least 3, at 1280x800 or 640x400).
+[ ] Store listing short description is under 132 characters.
+[ ] Store listing long description explains the compiler metaphor, clause types, and hotkey map.
+[ ] Extension icon set is complete: 16px, 32px, 48px, 128px PNGs with no transparency bleed.
+[ ] Production bundle has been loaded unpacked and passes Tests 14.4 (target site smoke) in its final form.
+[ ] No console errors in the production bundle on any target site.
+[ ] All debug logging is gated behind a DEV flag and is not present in the production bundle.
+[ ] Supabase RLS is confirmed active (not disabled) on the production instance.
+[ ] Redis rate limit keys are using production Redis, not the local dev instance.
+```
+
+### Test 14.6 (Optional) - Memory and Performance Baseline
+
+How to run: use Chrome's Memory panel to confirm no memory leak after a multi-tab session.
+
+1. Open three tabs on different target sites and interact with the extension on each.
+2. On each tab: type a prompt, accept clauses, bind, and commit.
+3. Open Chrome DevTools → Memory → take a heap snapshot.
+4. Repeat the cycle on all three tabs.
+5. Take a second heap snapshot.
+6. Compare the two snapshots: retained size for PromptCompiler-owned objects must not grow between snapshots.
+
+Sunny day expected:
+
+1. Heap snapshot delta for content script objects is near zero after two full cycles.
+2. No `EventListener`-attached DOM nodes appear in the retained set that are not currently instrumented inputs.
+3. Background SW memory is stable across tab open/close cycles.
+
+Rainy day expected:
+
+1. Retained size grows per cycle: the `EventListener` cleanup path is not removing listeners on commit or on element removal — audit all `addEventListener` calls for matching `removeEventListener`.
+2. SW memory grows across tabs: per-tab `chrome.storage.session` state is not being cleaned up after commit — add explicit session key deletion on the commit confirmation message.
+
+## Step 14 Personal Notes
+
+Use this section to log your own observations while running the guide:
+- Date:
+- Sunny path result:
+- Rainy path result:
+- Bugs found:

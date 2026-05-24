@@ -148,6 +148,55 @@ export default defineBackground(() => {
 		return isPlainObject(message.payload) || isPlainObject(message.request) || Object.keys(message).some((key) => !["verb", "jwt", "requestId", "payload", "request"].includes(key));
 	}
 
+	type ValidationFailure = { ok: false; reason: string };
+	type ValidationSuccess = { ok: true; message: BridgeMessage };
+
+	function validateBridgeMessage(raw: unknown): ValidationFailure | ValidationSuccess {
+		if (!isPlainObject(raw)) {
+			return { ok: false, reason: "message is not an object" };
+		}
+
+		if (!isBridgeVerb(raw.verb)) {
+			return { ok: false, reason: `unknown verb ${String(raw.verb)}` };
+		}
+
+		if (typeof raw.jwt !== "string" || raw.jwt.trim().length === 0) {
+			return { ok: false, reason: "missing jwt" };
+		}
+
+		if (raw.verb === "CANCEL") {
+			return { ok: true, message: raw as unknown as BridgeMessage };
+		}
+
+		const body = isPlainObject(raw.payload) ? raw.payload : isPlainObject(raw.request) ? raw.request : null;
+		if (!body) {
+			return { ok: false, reason: `${raw.verb} payload is missing` };
+		}
+
+		if (raw.verb === "SEGMENT") {
+			const segments = body ? body.segments : undefined;
+			if (!Array.isArray(segments) || segments.length === 0) {
+				return { ok: false, reason: "SEGMENT payload.segments must be a non-empty array" };
+			}
+		}
+
+		if (raw.verb === "ENHANCE") {
+			const section = body ? body.section : undefined;
+			if (!isPlainObject(section)) {
+				return { ok: false, reason: "ENHANCE payload.section must be an object" };
+			}
+		}
+
+		if (raw.verb === "BIND") {
+			const sections = body ? body.sections : undefined;
+			if (!Array.isArray(sections) || sections.length === 0) {
+				return { ok: false, reason: "BIND payload.sections must be a non-empty array" };
+			}
+		}
+
+		return { ok: true, message: raw as unknown as BridgeMessage };
+	}
+
 	function getRequestId(message: BridgeMessage): BridgeRequestId {
 		const explicitRequestId = typeof message.requestId === "string" ? message.requestId.trim() : "";
 		return explicitRequestId.length > 0 ? explicitRequestId : crypto.randomUUID();
@@ -185,11 +234,14 @@ export default defineBackground(() => {
 		}
 	}
 
-	function buildRequestHeaders(jwt: string, accept: string): Headers {
+	function buildRequestHeaders(jwt: string, accept: string, requestId?: string): Headers {
 		const headers = new Headers();
 		headers.set("Authorization", `Bearer ${jwt}`);
 		headers.set("Content-Type", "application/json");
 		headers.set("Accept", accept);
+		if (requestId && requestId.length > 0) {
+			headers.set("X-Request-ID", requestId);
+		}
 		return headers;
 	}
 
@@ -368,7 +420,7 @@ export default defineBackground(() => {
 		try {
 			const response = await fetch(new URL(getEndpointPath("SEGMENT"), BACKEND_BASE_URL), {
 				method: "POST",
-				headers: buildRequestHeaders(message.jwt, "application/json"),
+				headers: buildRequestHeaders(message.jwt, "application/json", requestId),
 				body: JSON.stringify(getRequestBody(message)),
 				signal: requestState.controller.signal,
 			});
@@ -436,7 +488,7 @@ export default defineBackground(() => {
 		try {
 			const response = await fetch(new URL(getEndpointPath(message.verb), BACKEND_BASE_URL), {
 				method: "POST",
-				headers: buildRequestHeaders(message.jwt, "text/event-stream"),
+				headers: buildRequestHeaders(message.jwt, "text/event-stream", requestId),
 				body: JSON.stringify(getRequestBody(message)),
 				signal: requestState.controller.signal,
 			});
@@ -567,6 +619,20 @@ export default defineBackground(() => {
 			return;
 		}
 
+		const expectedExtensionId = (() => {
+			try {
+				return chrome.runtime.id;
+			} catch {
+				return undefined;
+			}
+		})();
+
+		if (expectedExtensionId && port.sender?.id !== expectedExtensionId) {
+			console.warn("[SW] rejecting port from unknown sender", { senderId: port.sender?.id });
+			port.disconnect();
+			return;
+		}
+
 		const tabId = port.sender?.tab?.id;
 		let portClosed = false;
 		const isPortClosed = () => portClosed;
@@ -581,11 +647,14 @@ export default defineBackground(() => {
 			});
 		}
 
-		port.onMessage.addListener((message) => {
-			if (!isBridgeMessage(message)) {
-				console.warn("Ignoring malformed bridge message", { tabId, message });
+		port.onMessage.addListener((rawMessage) => {
+			const validation = validateBridgeMessage(rawMessage);
+			if (!validation.ok) {
+				console.warn(`[SW] rejected message: ${validation.reason}`, { tabId });
 				return;
 			}
+
+			const message = validation.message;
 
 			void (async () => {
 				await sessionRecoveryPromise;
@@ -596,6 +665,8 @@ export default defineBackground(() => {
 
 				const requestId = getRequestId(message);
 				const currentTabId = typeof tabId === "number" && Number.isFinite(tabId) ? tabId : null;
+
+				console.log(`[SW] dispatching ${message.verb} requestId=${requestId}`, { tabId: currentTabId });
 
 				if (currentTabId !== null && orphanedTabIds.has(currentTabId)) {
 					sendOrphanedTabSignal(port, currentTabId, requestId, isPortClosed);

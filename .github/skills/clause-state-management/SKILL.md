@@ -1,6 +1,6 @@
 ---
 name: clause-state-management
-description: "Use when implementing Step 4-5 section lifecycle transitions, dirty-state invalidation, acceptance behavior, and stale re-expansion rules."
+description: "Use when implementing section lifecycle transitions, Tab/Shift+Tab acceptance queue, dirty-state invalidation from upstream edits, stale re-expansion gating, or bind-eligibility guards — across any step that touches section state."
 user-invocable: false
 ---
 
@@ -12,8 +12,10 @@ Use this skill when implementing or debugging section lifecycle behavior, includ
 
 - state transitions from typing to ready/accepted/stale
 - dirty-state propagation from upstream edits
-- acceptance flow and focus queue behavior
+- Tab/Shift+Tab acceptance queue and focus model (Step 10)
+- acceptance visual state without DOM mutation
 - stale-section re-expansion gating before bind
+- bind-eligibility guard (Cmd+Enter blocked while stale accepted sections exist)
 - merge/filter behavior after segmentation
 
 ## When Not to Use

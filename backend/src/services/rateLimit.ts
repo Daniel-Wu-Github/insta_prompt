@@ -17,6 +17,7 @@ type RateLimitRedisClient = {
 	expireat: (key: string, unixSeconds: number) => Promise<number>;
 	expire: (key: string, seconds: number) => Promise<number>;
 	ttl: (key: string) => Promise<number>;
+	get?: (key: string) => Promise<string | number | null>;
 	flushdb?: () => Promise<void>;
 	close?: () => Promise<void>;
 };
@@ -178,6 +179,9 @@ function createLocalRedisClient(redisUrl: string): RateLimitRedisClient {
 		async ttl(key) {
 			return await redis.ttl(key);
 		},
+		async get(key) {
+			return await redis.get(key);
+		},
 		async flushdb() {
 			await redis.flushdb();
 		},
@@ -209,6 +213,9 @@ function createUpstashRedisClient(url: string, redisTokenValue: string): RateLim
 		},
 		async ttl(key) {
 			return await redis.ttl(key);
+		},
+		async get(key) {
+			return await redis.get(key);
 		},
 	};
 }
@@ -328,6 +335,31 @@ export async function consumeDailyFreeQuota(userId: string, now = new Date()): P
 	} catch (error) {
 		console.error("Rate limit Redis call failed", error);
 		return unavailableResult();
+	}
+}
+
+export async function peekDailyFreeQuotaCount(userId: string): Promise<number> {
+	const redis = resolveRedisClient();
+	if (!redis || typeof redis.get !== "function") {
+		return 0;
+	}
+
+	try {
+		const key = buildDailyQuotaKey(userId);
+		const raw = await withRedisTimeout(redis.get(key), "get");
+		if (typeof raw === "number" && Number.isFinite(raw)) {
+			return Math.max(0, Math.floor(raw));
+		}
+
+		if (typeof raw === "string") {
+			const parsed = Number.parseInt(raw, 10);
+			return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+		}
+
+		return 0;
+	} catch (error) {
+		console.warn("Daily quota peek failed", error);
+		return 0;
 	}
 }
 

@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { authMiddleware } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/ratelimit";
 import { tierMiddleware } from "./middleware/tier";
+import { accountRoutes } from "./routes/account";
 import { authRoutes } from "./routes/auth";
 import { bindRoutes } from "./routes/bind";
 import { enhanceRoutes } from "./routes/enhance";
@@ -30,8 +31,26 @@ console.log("===========================");
 const app = new Hono<AppEnv>();
 const PROTECTED_ROUTE_PREFIXES = ["/segment", "/enhance", "/bind", "/projects"] as const;
 
+// Capture client request IDs for traceability across SW + backend logs.
+app.use("*", async (c, next) => {
+	const requestId = c.req.header("X-Request-ID")?.trim() ?? "";
+	if (requestId.length > 0) {
+		c.set("requestId", requestId);
+		c.header("X-Request-ID", requestId);
+	}
+	await next();
+});
+
 app.get("/health", (c) => {
-	return c.json({ ok: true });
+	return c.json({ ok: true, status: "ok" });
+});
+
+app.get("/smoke", (c) => {
+	return c.json({
+		status: "ok",
+		routes: ["segment", "enhance", "bind"],
+		ts: Date.now(),
+	});
 });
 
 // /auth stays public; /auth/token abuse protection is enforced in authRoutes.
@@ -42,10 +61,14 @@ for (const routePrefix of PROTECTED_ROUTE_PREFIXES) {
 	app.use(`${routePrefix}/*`, authMiddleware, rateLimitMiddleware, tierMiddleware);
 }
 
+// /account is auth-gated read-only; no rate limiting (cheap + no LLM cost).
+app.use("/account/*", authMiddleware, tierMiddleware);
+
 app.route("/segment", segmentRoutes);
 app.route("/enhance", enhanceRoutes);
 app.route("/bind", bindRoutes);
 app.route("/projects", projectRoutes);
+app.route("/account", accountRoutes);
 
 app.notFound((c) => {
 	return c.json(

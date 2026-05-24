@@ -19,7 +19,7 @@ export function useSettings() {
 	const [isLoading, setIsLoading] = useState(true);
 
 	useEffect(() => {
-		chrome.storage.local.get(STORAGE_KEY, (result) => {
+		chrome.storage.sync.get(STORAGE_KEY, (result) => {
 			const stored = result[STORAGE_KEY] as Settings | undefined;
 			if (stored) {
 				setSettings({
@@ -32,8 +32,9 @@ export function useSettings() {
 	}, []);
 
 	const persist = (next: Settings) => {
-		setSettings(next);
-		chrome.storage.local.set({ [STORAGE_KEY]: next });
+		chrome.storage.sync.set({ [STORAGE_KEY]: next }, () => {
+			setSettings(next);
+		});
 	};
 
 	const api = useMemo(
@@ -48,4 +49,3 @@ export function useSettings() {
 
 	return api;
 }
-

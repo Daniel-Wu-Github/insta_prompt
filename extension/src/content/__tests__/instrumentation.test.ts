@@ -59,11 +59,12 @@ function getLastBridgePort(): ChromeConnectHandle {
 	return lastResult.value as ChromeConnectHandle;
 }
 
-function getChromeStorageGetMock(area: "local" | "session"): ReturnType<typeof vi.fn> {
+function getChromeStorageGetMock(area: "local" | "session" | "sync"): ReturnType<typeof vi.fn> {
 	const chromeStorage = chrome as unknown as {
 		storage: {
 			local: { get: ReturnType<typeof vi.fn> };
 			session: { get: ReturnType<typeof vi.fn> };
+			sync: { get: ReturnType<typeof vi.fn> };
 		};
 	};
 
@@ -175,11 +176,13 @@ function installTestGlobals(): { connectMock: ReturnType<typeof vi.fn> } {
 	vi.stubGlobal("defineContentScript", (config: unknown) => config);
 	const storageLocalGetMock = vi.fn(async () => ({}));
 	const storageSessionGetMock = vi.fn(async () => ({}));
+	const storageSyncGetMock = vi.fn(async () => ({}));
 	vi.stubGlobal("chrome", {
-		runtime: { connect: connectMock },
+		runtime: { connect: connectMock, id: "test-extension-id" },
 		storage: {
 			local: { get: storageLocalGetMock },
 			session: { get: storageSessionGetMock },
+			sync: { get: storageSyncGetMock },
 		},
 	});
 	vi.stubGlobal("CSS", { highlights: undefined });

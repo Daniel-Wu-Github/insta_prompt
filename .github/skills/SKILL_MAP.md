@@ -17,8 +17,11 @@ All agents must do these steps before using or editing skills:
 5. For manual testing guide authoring, load [manual-testing-guides](manual-testing-guides/SKILL.md).
 6. For Step 2 enforcement work, load [rate-limiting-tier-enforcement](rate-limiting-tier-enforcement/SKILL.md).
 7. For Step 3 routing and prompt orchestration, load [llm-router-and-model-selection](llm-router-and-model-selection/SKILL.md) and [system-prompt-assembly](system-prompt-assembly/SKILL.md).
-8. For Step 4-5 clause and extension workflow work, load [canonical-clause-ordering](canonical-clause-ordering/SKILL.md), [clause-state-management](clause-state-management/SKILL.md), [mv3-extension-boundaries](mv3-extension-boundaries/SKILL.md), and [sse-streaming-bridge](sse-streaming-bridge/SKILL.md).
-9. For Step 6-11 extension runtime workflow work, load [background-port-state-recovery](background-port-state-recovery/SKILL.md), [content-script-instrumentation](content-script-instrumentation/SKILL.md), [underline-preview-rendering](underline-preview-rendering/SKILL.md), and [hotkey-bind-commit-ux](hotkey-bind-commit-ux/SKILL.md) alongside boundary/state/stream skills as needed.
+8. For clause pipeline and extension workflow work, load [canonical-clause-ordering](canonical-clause-ordering/SKILL.md), [clause-state-management](clause-state-management/SKILL.md), [mv3-extension-boundaries](mv3-extension-boundaries/SKILL.md), and [sse-streaming-bridge](sse-streaming-bridge/SKILL.md).
+9. For extension runtime workflow work (Steps 6-11), load [background-port-state-recovery](background-port-state-recovery/SKILL.md), [content-script-instrumentation](content-script-instrumentation/SKILL.md), [underline-preview-rendering](underline-preview-rendering/SKILL.md), [hotkey-bind-commit-ux](hotkey-bind-commit-ux/SKILL.md), [dom-memory-management](dom-memory-management/SKILL.md), and [ui-design-system](ui-design-system/SKILL.md) alongside boundary/state/stream skills as needed.
+10. For popup and account UX work (Step 12), load [extension-popup-ux](extension-popup-ux/SKILL.md) and [mv3-extension-boundaries](mv3-extension-boundaries/SKILL.md).
+11. For TypeScript errors, message validation, or runtime type safety, load [typescript-safety](typescript-safety/SKILL.md).
+12. For commit behavior on specific target sites (ChatGPT, Claude.ai, Linear, Notion, GitHub), load [target-site-compat](target-site-compat/SKILL.md).
 10. Add cross-cutting skills as needed in this order:
   1. [skill-map-governance](skill-map-governance/SKILL.md)
   2. [verification-gate](verification-gate/SKILL.md)
@@ -39,14 +42,19 @@ All agents must do these steps before using or editing skills:
 | rate-limiting-tier-enforcement | [rate-limiting-tier-enforcement/SKILL.md](rate-limiting-tier-enforcement/SKILL.md) | Enforce Step 2 quota and tier gate behavior with deterministic contracts | Step 2 backend middleware and public-endpoint abuse-control work |
 | llm-router-and-model-selection | [llm-router-and-model-selection/SKILL.md](llm-router-and-model-selection/SKILL.md) | Build deterministic tier/mode/callType model routing behavior | Step 3 backend model-routing implementation and tests |
 | system-prompt-assembly | [system-prompt-assembly/SKILL.md](system-prompt-assembly/SKILL.md) | Build goal-type prompt factories and bind assembly behavior | Step 3 prompt-template and assembly implementation work |
-| canonical-clause-ordering | [canonical-clause-ordering/SKILL.md](canonical-clause-ordering/SKILL.md) | Enforce canonical clause slot ordering across API and UI layers | Step 4-5 section ordering, bind sorting, and contract alignment work |
-| clause-state-management | [clause-state-management/SKILL.md](clause-state-management/SKILL.md) | Enforce section lifecycle and stale-propagation correctness | Step 4-5 acceptance flow, stale invalidation, and bind gating work |
-| mv3-extension-boundaries | [mv3-extension-boundaries/SKILL.md](mv3-extension-boundaries/SKILL.md) | Preserve MV3 process and storage boundaries | Step 5 extension process-boundary and messaging work |
-| sse-streaming-bridge | [sse-streaming-bridge/SKILL.md](sse-streaming-bridge/SKILL.md) | Enforce stream contract and abort-safe relay behavior | Step 5 SSE streaming bridge implementation across backend and extension |
-| background-port-state-recovery | [background-port-state-recovery/SKILL.md](background-port-state-recovery/SKILL.md) | Enforce restart-safe background port orchestration and per-tab session recovery | Step 7 background worker verbs, disconnect cleanup, and session-state restoration |
-| content-script-instrumentation | [content-script-instrumentation/SKILL.md](content-script-instrumentation/SKILL.md) | Enforce robust input discovery, idempotent attachment, and debounce/abort orchestration | Step 8 content instrumentation across dynamic editors |
-| underline-preview-rendering | [underline-preview-rendering/SKILL.md](underline-preview-rendering/SKILL.md) | Enforce deterministic underline/preview rendering with typography and box-model sync | Step 9 overlay alignment, confidence styling, and preview lifecycle behavior |
-| hotkey-bind-commit-ux | [hotkey-bind-commit-ux/SKILL.md](hotkey-bind-commit-ux/SKILL.md) | Enforce guarded keybinding flow from acceptance through bind and commit | Step 11 hotkey guards, commit behavior, and reset semantics |
+| canonical-clause-ordering | [canonical-clause-ordering/SKILL.md](canonical-clause-ordering/SKILL.md) | Enforce canonical clause slot ordering across API and UI layers | Section ordering, bind payload sorting, and pre-bind canonical sort in content script |
+| clause-state-management | [clause-state-management/SKILL.md](clause-state-management/SKILL.md) | Enforce section lifecycle, Tab/Shift+Tab acceptance queue, and dirty-state stale propagation | Section state transitions, acceptance flow, stale invalidation, and bind gating |
+| mv3-extension-boundaries | [mv3-extension-boundaries/SKILL.md](mv3-extension-boundaries/SKILL.md) | Preserve MV3 process and storage boundaries | Any extension process-boundary, messaging, or storage scope work |
+| sse-streaming-bridge | [sse-streaming-bridge/SKILL.md](sse-streaming-bridge/SKILL.md) | Enforce stream contract and abort-safe relay behavior | SSE streaming bridge implementation across backend and extension |
+| background-port-state-recovery | [background-port-state-recovery/SKILL.md](background-port-state-recovery/SKILL.md) | Enforce restart-safe background port orchestration and per-tab session recovery | Background worker verbs, disconnect cleanup, and session-state restoration |
+| content-script-instrumentation | [content-script-instrumentation/SKILL.md](content-script-instrumentation/SKILL.md) | Enforce robust input discovery, idempotent attachment, and debounce/abort orchestration | Content script instrumentation across dynamic editors |
+| underline-preview-rendering | [underline-preview-rendering/SKILL.md](underline-preview-rendering/SKILL.md) | Enforce deterministic underline/preview rendering with typography and box-model sync | Overlay alignment, confidence styling, and preview lifecycle behavior |
+| hotkey-bind-commit-ux | [hotkey-bind-commit-ux/SKILL.md](hotkey-bind-commit-ux/SKILL.md) | Enforce guarded keybinding flow from Tab acceptance through Cmd+Enter bind and Enter commit | Tab/Shift+Tab acceptance keys, bind trigger, ghost text, commit, and reset semantics |
+| ui-design-system | [ui-design-system/SKILL.md](ui-design-system/SKILL.md) | Enforce Shadow DOM CSS isolation, design tokens, safe textContent rendering, and popup component patterns | Any overlay, popover, ghost text, underline styling, or popup UI work |
+| dom-memory-management | [dom-memory-management/SKILL.md](dom-memory-management/SKILL.md) | Prevent memory leaks, ghost DOM nodes, and dangling listeners via cleanup registries and observer teardown | Any addEventListener, MutationObserver, ResizeObserver, overlay node creation, or cleanup path |
+| typescript-safety | [typescript-safety/SKILL.md](typescript-safety/SKILL.md) | Enforce Zod validation at message boundaries, no-any in contracts, and sender verification | TypeScript errors, message handler authoring, shared contract changes, or any runtime I/O parsing |
+| extension-popup-ux | [extension-popup-ux/SKILL.md](extension-popup-ux/SKILL.md) | Enforce storage-first popup state, loading guards, mode forwarding, tier display, and upgrade CTA gating | Popup mode toggle, account tier display, usage indicator, upgrade CTA, or chrome.storage.sync patterns |
+| target-site-compat | [target-site-compat/SKILL.md](target-site-compat/SKILL.md) | Apply site-specific commit, reattach, and cursor patterns for ProseMirror, React-controlled inputs, SPAs, and virtualized editors | Commit behavior on ChatGPT, Claude.ai, Linear, Notion, or GitHub; SPA navigation reattach; native value setter patterns |
 | skill-map-governance | [skill-map-governance/SKILL.md](skill-map-governance/SKILL.md) | Keep the skill map synchronized with the skill catalog | Any skill add/remove/rename/scope change |
 | verification-gate | [verification-gate/SKILL.md](verification-gate/SKILL.md) | Enforce verification before completion | Any task that edits files, config, or process docs |
 | workflow-logging | [workflow-logging/SKILL.md](workflow-logging/SKILL.md) | Capture decisions, progress, and change records | Material process or instruction updates |
@@ -94,6 +102,11 @@ skillMap:
     - content-script-instrumentation
     - underline-preview-rendering
     - hotkey-bind-commit-ux
+    - ui-design-system
+    - dom-memory-management
+    - typescript-safety
+    - extension-popup-ux
+    - target-site-compat
     - skill-map-governance
     - verification-gate
     - workflow-logging
@@ -147,6 +160,21 @@ skillMap:
     - name: hotkey-bind-commit-ux
       path: .github/skills/hotkey-bind-commit-ux/SKILL.md
       type: extension-interaction
+    - name: ui-design-system
+      path: .github/skills/ui-design-system/SKILL.md
+      type: extension-ui
+    - name: dom-memory-management
+      path: .github/skills/dom-memory-management/SKILL.md
+      type: extension-safety
+    - name: typescript-safety
+      path: .github/skills/typescript-safety/SKILL.md
+      type: type-safety
+    - name: extension-popup-ux
+      path: .github/skills/extension-popup-ux/SKILL.md
+      type: extension-popup
+    - name: target-site-compat
+      path: .github/skills/target-site-compat/SKILL.md
+      type: extension-compat
     - name: skill-map-governance
       path: .github/skills/skill-map-governance/SKILL.md
       type: governance
