@@ -1907,7 +1907,21 @@ export default defineContentScript({
 		};
 
 		const isBindGateOpen = (state: ActiveInputState): boolean => {
-			return state.acceptedSegmentIndices.size > 0 && !state.hasStaleAccepted;
+			return (
+				state.acceptedSegmentIndices.size > 0 &&
+				!state.hasStaleAccepted &&
+				state.activeBindRequestId === undefined &&
+				state.bindPhase === "IDLE"
+			);
+		};
+
+		const logBindGateBlocked = (state: ActiveInputState): void => {
+			console.warn("[content] bind blocked", {
+				accepted: state.acceptedSegmentIndices.size,
+				hasStaleAccepted: state.hasStaleAccepted,
+				bindPhase: state.bindPhase,
+				activeBindRequestId: state.activeBindRequestId,
+			});
 		};
 
 		const collectAcceptedBindSections = (state: ActiveInputState): Array<{
@@ -1934,10 +1948,7 @@ export default defineContentScript({
 
 		const dispatchBindRequest = (state: ActiveInputState): void => {
 			if (!isBindGateOpen(state)) {
-				console.warn("[content] bind blocked", {
-					accepted: state.acceptedSegmentIndices.size,
-					hasStaleAccepted: state.hasStaleAccepted,
-				});
+				logBindGateBlocked(state);
 				return;
 			}
 
@@ -1950,6 +1961,11 @@ export default defineContentScript({
 				const { mode, jwt } = await resolveBridgeContext();
 				if (!jwt) {
 					showSessionExpiredNotice(state);
+					return;
+				}
+
+				if (!isBindGateOpen(state)) {
+					logBindGateBlocked(state);
 					return;
 				}
 
@@ -2441,10 +2457,12 @@ export default defineContentScript({
 						postToBridge(bridgeMessage);
 					}
 					renderDraftSegments(nextState, normalizedText, draftSegments, false);
-					console.log("Debounced extracted text:\n", extractedText);
-				})().catch((error) => {
-					console.warn("Failed to send debounced extraction to background", error);
-				});
+					if (import.meta.env.DEV) {
+						console.log("Debounced extracted text:\n", extractedText);
+					}
+					})().catch((error) => {
+						console.warn("Failed to send debounced extraction to background", error);
+					});
 			}, DEBOUNCE_DELAY_MS);
 
 			activeInputState = nextState;
@@ -2497,7 +2515,9 @@ export default defineContentScript({
 			element.addEventListener("blur", handleSourceBlurEvent);
 			element.addEventListener("keydown", handleSourceKeyDownEvent);
 			element.setAttribute(INSTRUMENTED_ATTRIBUTE, INSTRUMENTED_VALUE);
-			console.log("Found valid input:", element);
+			if (import.meta.env.DEV) {
+				console.log("Found valid input:", element);
+			}
 		};
 
 		const scanNodeForInputs = (node: Node): void => {
@@ -2587,7 +2607,9 @@ export default defineContentScript({
 		// Defined here so attachPortListeners (below) can reference it without a
 		// forward-declaration problem — all helpers it calls are already in scope.
 		const handleBridgeMessage = (message: unknown): void => {
-			console.debug("PromptCompiler bridge message", message);
+			if (import.meta.env.DEV) {
+				console.debug("PromptCompiler bridge message", message);
+			}
 
 			if (typeof message !== "object" || message === null) {
 				return;
@@ -2681,7 +2703,9 @@ export default defineContentScript({
 		const attachPortListeners = (port: chrome.runtime.Port): void => {
 			port.onMessage.addListener(handleBridgeMessage);
 			port.onDisconnect.addListener(() => {
-				console.debug("PromptCompiler bridge disconnected — port will reconnect on next use");
+				if (import.meta.env.DEV) {
+					console.debug("PromptCompiler bridge disconnected — port will reconnect on next use");
+				}
 				_bridgePort = null;
 				// The SW was killed while ENHANCE streams were active. Clear all dead request IDs
 				// so the 120ms hover-preview fallback timer is no longer suppressed by has(segment.id),

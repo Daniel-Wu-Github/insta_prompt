@@ -32,6 +32,7 @@ import {
 	normalizeIncomingSegments,
 	normalizeSegmentClassificationIntermediate,
 } from "./segment";
+import type { AppEnv } from "../types";
 
 function initializeStreamingAdapter(provider: string): ProviderStreamingAdapter | null {
 	if (provider === "groq") {
@@ -83,6 +84,8 @@ function toDeterministicProviderErrorMessage(errorEvent: ProviderStreamErrorEven
 	return `${providerLabel}: ${mapped}.`;
 }
 
+const IS_DEV = process.env.NODE_ENV !== "production";
+
 function captureEnhanceMetadataNonBlocking(metadata: EnhanceStreamMetadata): void {
 	try {
 		void captureEnhanceStreamMetadata(metadata).catch((error) => {
@@ -109,7 +112,7 @@ function createEnhanceStreamMetadataCapture(
 	};
 }
 
-export async function segmentRouteHandler(c: Context) {
+export async function segmentRouteHandler(c: Context<AppEnv>) {
 	const body = await readJsonBody(c);
 	if (body === null) {
 		return validationErrorResponse(c, "Invalid JSON body");
@@ -141,13 +144,15 @@ export async function segmentRouteHandler(c: Context) {
 		segments: classifiedIntermediate.sections,
 	};
 
-	console.log("\n=== 🧠 GROQ SEMANTIC ANALYSIS ===");
-	aiResult.segments.forEach((seg, index) => {
-		console.log(`Clause ${index + 1}: "${seg.text}"`);
-		console.log(`  ➔ Goal: ${seg.goal_type}`);
-		console.log(`  ➔ Confidence: ${seg.confidence}`);
-	});
-	console.log("=================================\n");
+	if (IS_DEV) {
+		console.log("\n=== 🧠 GROQ SEMANTIC ANALYSIS ===");
+		aiResult.segments.forEach((seg, index) => {
+			console.log(`Clause ${index + 1}: "${seg.text}"`);
+			console.log(`  ➔ Goal: ${seg.goal_type}`);
+			console.log(`  ➔ Confidence: ${seg.confidence}`);
+		});
+		console.log("=================================\n");
+	}
 
 	const response = normalizeSegmentClassificationIntermediate(classifiedIntermediate);
 
@@ -167,7 +172,7 @@ export async function segmentRouteHandler(c: Context) {
 	return c.json(responseCheck.data);
 }
 
-export async function enhanceRouteHandler(c: Context) {
+export async function enhanceRouteHandler(c: Context<AppEnv>) {
 	const body = await readJsonBody(c);
 	if (body === null) {
 		return validationErrorResponse(c, "Invalid JSON body");
@@ -338,7 +343,7 @@ export async function enhanceRouteHandler(c: Context) {
 	});
 }
 
-export async function bindRouteHandler(c: Context) {
+export async function bindRouteHandler(c: Context<AppEnv>) {
 	const body = await readJsonBody(c);
 	if (body === null) {
 		return validationErrorResponse(c, "Invalid JSON body");
@@ -353,6 +358,7 @@ export async function bindRouteHandler(c: Context) {
 	const sectionCount = parsed.data.sections.length;
 	const tier = c.get("tier") as Tier;
 	const userId = c.get("userId") as string | undefined;
+	const requestId = c.get("requestId");
 	const byokConfig: ByokConfig | null = null;
 	const abortSignal = c.req.raw.signal;
 	const canonicalSections = canonicalizeBindSections(parsed.data.sections);
@@ -515,6 +521,7 @@ export async function bindRouteHandler(c: Context) {
 				});
 			} catch (error) {
 				console.error("[observability][bind_history] persistence failed", {
+					requestId,
 					userId,
 					sectionCount,
 					mode: parsed.data.mode,

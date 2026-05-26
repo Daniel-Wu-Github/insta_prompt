@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export default defineBackground(() => {
+	const IS_DEV = import.meta.env.DEV;
 	const BACKEND_BASE_URL = typeof import.meta.env.VITE_API_BASE_URL === "string"
 		? import.meta.env.VITE_API_BASE_URL.trim()
 		: "";
@@ -956,7 +957,9 @@ export default defineBackground(() => {
 
 	chrome.alarms.onAlarm.addListener((alarm) => {
 		if (alarm.name === KEEPALIVE_ALARM_NAME) {
-			console.debug("Keepalive alarm tick");
+			if (IS_DEV) {
+				console.debug("Keepalive alarm tick");
+			}
 		}
 	});
 
@@ -975,7 +978,9 @@ export default defineBackground(() => {
 		let portClosed = false;
 		const isPortClosed = () => portClosed;
 
-		console.log("Accepted bridge port connection", { tabId });
+		if (IS_DEV) {
+			console.log("Accepted bridge port connection", { tabId });
+		}
 
 		// The connect-time orphan signal with a synthetic "recovery-<tabId>" requestId was
 		// silently dropped by the content script (no handler matched it). Orphan detection
@@ -1001,7 +1006,9 @@ export default defineBackground(() => {
 				const requestId = getRequestId(message);
 				const currentTabId = typeof tabId === "number" && Number.isFinite(tabId) ? tabId : null;
 
-				console.log(`[SW] dispatching ${message.verb} requestId=${requestId}`, { tabId: currentTabId });
+				if (IS_DEV) {
+					console.log(`[SW] dispatching ${message.verb} requestId=${requestId}`, { tabId: currentTabId });
+				}
 
 				if (currentTabId !== null && orphanedTabIds.has(currentTabId)) {
 					sendOrphanedTabSignal(port, currentTabId, requestId, isPortClosed);
@@ -1009,7 +1016,9 @@ export default defineBackground(() => {
 				}
 
 				if (message.verb === "CANCEL") {
-					console.log("Received bridge verb", { tabId, verb: message.verb, requestId });
+					if (IS_DEV) {
+						console.log("Received bridge verb", { tabId, verb: message.verb, requestId });
+					}
 					const requestIdsToAbort = message.requestId && message.requestId.trim().length > 0
 						? [message.requestId.trim()]
 						: (currentTabId !== null ? getRequestsForTab(currentTabId).map(([targetRequestId]) => targetRequestId) : Array.from(activeRequestsById.keys()));
@@ -1036,7 +1045,9 @@ export default defineBackground(() => {
 					return;
 				}
 
-				console.log("Received bridge verb", { tabId, verb: message.verb, requestId });
+				if (IS_DEV) {
+					console.log("Received bridge verb", { tabId, verb: message.verb, requestId });
+				}
 
 				if (message.verb === "SEGMENT") {
 					void dispatchSegmentRequest(port, message, requestId, isPortClosed);
@@ -1073,7 +1084,9 @@ export default defineBackground(() => {
 			if (typeof tabId === "number" && Number.isFinite(tabId)) {
 				void clearTabState(tabId);
 			}
-			console.log("Bridge port disconnected", { tabId });
+			if (IS_DEV) {
+				console.log("Bridge port disconnected", { tabId });
+			}
 		});
 	});
 });
