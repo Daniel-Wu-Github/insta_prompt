@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for promptcompiler-backend on 2026-05-26T17:58:46Z
+# fly.toml app configuration file generated for promptcompiler-backend on 2026-05-26T20:36:10Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -10,7 +10,7 @@ primary_region = 'dfw'
   dockerfile = 'backend/Dockerfile'
 
 [http_service]
-  internal_port = 3000
+  internal_port = 8080
   force_https = true
 
 [[vm]]
