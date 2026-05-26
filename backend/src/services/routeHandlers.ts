@@ -499,6 +499,10 @@ export async function bindRouteHandler(c: Context) {
 				return;
 			}
 
+			if (c.req.raw.signal.aborted || streamAborted || terminalEventSent) {
+				return;
+			}
+
 			try {
 				await recordEnhancementHistory({
 					userId,
@@ -509,17 +513,20 @@ export async function bindRouteHandler(c: Context) {
 					modelUsed,
 					sectionCount,
 				});
-			} catch {
-				if (streamAborted || abortSignal.aborted) {
-					return;
-				}
-
-				await writeErrorEvent("Bind history persistence failed.");
-				return;
-			}
-
-			if (c.req.raw.signal.aborted || streamAborted || terminalEventSent) {
-				return;
+			} catch (error) {
+				console.error("[observability][bind_history] persistence failed", {
+					userId,
+					sectionCount,
+					mode: parsed.data.mode,
+					modelUsed,
+					error,
+				});
+				await stream.writeSSE({
+					data: JSON.stringify({
+						type: "warning",
+						message: "Bind history recording failed after completion.",
+					}),
+				});
 			}
 
 			terminalEventSent = true;

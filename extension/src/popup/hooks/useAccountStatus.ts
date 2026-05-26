@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { Tier } from "../../../../shared/contracts";
 
-const SETTINGS_STORAGE_KEY = "promptcompiler.settings";
-const BACKEND_BASE_URL = "http://localhost:3000";
+const AUTH_STORAGE_KEY = "promptcompiler.auth";
 
 export type AccountUsage = {
 	count: number;
@@ -23,6 +22,12 @@ type AccountStatusResponse = {
 	dailyLimit?: unknown;
 };
 
+type StoredAuth = {
+	access_token: string;
+	refresh_token: string | null;
+	expires_at: number;
+};
+
 const FALLBACK_STATE: AccountStatusValue = {
 	tier: "free",
 	usage: null,
@@ -34,56 +39,70 @@ const isTier = (value: unknown): value is Tier => {
 	return value === "free" || value === "pro" || value === "byok";
 };
 
-const extractJwt = (value: unknown): string | undefined => {
-	if (typeof value === "string") {
-		const trimmed = value.trim();
-		return trimmed.length > 0 ? trimmed : undefined;
-	}
+const normalizeExpiresAtSeconds = (expiresAt: number): number => {
+	return expiresAt > 1_000_000_000_000 ? Math.floor(expiresAt / 1000) : expiresAt;
+};
 
+const extractStoredAuth = (value: unknown): StoredAuth | undefined => {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		return undefined;
 	}
 
 	const record = value as Record<string, unknown>;
-	for (const key of ["token", "accessToken", "access_token", "jwt"]) {
-		const candidate = record[key];
-		if (typeof candidate === "string" && candidate.trim().length > 0) {
-			return candidate.trim();
+	const accessToken = typeof record.access_token === "string" ? record.access_token.trim() : "";
+	const refreshToken = typeof record.refresh_token === "string" ? record.refresh_token.trim() : "";
+	const expiresAt = typeof record.expires_at === "number" ? record.expires_at : undefined;
+
+	if (!accessToken || expiresAt === undefined) {
+		return undefined;
+	}
+
+	return {
+		access_token: accessToken,
+		refresh_token: refreshToken.length > 0 ? refreshToken : null,
+		expires_at: expiresAt,
+	};
+};
+
+const readStoredAuth = async (): Promise<StoredAuth | undefined> => {
+	const [localSnapshot, sessionSnapshot] = await Promise.all([
+		chrome.storage.local.get(null),
+		chrome.storage.session.get(null),
+	]);
+
+	for (const snapshot of [localSnapshot, sessionSnapshot]) {
+		for (const [key, value] of Object.entries(snapshot)) {
+			if (key === AUTH_STORAGE_KEY) {
+				const storedAuth = extractStoredAuth(value);
+				if (storedAuth) {
+					return storedAuth;
+				}
+			}
 		}
 	}
 
-	for (const key of ["session", "auth", "data"]) {
-		const nested = extractJwt(record[key]);
-		if (nested) {
-			return nested;
+	for (const snapshot of [localSnapshot, sessionSnapshot]) {
+		for (const value of Object.values(snapshot)) {
+			const storedAuth = extractStoredAuth(value);
+			if (storedAuth) {
+				return storedAuth;
+			}
 		}
 	}
 
 	return undefined;
 };
 
-const readStoredJwt = (): Promise<string | undefined> => {
-	return new Promise((resolve) => {
-		chrome.storage.local.get(null, (snapshot) => {
-			const record = snapshot as Record<string, unknown>;
-			const settings = record[SETTINGS_STORAGE_KEY];
-			if (settings) {
-				const fromSettings = extractJwt(settings);
-				if (fromSettings) {
-					resolve(fromSettings);
-					return;
-				}
+const sendRuntimeMessage = <T,>(message: Record<string, unknown>): Promise<T | null> => {
+	return new Promise((resolve, reject) => {
+		chrome.runtime.sendMessage(message, (response) => {
+			const runtimeError = chrome.runtime.lastError;
+			if (runtimeError) {
+				reject(new Error(runtimeError.message));
+				return;
 			}
 
-			for (const value of Object.values(record)) {
-				const jwt = extractJwt(value);
-				if (jwt) {
-					resolve(jwt);
-					return;
-				}
-			}
-
-			resolve(undefined);
+			resolve((response as T | undefined) ?? null);
 		});
 	});
 };
@@ -100,40 +119,51 @@ export function useAccountStatus(): AccountStatusValue {
 		let cancelled = false;
 
 		(async () => {
-			const jwt = await readStoredJwt();
+			const auth = await readStoredAuth();
 			if (cancelled) {
 				return;
 			}
 
-			if (!jwt) {
+			if (!auth) {
 				setState(FALLBACK_STATE);
 				return;
 			}
 
-			try {
-				const response = await fetch(`${BACKEND_BASE_URL}/account/status`, {
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${jwt}`,
-						Accept: "application/json",
-					},
-				});
-
-				if (!response.ok) {
-					if (!cancelled) {
-						setState(FALLBACK_STATE);
-					}
-					return;
-				}
-
-				const payload = (await response.json()) as AccountStatusResponse;
+			const expiresAtSeconds = normalizeExpiresAtSeconds(auth.expires_at);
+			if (Date.now() / 1000 >= expiresAtSeconds - 30) {
+				const refreshed = await sendRuntimeMessage<{ accessToken?: string | null }>({ type: "REFRESH_TOKEN" });
 				if (cancelled) {
 					return;
 				}
 
-				const tier: Tier = isTier(payload.tier) ? payload.tier : "free";
-				const enhanceCount = typeof payload.enhanceCount === "number" ? payload.enhanceCount : null;
-				const dailyLimit = typeof payload.dailyLimit === "number" ? payload.dailyLimit : null;
+				if (!refreshed?.accessToken) {
+					setState(FALLBACK_STATE);
+					return;
+				}
+
+				const refreshedAuth = await readStoredAuth();
+				if (cancelled) {
+					return;
+				}
+
+				if (!refreshedAuth) {
+					setState(FALLBACK_STATE);
+					return;
+				}
+
+				const accountStatus = await sendRuntimeMessage<AccountStatusResponse>({ type: "ACCOUNT_STATUS_REQUEST", jwt: refreshedAuth.access_token });
+				if (cancelled) {
+					return;
+				}
+
+				if (!accountStatus) {
+					setState(FALLBACK_STATE);
+					return;
+				}
+
+				const tier: Tier = isTier(accountStatus.tier) ? accountStatus.tier : "free";
+				const enhanceCount = typeof accountStatus.enhanceCount === "number" ? accountStatus.enhanceCount : null;
+				const dailyLimit = typeof accountStatus.dailyLimit === "number" ? accountStatus.dailyLimit : null;
 
 				setState({
 					tier,
@@ -141,11 +171,29 @@ export function useAccountStatus(): AccountStatusValue {
 					isLoading: false,
 					error: false,
 				});
-			} catch {
-				if (!cancelled) {
-					setState(FALLBACK_STATE);
-				}
+				return;
 			}
+
+			const accountStatus = await sendRuntimeMessage<AccountStatusResponse>({ type: "ACCOUNT_STATUS_REQUEST", jwt: auth.access_token });
+			if (cancelled) {
+				return;
+			}
+
+			if (!accountStatus) {
+				setState(FALLBACK_STATE);
+				return;
+			}
+
+			const tier: Tier = isTier(accountStatus.tier) ? accountStatus.tier : "free";
+			const enhanceCount = typeof accountStatus.enhanceCount === "number" ? accountStatus.enhanceCount : null;
+			const dailyLimit = typeof accountStatus.dailyLimit === "number" ? accountStatus.dailyLimit : null;
+
+			setState({
+				tier,
+				usage: enhanceCount !== null && dailyLimit !== null ? { count: enhanceCount, limit: dailyLimit } : null,
+				isLoading: false,
+				error: false,
+			});
 		})().catch(() => {
 			if (!cancelled) {
 				setState(FALLBACK_STATE);

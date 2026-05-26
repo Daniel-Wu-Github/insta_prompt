@@ -9,6 +9,9 @@ export function formatSseEvent(event: StreamEvent): string {
   if (event.type === "error") {
     return `data: ${JSON.stringify({ type: "error", message: event.message })}\n\n`;
   }
+  if (event.type === "warning") {
+    return `data: ${JSON.stringify({ type: "warning", message: event.message })}\n\n`;
+  }
   return `data: ${JSON.stringify({ type: "done" })}\n\n`;
 }
 

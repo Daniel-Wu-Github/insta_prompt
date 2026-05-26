@@ -65,7 +65,7 @@ else
 fi
 
 # ─── 4. Run incremental TypeScript check ─────────────────────────────────────
-RESULT=$(cd "$PKG_DIR" && timeout 45 npx tsc --noEmit --skipLibCheck 2>&1 | head -40 || true)
+RESULT=$(cd "$PKG_DIR" && timeout 45 ./node_modules/.bin/tsc --noEmit --skipLibCheck 2>&1 | head -40 || true)
 
 if [[ -z "$RESULT" ]]; then
   exit 0

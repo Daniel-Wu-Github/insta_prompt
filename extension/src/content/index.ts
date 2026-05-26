@@ -11,65 +11,67 @@ export default defineContentScript({
 		const DEBOUNCE_DELAY_MS = 400;
 		const DEFAULT_BRIDGE_MODE: Mode = "balanced";
 		const BRIDGE_FALLBACK_JWT = "promptcompiler-dev-jwt";
+		const SESSION_EXPIRED_NOTICE = "Session expired — please reopen the extension";
 		const DRAFT_HIGHLIGHT_NAME = "insta-prompt-draft-highlight";
 		const DRAFT_HIGHLIGHT_STYLE_ID = "insta-prompt-draft-highlight-style";
 		const DRAFT_OVERLAY_Z_INDEX = "2147483647";
-		const DRAFT_HIGH_CONFIDENCE_THRESHOLD = 0.7;
+		const DRAFT_HIGH_CONFIDENCE_THRESHOLD = 0.85;
 		const DRAFT_LOW_CONFIDENCE_THRESHOLD = 0.55;
 		const DRAFT_STALE_OPACITY = "0.45";
 		const DRAFT_ACCEPTED_OPACITY = "0.4";
 		const DRAFT_ACCEPTED_STALE_OPACITY = "0.3";
 		const DRAFT_UNDERLINE_COLOR = "rgb(37 99 235 / 0.95)";
 		const CANONICAL_ORDER_BY_GOAL_TYPE: Record<GoalType, number> = {
-			context: 0,
-			tech_stack: 1,
-			constraint: 2,
-			action: 3,
-			output_format: 4,
-			edge_case: 5,
+			// 1-indexed: matches backend canonical_order schema
+			context: 1,
+			tech_stack: 2,
+			constraint: 3,
+			action: 4,
+			output_format: 5,
+			edge_case: 6,
 		};
 
 		const GOAL_TYPE_PALETTE = {
-			context: {
-				cssVariable: "--insta-goal-type-context-color",
-				color: "rgb(15 118 110)",
-			},
-			tech_stack: {
-				cssVariable: "--insta-goal-type-tech-stack-color",
-				color: "rgb(29 78 216)",
-			},
-			constraint: {
-				cssVariable: "--insta-goal-type-constraint-color",
-				color: "rgb(180 83 9)",
-			},
+			// Purple
 			action: {
 				cssVariable: "--insta-goal-type-action-color",
-				color: "rgb(21 128 61)",
+				color: "rgb(124 58 237)",
 			},
+			// Teal
+			tech_stack: {
+				cssVariable: "--insta-goal-type-tech-stack-color",
+				color: "rgb(15 118 110)",
+			},
+			// Coral
+			constraint: {
+				cssVariable: "--insta-goal-type-constraint-color",
+				color: "rgb(244 63 94)",
+			},
+			// Blue
 			output_format: {
 				cssVariable: "--insta-goal-type-output-format-color",
-				color: "rgb(109 40 217)",
+				color: "rgb(29 78 216)",
 			},
+			// Amber
+			context: {
+				cssVariable: "--insta-goal-type-context-color",
+				color: "rgb(217 119 6)",
+			},
+			// Gray
 			edge_case: {
 				cssVariable: "--insta-goal-type-edge-case-color",
-				color: "rgb(185 28 28)",
+				color: "rgb(107 114 128)",
 			},
 		} as const satisfies Record<GoalType, { cssVariable: string; color: string }>;
 
-		const GOAL_TYPE_KEYWORDS: Record<GoalType, readonly string[]> = {
-			context: ["context", "background", "overview", "summary", "this is", "these", "here", "project", "page", "system"],
-			tech_stack: ["react", "typescript", "javascript", "css", "html", "dom", "textarea", "contenteditable", "extension", "observer", "shadow dom", "resizeobserver"],
-			constraint: ["must not", "must", "should not", "should", "never", "only", "without", "require", "cannot", "do not"],
-			action: ["add", "build", "create", "implement", "make", "fix", "render", "show", "paint", "display", "track", "keep", "attach", "apply", "update", "copy", "recompute", "derive", "write", "map", "set", "sync"],
-			output_format: ["json", "markdown", "table", "list", "bullet", "code", "output", "format", "response"],
-			edge_case: ["edge case", "fallback", "error", "stale", "empty", "missing", "invalid", "null", "zero", "unexpected"],
-		};
 
 		type InputLifecycleState = "IDLE" | "TYPING" | "SEGMENTING";
 		type DraftRenderMode = "highlight" | "overlay";
 		type DraftHoverPreviewStatus = "loading" | "ready" | "stale";
 
 		interface DraftSegment {
+			id: string;
+			depends_on: string[];
 			start: number;
 			end: number;
 			text: string;
@@ -96,10 +98,17 @@ export default defineContentScript({
 			focusedSegmentIndex: number | undefined;
 			hasStaleAccepted: boolean;
 			activeBindRequestId: string | undefined;
+			activeSegmentRequestId: string | undefined;
+			activeEnhanceRequestIdsBySegmentId: Map<string, string>;
+			enhancedTextBySegmentId: Map<string, string>;
 			ghostPanelElement: HTMLDivElement | undefined;
 			ghostPanelBodyElement: HTMLDivElement | undefined;
 			ghostPanelStatusElement: HTMLDivElement | undefined;
 			ghostPanelLayoutListener: EventListener | undefined;
+			bindPhase: "IDLE" | "BINDING" | "COMPLETE";
+			bindHistoryWarning: string | undefined;
+			bindRecoveryObserver: MutationObserver | undefined;
+			bindRecoveryTimeoutId: number | undefined;
 			pendingGhostText: string;
 			ghostStreamComplete: boolean;
 		}
@@ -161,7 +170,8 @@ export default defineContentScript({
 		let activeDraftHoverPreviewState: DraftHoverPreviewState | undefined;
 		let lastDraftHoverPoint: { clientX: number; clientY: number } | undefined;
 		let draftOverlaySyncListenersInstalled = false;
-		const bridgePort = chrome.runtime.connect({ name: BRIDGE_PORT_NAME });
+		// Null when the SW port has been killed and not yet reconnected.
+		let _bridgePort: chrome.runtime.Port | null = null;
 
 		const isBlockLevelElement = (element: Element): boolean => {
 			return BLOCK_LEVEL_TAGS.has(element.tagName);
@@ -173,6 +183,10 @@ export default defineContentScript({
 
 		const isModeValue = (value: unknown): value is Mode => {
 			return typeof value === "string" && MODE_VALUES.includes(value as Mode);
+		};
+
+		const isGoalTypeValue = (value: unknown): value is GoalType => {
+			return typeof value === "string" && GOAL_TYPE_VALUES.includes(value as GoalType);
 		};
 
 		const extractBridgeJwtCandidate = (value: unknown): string | undefined => {
@@ -245,7 +259,9 @@ export default defineContentScript({
 			}
 		};
 
-		const resolveBridgeContext = async (): Promise<{ mode: Mode; jwt: string }> => {
+		const AUTH_STORAGE_KEY = "promptcompiler.auth";
+
+		const resolveBridgeContext = async (): Promise<{ mode: Mode; jwt: string | null }> => {
 			const syncSnapshot = await readSyncStorageSnapshot();
 			const localSnapshot = await chrome.storage.local.get(null);
 			const sessionSnapshot = await readSessionStorageSnapshot();
@@ -262,6 +278,16 @@ export default defineContentScript({
 				}
 			}
 
+			// Check the canonical auth key written by App.tsx on login.
+			const storedAuth = localSnapshot[AUTH_STORAGE_KEY];
+			if (typeof storedAuth === "object" && storedAuth !== null && !Array.isArray(storedAuth)) {
+				const accessToken = (storedAuth as Record<string, unknown>).access_token;
+				if (typeof accessToken === "string" && accessToken.trim().length > 0) {
+					return { mode, jwt: accessToken.trim() };
+				}
+			}
+
+			// Fall back to broad storage scan for dev/legacy tokens.
 			for (const snapshot of [sessionSnapshot, localSnapshot]) {
 				for (const candidate of Object.values(snapshot)) {
 					const jwt = extractBridgeJwtCandidate(candidate);
@@ -271,12 +297,12 @@ export default defineContentScript({
 				}
 			}
 
-			return { mode, jwt: BRIDGE_FALLBACK_JWT };
+			return { mode, jwt: null };
 		};
 
 		const buildSegmentBridgeMessage = async (normalizedText: string): Promise<{
 			verb: "SEGMENT";
-			jwt: string;
+			jwt: string | null;
 			requestId: string;
 			payload: SegmentRequest;
 		}> => {
@@ -460,10 +486,12 @@ export default defineContentScript({
 					statusElement.textContent = "Stale";
 					bodyElement.textContent = "This preview is outdated because the text changed.";
 					break;
-				case "ready":
+				case "ready": {
 					statusElement.textContent = "Ready";
-					bodyElement.textContent = getDraftHoverPreviewBodyText(segment);
+					const enhancedText = activeInputState?.enhancedTextBySegmentId.get(segment.id);
+					bodyElement.textContent = enhancedText ?? getDraftHoverPreviewBodyText(segment);
 					break;
+				}
 			}
 		};
 
@@ -613,7 +641,11 @@ export default defineContentScript({
 			positionDraftHoverPreview(hoverState);
 
 			if (hoverState.status === "loading") {
-				scheduleDraftHoverPreviewReady(hoverState);
+				// Use the timer fallback only when no ENHANCE stream is driving this segment.
+				// If a stream is active the done-handler will transition to "ready" instead.
+				if (!activeInputState?.activeEnhanceRequestIdsBySegmentId.has(hitTarget.segment.id)) {
+					scheduleDraftHoverPreviewReady(hoverState);
+				}
 			}
 		};
 
@@ -625,71 +657,6 @@ export default defineContentScript({
 			syncDraftHoverPreviewFromPoint(sourceElement, lastDraftHoverPoint.clientX, lastDraftHoverPoint.clientY);
 		};
 
-		const classifyDraftSegment = (segmentText: string): { goalType: GoalType; confidence: number } => {
-			const normalizedText = segmentText.trim().toLowerCase();
-			const goalTypeScores = new Map<GoalType, number>();
-
-			for (const goalType of GOAL_TYPE_VALUES) {
-				goalTypeScores.set(goalType, 0);
-			}
-
-			for (const goalType of GOAL_TYPE_VALUES) {
-				const keywords = GOAL_TYPE_KEYWORDS[goalType];
-				let score = goalTypeScores.get(goalType) ?? 0;
-
-				for (const keyword of keywords) {
-					if (!normalizedText.includes(keyword)) {
-						continue;
-					}
-
-					score += keyword.includes(" ") ? 2 : 1;
-				}
-
-				if (goalType === "action" && /^(add|build|create|implement|make|fix|render|show|paint|display|track|keep|attach|apply|update|copy|recompute|derive|write|map|set|sync)\b/.test(normalizedText)) {
-					score += 2;
-				}
-
-				if (goalType === "constraint" && /\b(must|should|never|only|without|require|cannot|do not)\b/.test(normalizedText)) {
-					score += 2;
-				}
-
-				goalTypeScores.set(goalType, score);
-			}
-
-			let winningGoalType: GoalType = GOAL_TYPE_VALUES[0];
-			let winningScore = -1;
-			let runnerUpScore = -1;
-
-			for (const goalType of GOAL_TYPE_VALUES) {
-				const score = goalTypeScores.get(goalType) ?? 0;
-
-				if (score > winningScore) {
-					runnerUpScore = winningScore;
-					winningGoalType = goalType;
-					winningScore = score;
-					continue;
-				}
-
-				if (score > runnerUpScore) {
-					runnerUpScore = score;
-				}
-			}
-
-			if (winningScore <= 0) {
-				return {
-					goalType: winningGoalType,
-					confidence: 0.42,
-				};
-			}
-
-			const conflictPenalty = runnerUpScore > 0 ? Math.min(0.16, runnerUpScore * 0.08) : 0;
-			const confidence = Math.max(0.35, Math.min(0.97, 0.62 + winningScore * 0.12 - conflictPenalty));
-
-			return {
-				goalType: winningGoalType,
-				confidence,
-			};
-		};
 
 		const extractContenteditableText = (element: HTMLElement): string => {
 			const extractNodeText = (node: Node): string => {
@@ -740,10 +707,14 @@ export default defineContentScript({
 				}
 
 				segments.push({
+					id: `seg-${start}-${end}`,
+					depends_on: [],
 					start,
 					end,
 					text: normalizedText.slice(start, end),
-					...classifyDraftSegment(normalizedText.slice(start, end)),
+					// Placeholder until the backend /segment response updates these fields.
+					goalType: GOAL_TYPE_VALUES[0],
+					confidence: 0,
 				});
 			};
 
@@ -763,6 +734,11 @@ export default defineContentScript({
 			}
 
 			pushSegment(normalizedText.length);
+
+			// Second pass: fill depends_on with all upstream segment IDs
+			for (let i = 1; i < segments.length; i++) {
+				segments[i]!.depends_on = segments.slice(0, i).map(s => s.id);
+			}
 
 			return segments;
 		};
@@ -848,6 +824,17 @@ export default defineContentScript({
 			if (!state) {
 				return;
 			}
+
+			// Cancel all live ENHANCE streams before clearing segment state.
+			const enhanceSegmentIds = Array.from(state.activeEnhanceRequestIdsBySegmentId.keys());
+			for (const segId of enhanceSegmentIds) {
+				const reqId = state.activeEnhanceRequestIdsBySegmentId.get(segId);
+				if (reqId) {
+					postToBridge({ verb: "CANCEL", jwt: BRIDGE_FALLBACK_JWT, requestId: reqId });
+					state.activeEnhanceRequestIdsBySegmentId.delete(segId);
+				}
+			}
+			state.enhancedTextBySegmentId.clear();
 
 			if (renderedDraftOverlayState === state) {
 				renderedDraftOverlayState = undefined;
@@ -1292,6 +1279,108 @@ export default defineContentScript({
 			restoreDraftHoverPreviewFromLastPointer(state.element);
 		};
 
+		// CSS properties (hyphenated) that control text layout inside a textarea.
+		// These are copied to the mirror div so wrapping and character widths match exactly.
+		const MIRROR_LAYOUT_PROPS = [
+			"box-sizing", "width",
+			"border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+			"padding-top", "padding-right", "padding-bottom", "padding-left",
+			"font-family", "font-size", "font-style", "font-weight", "font-stretch",
+			"letter-spacing", "word-spacing", "line-height",
+			"text-align", "text-transform", "text-indent",
+		] as const;
+
+		// Returns the viewport-relative {x, y} of the insertion point (bottom of the caret
+		// line) inside the given element, or null if the technique cannot be applied.
+		//
+		// For contenteditable elements the Selection API gives us the caret range rect
+		// directly, so no cloning is needed.
+		//
+		// For <textarea> elements we use the mirror-clone technique:
+		//   1. Build a hidden div with identical layout styles and the same pixel width.
+		//   2. Fill it with all text *before* the caret, then append a zero-width-space
+		//      sentinel <span>.
+		//   3. Scroll the mirror to match the textarea's own scrollTop / scrollLeft so
+		//      text that has scrolled off the top does not shift the sentinel upward.
+		//   4. Read the sentinel's viewport rect — its bottom-left is exactly where the
+		//      next character would appear in the textarea.
+		//
+		// Step 3 is what makes the math correct under scroll and wrapping: the mirror's
+		// layout engine performs the same line-breaking as the browser does inside the
+		// real textarea (because box width, font metrics, and padding are identical), and
+		// scrollTop alignment ensures visible-area coordinates rather than document-area.
+		const getCaretCoordinates = (element: HTMLTextAreaElement | HTMLElement): { x: number; y: number } | null => {
+			try {
+				if (!(element instanceof HTMLTextAreaElement)) {
+					// contenteditable / ProseMirror: Selection API is authoritative.
+					const sel = window.getSelection();
+					if (!sel || sel.rangeCount === 0) {
+						return null;
+					}
+					const range = sel.getRangeAt(0).cloneRange();
+					range.collapse(true);
+					const rect = range.getBoundingClientRect();
+					// A zero rect means the selection is in an invisible node.
+					if (rect.top === 0 && rect.left === 0 && rect.width === 0 && rect.height === 0) {
+						return null;
+					}
+					return { x: rect.left, y: rect.bottom };
+				}
+
+				const ta = element;
+				const caretPos = ta.selectionStart ?? ta.value.length;
+				const computed = window.getComputedStyle(ta);
+				const taRect = ta.getBoundingClientRect();
+
+				const mirror = document.createElement("div");
+				mirror.setAttribute("aria-hidden", "true");
+
+				// Base positioning: place mirror at the textarea's document position so
+				// its internal layout matches the textarea's coordinate space.
+				mirror.style.position = "absolute";
+				mirror.style.visibility = "hidden";
+				mirror.style.pointerEvents = "none";
+				mirror.style.top = `${taRect.top + window.scrollY}px`;
+				mirror.style.left = `${taRect.left + window.scrollX}px`;
+				// Allow overflow so scrollTop assignment below takes effect.
+				mirror.style.overflowY = "scroll";
+				mirror.style.overflowX = "hidden";
+				// Textareas always wrap — enforce consistent wrapping on the mirror.
+				mirror.style.whiteSpace = "pre-wrap";
+				mirror.style.wordBreak = "break-word";
+
+				for (const prop of MIRROR_LAYOUT_PROPS) {
+					const val = computed.getPropertyValue(prop);
+					if (val) {
+						mirror.style.setProperty(prop, val);
+					}
+				}
+
+				// Text before caret + zero-width-space sentinel.
+				mirror.textContent = ta.value.substring(0, caretPos);
+				const sentinel = document.createElement("span");
+				sentinel.textContent = "​";
+				mirror.appendChild(sentinel);
+
+				document.body.appendChild(mirror);
+				// Scroll the mirror to match the textarea so lines above the viewport
+				// are accounted for in the sentinel's viewport-relative rect.
+				mirror.scrollTop = ta.scrollTop;
+				mirror.scrollLeft = ta.scrollLeft;
+
+				const sentinelRect = sentinel.getBoundingClientRect();
+				mirror.remove();
+
+				if (sentinelRect.top === 0 && sentinelRect.left === 0) {
+					return null;
+				}
+				return { x: sentinelRect.left, y: sentinelRect.bottom };
+			} catch {
+				// Any DOM or CSP failure falls through to the floating-panel fallback.
+				return null;
+			}
+		};
+
 		const ensureGhostPanel = (state: ActiveInputState): void => {
 			if (state.ghostPanelElement && state.ghostPanelElement.isConnected) {
 				positionGhostPanel(state);
@@ -1390,8 +1479,20 @@ export default defineContentScript({
 				return;
 			}
 
-			const rect = state.element.getBoundingClientRect();
 			const viewportPadding = 12;
+
+			// Primary: anchor to the exact caret position via mirror-clone.
+			const caret = getCaretCoordinates(state.element);
+			if (caret !== null) {
+				const x = Math.max(viewportPadding, Math.min(window.innerWidth - viewportPadding - 200, caret.x));
+				const y = Math.max(viewportPadding, Math.min(window.innerHeight - viewportPadding - 80, caret.y + 4));
+				panel.style.left = `${x}px`;
+				panel.style.top = `${y}px`;
+				return;
+			}
+
+			// Fallback: float the panel just below the host element's bounding box.
+			const rect = state.element.getBoundingClientRect();
 			const top = Math.min(window.innerHeight - viewportPadding - 80, rect.bottom + 8);
 			const left = Math.max(viewportPadding, rect.left);
 			panel.style.left = `${left}px`;
@@ -1402,6 +1503,196 @@ export default defineContentScript({
 			if (state.ghostPanelStatusElement) {
 				state.ghostPanelStatusElement.textContent = text;
 			}
+		};
+
+		const showSessionExpiredNotice = (state: ActiveInputState): void => {
+			ensureGhostPanel(state);
+			updateGhostPanelStatus(state, "Session expired");
+			if (state.ghostPanelBodyElement) {
+				state.ghostPanelBodyElement.textContent = SESSION_EXPIRED_NOTICE;
+			}
+		};
+
+		const clearBindRecoveryTracking = (state: ActiveInputState): void => {
+			if (state.bindRecoveryTimeoutId !== undefined) {
+				window.clearTimeout(state.bindRecoveryTimeoutId);
+				state.bindRecoveryTimeoutId = undefined;
+			}
+
+			if (state.bindRecoveryObserver) {
+				state.bindRecoveryObserver.disconnect();
+				state.bindRecoveryObserver = undefined;
+			}
+		};
+
+		const copyTextToClipboard = async (text: string): Promise<void> => {
+			if (text.length === 0) {
+				return;
+			}
+
+			if (navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(text);
+				return;
+			}
+
+			const fallback = document.createElement("textarea");
+			fallback.value = text;
+			fallback.setAttribute("readonly", "true");
+			fallback.style.position = "fixed";
+			fallback.style.opacity = "0";
+			document.body.appendChild(fallback);
+			fallback.select();
+			document.execCommand("copy");
+			fallback.remove();
+		};
+
+		const scoreReplacementInput = (previous: HTMLTextAreaElement | HTMLElement, candidate: HTMLElement): number => {
+			let score = 0;
+
+			if (previous.tagName === candidate.tagName) {
+				score += 4;
+			}
+
+			const comparableAttributes = ["id", "name", "role", "aria-label", "placeholder", "data-testid", "data-test-id"] as const;
+			for (const attribute of comparableAttributes) {
+				const previousValue = previous.getAttribute(attribute);
+				const candidateValue = candidate.getAttribute(attribute);
+				if (previousValue && candidateValue && previousValue === candidateValue) {
+					score += 1;
+				}
+			}
+
+			if (previous.className && previous.className === candidate.className) {
+				score += 1;
+			}
+
+			if (previous instanceof HTMLTextAreaElement && candidate instanceof HTMLTextAreaElement) {
+				score += 2;
+			}
+
+			if (
+				previous instanceof HTMLElement &&
+				candidate instanceof HTMLElement &&
+				previous.matches('[contenteditable]:not([contenteditable="false"])') === candidate.matches('[contenteditable]:not([contenteditable="false"])')
+			) {
+				score += 1;
+			}
+
+			return score;
+		};
+
+		const findReplacementInput = (
+			state: ActiveInputState,
+			mutationList: MutationRecord[],
+		): HTMLTextAreaElement | HTMLElement | undefined => {
+			const candidates: HTMLElement[] = [];
+
+			const collectCandidates = (node: Node): void => {
+				if (node instanceof HTMLTextAreaElement || node instanceof HTMLElement) {
+					if (isValidInput(node)) {
+						candidates.push(node);
+					}
+				}
+
+				if (node instanceof Element || node instanceof DocumentFragment) {
+					for (const descendant of node.querySelectorAll("textarea, [contenteditable]:not([contenteditable='false'])")) {
+						if (isValidInput(descendant)) {
+							candidates.push(descendant);
+						}
+					}
+				}
+			};
+
+			for (const mutation of mutationList) {
+				if (mutation.type !== "childList") {
+					continue;
+				}
+
+				for (const addedNode of mutation.addedNodes) {
+					collectCandidates(addedNode);
+				}
+			}
+
+			let bestCandidate: HTMLTextAreaElement | HTMLElement | undefined;
+			let bestScore = 0;
+			for (const candidate of candidates) {
+				if (candidate === state.element || isInstrumented(candidate)) {
+					continue;
+				}
+
+				const score = scoreReplacementInput(state.element, candidate);
+				if (score > bestScore) {
+					bestCandidate = candidate;
+					bestScore = score;
+				}
+			}
+
+			return bestScore > 0 ? bestCandidate : undefined;
+		};
+
+		const reattachActiveInput = (state: ActiveInputState, nextElement: HTMLTextAreaElement | HTMLElement): void => {
+			const previousElement = state.element;
+			if (previousElement !== nextElement) {
+				if (state.draftOverlayScrollListener) {
+					previousElement.removeEventListener("scroll", state.draftOverlayScrollListener);
+				}
+
+				state.element = nextElement;
+				state.draftOverlayScrollListener = undefined;
+				ensureSourceScrollListenerInstalled(state);
+				installDraftOverlayResizeObserver(state);
+				if (state.ghostPanelElement) {
+					ensureGhostPanel(state);
+				}
+			}
+
+			if (state.draftOverlayElement?.isConnected && state.draftOverlayContentElement?.isConnected) {
+				updateDraftOverlayGeometry(state.element, state.draftOverlayElement, state.draftOverlayContentElement, state.draftOverlaySegmentRootElement);
+				applyDraftOverlayFreshness(state.draftOverlayElement, state.draftIsStale);
+			}
+
+			if (state.ghostPanelElement?.isConnected) {
+				positionGhostPanel(state);
+			}
+
+			renderedDraftOverlayState = state;
+		};
+
+		const scheduleBindRecoveryFallback = (state: ActiveInputState): void => {
+			if (state.bindRecoveryObserver || state.bindRecoveryTimeoutId !== undefined) {
+				return;
+			}
+
+			state.bindRecoveryObserver = new MutationObserver((mutationList) => {
+				const replacement = findReplacementInput(state, mutationList);
+				if (!replacement) {
+					return;
+				}
+
+				clearBindRecoveryTracking(state);
+				reattachActiveInput(state, replacement);
+			});
+
+			state.bindRecoveryObserver.observe(document.body, {
+				childList: true,
+				subtree: true,
+			});
+
+			state.bindRecoveryTimeoutId = window.setTimeout(() => {
+				clearBindRecoveryTracking(state);
+				if (state.element.isConnected || state.bindPhase === "IDLE") {
+					return;
+				}
+
+				void copyTextToClipboard(state.pendingGhostText).catch((error) => {
+					console.warn("Failed to copy recovered bind text", error);
+				});
+				showSessionExpiredNotice(state);
+				updateGhostPanelStatus(state, "Editor changed");
+				if (state.ghostPanelBodyElement) {
+					state.ghostPanelBodyElement.textContent = "Editor changed — your compiled prompt was saved to clipboard";
+				}
+			}, 500);
 		};
 
 		const removeGhostPanel = (state: ActiveInputState): void => {
@@ -1421,6 +1712,7 @@ export default defineContentScript({
 		};
 
 		const handleBindStreamToken = (state: ActiveInputState, token: string): void => {
+			state.bindPhase = "BINDING";
 			state.pendingGhostText += token;
 			ensureGhostPanel(state);
 			if (state.ghostPanelBodyElement) {
@@ -1429,17 +1721,82 @@ export default defineContentScript({
 		};
 
 		const handleBindStreamDone = (state: ActiveInputState): void => {
+			state.bindPhase = "COMPLETE";
 			state.ghostStreamComplete = true;
 			updateGhostPanelStatus(state, "Press Enter to commit");
 		};
 
+		const handleBindStreamWarning = (state: ActiveInputState, message: string): void => {
+			state.bindHistoryWarning = message;
+			ensureGhostPanel(state);
+			updateGhostPanelStatus(state, "Press Enter to commit");
+			if (state.ghostPanelBodyElement) {
+				state.ghostPanelBodyElement.textContent = `${state.pendingGhostText}\n\n${message}`;
+			}
+		};
+
 		const handleBindStreamError = (state: ActiveInputState, message: string): void => {
+			clearBindRecoveryTracking(state);
+			state.bindPhase = "IDLE";
 			state.ghostStreamComplete = false;
 			state.activeBindRequestId = undefined;
+			state.bindHistoryWarning = undefined;
 			ensureGhostPanel(state);
 			updateGhostPanelStatus(state, "Bind failed");
 			if (state.ghostPanelBodyElement) {
 				state.ghostPanelBodyElement.textContent = message;
+			}
+		};
+
+		const handleEnhanceStreamToken = (state: ActiveInputState, segmentId: string, token: string): void => {
+			const accumulated = (state.enhancedTextBySegmentId.get(segmentId) ?? "") + token;
+			state.enhancedTextBySegmentId.set(segmentId, accumulated);
+
+			// Live-update the hover preview body if it is currently showing this segment.
+			if (
+				activeDraftHoverPreviewState &&
+				activeDraftHoverPreviewState.sourceElement === state.element &&
+				activeDraftHoverPreviewState.segment.id === segmentId
+			) {
+				activeDraftHoverPreviewState.bodyElement.textContent = accumulated;
+			}
+		};
+
+		const handleEnhanceStreamDone = (state: ActiveInputState, segmentId: string): void => {
+			state.activeEnhanceRequestIdsBySegmentId.delete(segmentId);
+
+			// Transition hover preview to ready, cancelling any pending 120ms timer.
+			if (
+				activeDraftHoverPreviewState &&
+				activeDraftHoverPreviewState.sourceElement === state.element &&
+				activeDraftHoverPreviewState.segment.id === segmentId
+			) {
+				if (activeDraftHoverPreviewState.readyTimerId !== undefined) {
+					window.clearTimeout(activeDraftHoverPreviewState.readyTimerId);
+					activeDraftHoverPreviewState.readyTimerId = undefined;
+				}
+				activeDraftHoverPreviewState.status = "ready";
+				renderDraftHoverPreview(activeDraftHoverPreviewState);
+				positionDraftHoverPreview(activeDraftHoverPreviewState);
+			}
+		};
+
+		const handleEnhanceStreamError = (state: ActiveInputState, segmentId: string, errorMessage: string): void => {
+			state.activeEnhanceRequestIdsBySegmentId.delete(segmentId);
+
+			// Surface the error in the hover preview if it is showing this segment.
+			if (
+				activeDraftHoverPreviewState &&
+				activeDraftHoverPreviewState.sourceElement === state.element &&
+				activeDraftHoverPreviewState.segment.id === segmentId
+			) {
+				if (activeDraftHoverPreviewState.readyTimerId !== undefined) {
+					window.clearTimeout(activeDraftHoverPreviewState.readyTimerId);
+					activeDraftHoverPreviewState.readyTimerId = undefined;
+				}
+				activeDraftHoverPreviewState.panelElement.dataset.state = "error";
+				activeDraftHoverPreviewState.statusElement.textContent = "Error";
+				activeDraftHoverPreviewState.bodyElement.textContent = errorMessage;
 			}
 		};
 
@@ -1458,6 +1815,8 @@ export default defineContentScript({
 				state.abortController = undefined;
 			}
 
+			clearBindRecoveryTracking(state);
+			state.bindPhase = "IDLE";
 			state.status = "IDLE";
 		};
 
@@ -1530,17 +1889,19 @@ export default defineContentScript({
 			return undefined;
 		};
 
-		const deacceptLastSegment = (state: ActiveInputState): boolean => {
-			const lastAccepted = state.acceptanceOrder.pop();
-			if (lastAccepted === undefined) {
+		const skipFocusedSegment = (state: ActiveInputState): boolean => {
+			if (state.draftSegments.length === 0 || state.focusedSegmentIndex === undefined) {
 				return false;
 			}
-
-			state.acceptedSegmentIndices.delete(lastAccepted);
-			state.focusedSegmentIndex = lastAccepted;
-			if (state.acceptedSegmentIndices.size === 0) {
-				state.hasStaleAccepted = false;
+			// Find the next unaccepted segment after the current focus, wrapping around.
+			// findNextUnacceptedIndex wraps back through indices < start, which would re-hit
+			// focusedSegmentIndex itself if it is the only unaccepted segment — treat that
+			// as a no-op so focus does not appear to move.
+			const next = findNextUnacceptedIndex(state, state.focusedSegmentIndex + 1);
+			if (next === undefined || next === state.focusedSegmentIndex) {
+				return false;
 			}
+			state.focusedSegmentIndex = next;
 			restampAcceptedSegmentVisuals(state);
 			return true;
 		};
@@ -1562,9 +1923,9 @@ export default defineContentScript({
 				}
 
 				sections.push({
-					canonical_order: CANONICAL_ORDER_BY_GOAL_TYPE[segment.goalType] + 1,
+					canonical_order: CANONICAL_ORDER_BY_GOAL_TYPE[segment.goalType],
 					goal_type: segment.goalType,
-					expansion: segment.text,
+					expansion: state.enhancedTextBySegmentId.get(segment.id) ?? segment.text,
 				});
 			}
 
@@ -1587,8 +1948,16 @@ export default defineContentScript({
 
 			void (async () => {
 				const { mode, jwt } = await resolveBridgeContext();
+				if (!jwt) {
+					showSessionExpiredNotice(state);
+					return;
+				}
+
 				const requestId = crypto.randomUUID();
+				clearBindRecoveryTracking(state);
+				state.bindPhase = "BINDING";
 				state.activeBindRequestId = requestId;
+				state.bindHistoryWarning = undefined;
 				state.pendingGhostText = "";
 				state.ghostStreamComplete = false;
 				ensureGhostPanel(state);
@@ -1597,7 +1966,7 @@ export default defineContentScript({
 					state.ghostPanelBodyElement.textContent = "";
 				}
 
-				bridgePort.postMessage({
+				postToBridge({
 					verb: "BIND",
 					jwt,
 					requestId,
@@ -1617,21 +1986,61 @@ export default defineContentScript({
 				return false;
 			}
 
-			try {
-				bridgePort.postMessage({
-					verb: "CANCEL",
-					jwt: BRIDGE_FALLBACK_JWT,
-					requestId,
-				});
-			} catch (error) {
-				console.warn("Failed to cancel bind stream", error);
-			}
+			clearBindRecoveryTracking(state);
+			postToBridge({ verb: "CANCEL", jwt: BRIDGE_FALLBACK_JWT, requestId });
 
 			state.activeBindRequestId = undefined;
+			state.bindPhase = "IDLE";
+			state.bindHistoryWarning = undefined;
 			state.pendingGhostText = "";
 			state.ghostStreamComplete = false;
 			removeGhostPanel(state);
 			return true;
+		};
+
+		const cancelEnhanceStreamForSegment = (state: ActiveInputState, segmentId: string): void => {
+			const requestId = state.activeEnhanceRequestIdsBySegmentId.get(segmentId);
+			if (!requestId) {
+				return;
+			}
+
+			postToBridge({ verb: "CANCEL", jwt: BRIDGE_FALLBACK_JWT, requestId });
+			state.activeEnhanceRequestIdsBySegmentId.delete(segmentId);
+		};
+
+		const dispatchEnhanceRequest = async (state: ActiveInputState, segment: DraftSegment, allSegments: DraftSegment[]): Promise<void> => {
+			const { mode, jwt } = await resolveBridgeContext();
+			if (!jwt) {
+				showSessionExpiredNotice(state);
+				return;
+			}
+
+			// Guard: if state was superseded by a newer debounce, do nothing.
+			if (activeInputState !== state) {
+				return;
+			}
+
+			// Guard: don't re-dispatch if one is already active for this segment.
+			if (state.activeEnhanceRequestIdsBySegmentId.has(segment.id)) {
+				return;
+			}
+
+			const requestId = crypto.randomUUID();
+			state.activeEnhanceRequestIdsBySegmentId.set(segment.id, requestId);
+
+			postToBridge({
+				verb: "ENHANCE",
+				jwt,
+				requestId,
+				payload: {
+					section: { id: segment.id, text: segment.text, goal_type: segment.goalType },
+					siblings: allSegments
+						.filter(s => s.id !== segment.id)
+						.map(s => ({ id: s.id, text: s.text, goal_type: s.goalType })),
+					mode,
+					project_id: null,
+				},
+			});
 		};
 
 		const commitGhostTextToInput = (state: ActiveInputState): boolean => {
@@ -1665,17 +2074,122 @@ export default defineContentScript({
 			return true;
 		};
 
+		const mapBackendSectionsToDraftSegments = (
+			sections: Array<Record<string, unknown>>,
+			fullText: string,
+		): DraftSegment[] => {
+			const result: DraftSegment[] = [];
+			let cursor = 0;
+
+			for (const section of sections) {
+				const text = typeof section.text === "string" ? section.text.trim() : "";
+				if (!text) {
+					continue;
+				}
+				const goalType = isGoalTypeValue(section.goal_type) ? section.goal_type : GOAL_TYPE_VALUES[0];
+				const confidence = typeof section.confidence === "number" ? section.confidence : 0.5;
+
+				const pos = fullText.indexOf(text, cursor);
+				if (pos === -1) {
+					continue;
+				}
+
+				result.push({
+					id: `seg-${pos}-${pos + text.length}`,
+					depends_on: [],
+					start: pos,
+					end: pos + text.length,
+					text,
+					goalType,
+					confidence,
+				});
+				cursor = pos + text.length;
+			}
+
+			for (let i = 1; i < result.length; i++) {
+				result[i]!.depends_on = result.slice(0, i).map(s => s.id);
+			}
+
+			return result;
+		};
+
+		const handleSegmentResponse = (state: ActiveInputState, data: Record<string, unknown>): void => {
+			const rawSections = Array.isArray(data.sections) ? (data.sections as Array<Record<string, unknown>>) : [];
+			const backendSegments = mapBackendSectionsToDraftSegments(rawSections, state.draftText);
+
+			if (backendSegments.length === 0) {
+				return;
+			}
+
+			// Acceptance migration: same first-divergence algorithm used in the debounce callback.
+			const oldSegments = state.draftSegments;
+			let firstDivergenceIndex = Math.min(oldSegments.length, backendSegments.length);
+			for (let i = 0; i < firstDivergenceIndex; i++) {
+				if (oldSegments[i]?.id !== backendSegments[i]?.id) {
+					firstDivergenceIndex = i;
+					break;
+				}
+			}
+
+			const newIndexById = new Map<string, number>();
+			for (let i = 0; i < backendSegments.length; i++) {
+				newIndexById.set(backendSegments[i]!.id, i);
+			}
+
+			const newAcceptedIndices = new Set<number>();
+			const newAcceptanceOrder: number[] = [];
+			let anyStale = false;
+			for (const oldIndex of state.acceptanceOrder) {
+				const oldSegment = oldSegments[oldIndex];
+				if (!oldSegment) {
+					continue;
+				}
+				const newIndex = newIndexById.get(oldSegment.id);
+				if (newIndex === undefined) {
+					continue;
+				}
+				newAcceptedIndices.add(newIndex);
+				newAcceptanceOrder.push(newIndex);
+				if (newIndex >= firstDivergenceIndex) {
+					anyStale = true;
+				}
+			}
+			state.acceptedSegmentIndices = newAcceptedIndices;
+			state.acceptanceOrder = newAcceptanceOrder;
+			state.hasStaleAccepted = anyStale || (state.hasStaleAccepted && newAcceptedIndices.size > 0);
+
+			// Cancel ENHANCE streams for segments that the backend re-segmented differently.
+			for (const [segId] of Array.from(state.activeEnhanceRequestIdsBySegmentId.entries())) {
+				const newIndex = newIndexById.get(segId);
+				if (newIndex === undefined || newIndex >= firstDivergenceIndex) {
+					cancelEnhanceStreamForSegment(state, segId);
+					state.enhancedTextBySegmentId.delete(segId);
+				}
+			}
+
+			// Render with backend-classified segments, then fire ENHANCE for each new one.
+			renderDraftSegments(state, state.draftText, backendSegments, state.draftIsStale);
+
+			for (const segment of backendSegments) {
+				if (!state.activeEnhanceRequestIdsBySegmentId.has(segment.id) && !state.enhancedTextBySegmentId.has(segment.id)) {
+					void dispatchEnhanceRequest(state, segment, backendSegments);
+				}
+			}
+		};
+
 		const resetActiveInputAfterCommit = (state: ActiveInputState): void => {
 			removeGhostPanel(state);
 			state.pendingGhostText = "";
 			state.ghostStreamComplete = false;
 			state.activeBindRequestId = undefined;
+			state.activeSegmentRequestId = undefined;
 			state.acceptedSegmentIndices = new Set<number>();
 			state.acceptanceOrder = [];
 			state.focusedSegmentIndex = undefined;
 			state.hasStaleAccepted = false;
+			state.bindHistoryWarning = undefined;
 			clearActiveInputWork(state);
-			clearDraftRendering(state);
+			clearDraftRendering(state); // cancels ENHANCE streams and clears maps
 		};
 
 		const handleSourceKeyDownEvent = (event: Event): void => {
@@ -1712,7 +2226,7 @@ export default defineContentScript({
 				event.stopPropagation();
 
 				if (event.shiftKey) {
-					deacceptLastSegment(state);
+					skipFocusedSegment(state);
 				} else {
 					acceptNextSegment(state);
 				}
@@ -1742,6 +2256,9 @@ export default defineContentScript({
 
 			const previousState = activeInputState;
 			if (previousState?.element === element) {
+				if (previousState.activeBindRequestId) {
+					cancelActiveBindStream(previousState);
+				}
 				clearActiveInputWork(previousState);
 				previousState.draftIsStale = true;
 				if (previousState.draftOverlayElement) {
@@ -1775,10 +2292,17 @@ export default defineContentScript({
 					focusedSegmentIndex: previousState.focusedSegmentIndex,
 					hasStaleAccepted: previousState.hasStaleAccepted,
 					activeBindRequestId: previousState.activeBindRequestId,
+					activeSegmentRequestId: previousState.activeSegmentRequestId,
+					activeEnhanceRequestIdsBySegmentId: new Map(previousState.activeEnhanceRequestIdsBySegmentId),
+					enhancedTextBySegmentId: new Map(previousState.enhancedTextBySegmentId),
 					ghostPanelElement: previousState.ghostPanelElement,
 					ghostPanelBodyElement: previousState.ghostPanelBodyElement,
 					ghostPanelStatusElement: previousState.ghostPanelStatusElement,
 					ghostPanelLayoutListener: previousState.ghostPanelLayoutListener,
+					bindPhase: previousState.bindPhase,
+					bindHistoryWarning: undefined,
+					bindRecoveryObserver: previousState.bindRecoveryObserver,
+					bindRecoveryTimeoutId: previousState.bindRecoveryTimeoutId,
 					pendingGhostText: previousState.pendingGhostText,
 					ghostStreamComplete: previousState.ghostStreamComplete,
 				}
@@ -1801,10 +2325,17 @@ export default defineContentScript({
 					focusedSegmentIndex: undefined,
 					hasStaleAccepted: false,
 					activeBindRequestId: undefined,
+					activeSegmentRequestId: undefined,
+					activeEnhanceRequestIdsBySegmentId: new Map(),
+					enhancedTextBySegmentId: new Map(),
 					ghostPanelElement: undefined,
 					ghostPanelBodyElement: undefined,
 					ghostPanelStatusElement: undefined,
 					ghostPanelLayoutListener: undefined,
+					bindPhase: "IDLE",
+					bindHistoryWarning: undefined,
+					bindRecoveryObserver: undefined,
+					bindRecoveryTimeoutId: undefined,
 					pendingGhostText: "",
 					ghostStreamComplete: false,
 				};
@@ -1828,14 +2359,87 @@ export default defineContentScript({
 
 					nextState.debounceTimerId = undefined;
 					nextState.abortController = undefined;
+
 					nextState.status = "SEGMENTING";
-					nextState.acceptedSegmentIndices = new Set<number>();
-					nextState.acceptanceOrder = [];
-					nextState.focusedSegmentIndex = draftSegments.length > 0 ? 0 : undefined;
-					nextState.hasStaleAccepted = false;
+
+					// Dependency-aware acceptance preservation:
+					// Segments are identified by their stable positional id ("seg-${start}-${end}").
+					// Find the first index where the old and new sequences diverge; any accepted
+					// segment whose new index is >= that point has upstream changes and must be
+					// marked stale rather than silently dropped.
+					const oldSegments = nextState.draftSegments;
+
+					let firstDivergenceIndex = Math.min(oldSegments.length, draftSegments.length);
+					for (let i = 0; i < firstDivergenceIndex; i++) {
+						if (oldSegments[i]?.id !== draftSegments[i]?.id) {
+							firstDivergenceIndex = i;
+							break;
+						}
+					}
+
+					const newIndexById = new Map<string, number>();
+					for (let i = 0; i < draftSegments.length; i++) {
+						newIndexById.set(draftSegments[i]!.id, i);
+					}
+
+					const newAcceptedIndices = new Set<number>();
+					const newAcceptanceOrder: number[] = [];
+					let anyStale = false;
+
+					for (const oldIndex of nextState.acceptanceOrder) {
+						const oldSegment = oldSegments[oldIndex];
+						if (!oldSegment) {
+							continue;
+						}
+						const newIndex = newIndexById.get(oldSegment.id);
+						if (newIndex === undefined) {
+							// Segment was deleted — drop from accepted
+							continue;
+						}
+						newAcceptedIndices.add(newIndex);
+						newAcceptanceOrder.push(newIndex);
+						if (newIndex >= firstDivergenceIndex) {
+							anyStale = true;
+						}
+					}
+
+					nextState.acceptedSegmentIndices = newAcceptedIndices;
+					nextState.acceptanceOrder = newAcceptanceOrder;
+					nextState.hasStaleAccepted = anyStale || (nextState.hasStaleAccepted && newAcceptedIndices.size > 0);
+
+					// Cancel ENHANCE streams for segments that no longer exist or shifted
+					// downstream of the first divergence point.
+					for (const [segId] of Array.from(nextState.activeEnhanceRequestIdsBySegmentId.entries())) {
+						const newIdx = newIndexById.get(segId);
+						if (newIdx === undefined || newIdx >= firstDivergenceIndex) {
+							cancelEnhanceStreamForSegment(nextState, segId);
+							nextState.enhancedTextBySegmentId.delete(segId);
+						}
+					}
+
+					// Focus: advance to the first unaccepted segment after re-segmentation
+					let nextFocused: number | undefined;
+					if (draftSegments.length > 0) {
+						for (let i = 0; i < draftSegments.length; i++) {
+							if (!newAcceptedIndices.has(i)) {
+								nextFocused = i;
+								break;
+							}
+						}
+						if (nextFocused === undefined) {
+							nextFocused = 0;
+						}
+					}
+					nextState.focusedSegmentIndex = nextFocused;
+					nextState.activeSegmentRequestId = bridgeMessage.requestId;
+
 					activeInputState = nextState;
 
-					bridgePort.postMessage(bridgeMessage);
+					if (!bridgeMessage.jwt) {
+						console.warn("[content] skipping SEGMENT dispatch because no JWT was available");
+					} else {
+						postToBridge(bridgeMessage);
+					}
 					renderDraftSegments(nextState, normalizedText, draftSegments, false);
 					console.log("Debounced extracted text:\n", extractedText);
 				})().catch((error) => {
@@ -1929,8 +2533,20 @@ export default defineContentScript({
 
 			const observer = new MutationObserver((mutationList) => {
 				if (activeInputState?.element && !activeInputState.element.isConnected) {
-					clearActiveInputWork(activeInputState);
-					clearDraftRendering(activeInputState);
+					if (activeInputState.bindPhase === "BINDING" || activeInputState.bindPhase === "COMPLETE") {
+						const replacement = findReplacementInput(activeInputState, mutationList);
+						if (replacement) {
+							clearBindRecoveryTracking(activeInputState);
+							reattachActiveInput(activeInputState, replacement);
+						} else {
+							scheduleBindRecoveryFallback(activeInputState);
+						}
+					} else {
+						clearActiveInputWork(activeInputState);
+						cancelActiveBindStream(activeInputState);
+						removeGhostPanel(activeInputState);
+						clearDraftRendering(activeInputState);
+					}
 				}
 
 				if (renderedDraftOverlayState?.element && !renderedDraftOverlayState.element.isConnected) {
@@ -1968,10 +2584,9 @@ export default defineContentScript({
 			return observer;
 		};
 
-		scanDocumentForInputs();
-		observeForInputDiscovery();
-
-		bridgePort.onMessage.addListener((message: unknown) => {
+		// Defined here so attachPortListeners (below) can reference it without a
+		// forward-declaration problem — all helpers it calls are already in scope.
+		const handleBridgeMessage = (message: unknown): void => {
 			console.debug("PromptCompiler bridge message", message);
 
 			if (typeof message !== "object" || message === null) {
@@ -1986,30 +2601,122 @@ export default defineContentScript({
 			}
 
 			const state = activeInputState;
-			if (!state || state.activeBindRequestId !== requestId) {
+			if (!state) {
 				return;
 			}
 
-			if (type === "token" && typeof record.data === "string") {
-				handleBindStreamToken(state, record.data);
+			// ── BIND stream ──────────────────────────────────────────────────────────
+			if (state.activeBindRequestId === requestId) {
+				if (type === "token" && typeof record.data === "string") {
+					handleBindStreamToken(state, record.data);
+					return;
+				}
+				if (type === "done") {
+					handleBindStreamDone(state);
+					return;
+				}
+				if (type === "warning" && typeof record.message === "string") {
+					handleBindStreamWarning(state, record.message);
+					return;
+				}
+				if (type === "error") {
+					handleBindStreamError(state, typeof record.message === "string" ? record.message : "Bind stream failed");
+					return;
+				}
 				return;
 			}
 
-			if (type === "done") {
-				handleBindStreamDone(state);
+			// ── SEGMENT response ─────────────────────────────────────────────────────
+			if (state.activeSegmentRequestId === requestId) {
+				if (type === "segment") {
+					state.activeSegmentRequestId = undefined;
+					if (typeof record.data === "object" && record.data !== null) {
+						handleSegmentResponse(state, record.data as Record<string, unknown>);
+					}
+					return;
+				}
+				if (type === "error") {
+					state.activeSegmentRequestId = undefined;
+					// Mark the overlay stale so the user sees degraded confidence indicators.
+					if (state.draftOverlayElement) {
+						applyDraftOverlayFreshness(state.draftOverlayElement, true);
+					}
+					console.warn("[content] SEGMENT request failed:", record.message);
+					return;
+				}
 				return;
 			}
 
-			if (type === "error") {
-				const errorMessage = typeof record.message === "string" ? record.message : "Bind stream failed";
-				handleBindStreamError(state, errorMessage);
+			// ── ENHANCE streams (one per segment, routed by requestId) ────────────────
+			let enhanceSegmentId: string | undefined;
+			for (const [segId, reqId] of state.activeEnhanceRequestIdsBySegmentId.entries()) {
+				if (reqId === requestId) {
+					enhanceSegmentId = segId;
+					break;
+				}
+			}
+
+			if (enhanceSegmentId !== undefined) {
+				if (type === "token" && typeof record.data === "string") {
+					handleEnhanceStreamToken(state, enhanceSegmentId, record.data);
+					return;
+				}
+				if (type === "done") {
+					handleEnhanceStreamDone(state, enhanceSegmentId);
+					return;
+				}
+				if (type === "error") {
+					handleEnhanceStreamError(state, enhanceSegmentId, typeof record.message === "string" ? record.message : "Enhance failed");
+					return;
+				}
 				return;
 			}
-		});
+		};
 
-		bridgePort.onDisconnect.addListener(() => {
-			console.debug("PromptCompiler bridge disconnected");
-		});
+		// ── Lazy port factory ─────────────────────────────────────────────────────
+		// The MV3 service worker can be killed after 30 s of inactivity.  We never
+		// hold a permanent reference to the port; instead we reconnect on demand
+		// and re-attach both listeners to the fresh port object each time.
+
+		const attachPortListeners = (port: chrome.runtime.Port): void => {
+			port.onMessage.addListener(handleBridgeMessage);
+			port.onDisconnect.addListener(() => {
+				console.debug("PromptCompiler bridge disconnected — port will reconnect on next use");
+				_bridgePort = null;
+				// The SW was killed while ENHANCE streams were active. Clear all dead request IDs
+				// so the 120ms hover-preview fallback timer is no longer suppressed by has(segment.id),
+				// and transition any open hover preview to "stale" rather than leaving it in "loading".
+				if (activeInputState) {
+					activeInputState.activeEnhanceRequestIdsBySegmentId.clear();
+					setDraftHoverPreviewStale(activeInputState.element);
+				}
+			});
+		};
+
+		const getBridgePort = (): chrome.runtime.Port => {
+			if (_bridgePort === null) {
+				_bridgePort = chrome.runtime.connect({ name: BRIDGE_PORT_NAME });
+				attachPortListeners(_bridgePort);
+			}
+			return _bridgePort;
+		};
+
+		// Single postMessage wrapper used by every call site.  If the port was
+		// killed between the previous message and this one, getBridgePort()
+		// reconnects synchronously before the message is handed off — so no
+		// message is ever dropped into a dead port.  If the freshly created port
+		// is itself immediately closed (SW still cold-starting), the catch nulls
+		// the slot so the next call tries again.
+		const postToBridge = (message: unknown): void => {
+			try {
+				getBridgePort().postMessage(message);
+			} catch {
+				_bridgePort = null;
+			}
+		};
+
+		scanDocumentForInputs();
+		observeForInputDiscovery();
+		getBridgePort(); // establish initial connection eagerly
 	},
 });
-

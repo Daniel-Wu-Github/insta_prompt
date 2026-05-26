@@ -4,5 +4,6 @@ export type AppEnv = {
   Variables: {
     userId: string;
     tier: Tier;
+    requestId: string;
   };
 };

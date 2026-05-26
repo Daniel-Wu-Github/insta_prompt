@@ -1,6 +1,7 @@
 import "./env";
 
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 
 import { authMiddleware } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/ratelimit";
@@ -13,23 +14,23 @@ import { projectRoutes } from "./routes/projects";
 import { segmentRoutes } from "./routes/segment";
 import type { AppEnv } from "./types";
 
-//debug .env
-console.log("=== BOOTSTRAP ENV CHECK ===");
-console.log("1. SUPABASE_URL:", process.env.SUPABASE_URL);
-console.log("2. ANON_KEY PREFIX:", process.env.SUPABASE_ANON_KEY?.substring(0, 10) + "...");
-console.log("3. SERVICE_KEY PREFIX:", process.env.SUPABASE_SERVICE_KEY?.substring(0, 10) + "...");
-console.log("4. GROQ_API_KEY PREFIX:", process.env.GROQ_API_KEY?.substring(0, 10) + "...");
-console.log("5. ANTHROPIC_API_KEY PREFIX:", process.env.ANTHROPIC_API_KEY?.substring(0, 10) + "...");
-console.log("6. UPSTASH_REDIS_URL PREFIX:", process.env.UPSTASH_REDIS_URL?.substring(0, 10) + "...");
-console.log("7. UPSTASH_REDIS_TOKEN PREFIX:", process.env.UPSTASH_REDIS_TOKEN?.substring(0, 10) + "...");
-console.log("8. REDIS_URL PREFIX:", process.env.REDIS_URL?.substring(0, 10) + "...");
-console.log("9. JWT_SECRET PREFIX:", process.env.JWT_SECRET?.substring(0, 10) + "...");
-console.log("10. PORT:", process.env.PORT);
-console.log("===========================");
-
 
 const app = new Hono<AppEnv>();
 const PROTECTED_ROUTE_PREFIXES = ["/segment", "/enhance", "/bind", "/projects"] as const;
+const FLY_STAGING_ORIGIN = "https://promptcompiler-backend.fly.dev";
+
+function isAllowedCorsOrigin(origin: string): boolean {
+	return origin.startsWith("chrome-extension://") || origin === FLY_STAGING_ORIGIN;
+}
+
+app.use(
+	"*",
+	cors({
+		origin: (origin) => (isAllowedCorsOrigin(origin) ? origin : ""),
+		allowHeaders: ["Authorization", "Content-Type", "Accept", "X-Request-ID"],
+		allowMethods: ["GET", "POST", "OPTIONS"],
+	}),
+);
 
 // Capture client request IDs for traceability across SW + backend logs.
 app.use("*", async (c, next) => {
@@ -83,4 +84,3 @@ app.notFound((c) => {
 });
 
 export default app;
-

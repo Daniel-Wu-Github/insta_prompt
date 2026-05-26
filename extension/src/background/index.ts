@@ -1,8 +1,19 @@
+import { z } from "zod";
+
 export default defineBackground(() => {
-	const BACKEND_BASE_URL = "http://localhost:3000";
+	const BACKEND_BASE_URL = typeof import.meta.env.VITE_API_BASE_URL === "string"
+		? import.meta.env.VITE_API_BASE_URL.trim()
+		: "";
+	if (import.meta.env.PROD && (!BACKEND_BASE_URL || BACKEND_BASE_URL.includes("localhost"))) {
+		console.error("[PromptCompiler] FATAL: BACKEND_BASE_URL is missing or points to localhost in a production build.");
+	}
 	const KEEPALIVE_ALARM_NAME = "keepalive";
 	const KEEPALIVE_PERIOD_MINUTES = 1;
 	const TAB_STATE_STORAGE_PREFIX = "promptcompiler.tabState.";
+	const AUTH_STORAGE_KEY = "promptcompiler.auth";
+	const REFRESH_LOCK_STORAGE_KEY = "promptcompiler.refresh_lock";
+	const REFRESH_LOCK_MAX_AGE_MS = 10_000;
+	const REFRESH_LOCK_POLL_INTERVAL_MS = 250;
 	const BRIDGE_PORT_NAME = "insta_prompt_bridge";
 	const BRIDGE_VERBS = ["SEGMENT", "ENHANCE", "BIND", "CANCEL"] as const;
 
@@ -12,7 +23,8 @@ export default defineBackground(() => {
 	type StreamTokenEvent = { type: "token"; data: string };
 	type StreamDoneEvent = { type: "done" };
 	type StreamErrorEvent = { type: "error"; message: string };
-	type StreamEvent = StreamTokenEvent | StreamDoneEvent | StreamErrorEvent;
+	type StreamWarningEvent = { type: "warning"; message: string };
+	type StreamEvent = StreamTokenEvent | StreamDoneEvent | StreamErrorEvent | StreamWarningEvent;
 	type SegmentResponse = { sections: Array<Record<string, unknown>> };
 	type PersistedTabState = {
 		tabId: number;
@@ -46,6 +58,357 @@ export default defineBackground(() => {
 		terminalSent: boolean;
 		verb: DataBridgeVerb;
 	};
+
+	type StoredAuth = {
+		access_token: string;
+		refresh_token: string | null;
+		expires_at: number;
+	};
+
+	type RefreshLock = {
+		refreshing: boolean;
+		startedAt: number;
+	};
+
+	const bridgePayloadBaseSchema = z.object({
+		jwt: z.string().trim().min(1),
+		requestId: z.string().trim().min(1).optional(),
+	});
+
+	const segmentBridgeMessageSchema = bridgePayloadBaseSchema.extend({
+		verb: z.literal("SEGMENT"),
+		payload: z.object({
+			segments: z.array(z.string().trim().min(1)).min(1),
+			mode: z.string().trim().min(1),
+		}).strict(),
+	}).strict();
+
+	const enhanceBridgeMessageSchema = bridgePayloadBaseSchema.extend({
+		verb: z.literal("ENHANCE"),
+		payload: z.object({
+			section: z.object({
+				id: z.string().trim().min(1),
+				text: z.string().trim().min(1),
+				goal_type: z.string().trim().min(1),
+			}).strict(),
+			siblings: z.array(z.object({
+				id: z.string().trim().min(1),
+				text: z.string().trim().min(1),
+				goal_type: z.string().trim().min(1),
+			}).strict()),
+			mode: z.string().trim().min(1),
+			project_id: z.string().trim().min(1).nullable(),
+		}).strict(),
+	}).strict();
+
+	const bindBridgeMessageSchema = bridgePayloadBaseSchema.extend({
+		verb: z.literal("BIND"),
+		payload: z.object({
+			sections: z.array(z.object({
+				canonical_order: z.number().int().min(1).max(6),
+				goal_type: z.string().trim().min(1),
+				expansion: z.string().trim().min(1),
+			}).strict()).min(1),
+			mode: z.string().trim().min(1),
+		}).strict(),
+	}).strict();
+
+	const cancelBridgeMessageSchema = bridgePayloadBaseSchema.extend({
+		verb: z.literal("CANCEL"),
+	}).strict();
+
+	const bridgeMessageSchema = z.discriminatedUnion("verb", [
+		segmentBridgeMessageSchema,
+		enhanceBridgeMessageSchema,
+		bindBridgeMessageSchema,
+		cancelBridgeMessageSchema,
+	]);
+
+	const refreshTokenMessageSchema = z.object({
+		type: z.literal("REFRESH_TOKEN"),
+	}).strict();
+
+	const accountStatusRequestSchema = z.object({
+		type: z.literal("ACCOUNT_STATUS_REQUEST"),
+		jwt: z.string().trim().min(1),
+	}).strict();
+
+	function isStoredAuth(value: unknown): value is StoredAuth {
+		if (typeof value !== "object" || value === null || Array.isArray(value)) {
+			return false;
+		}
+		const record = value as Record<string, unknown>;
+		return typeof record.access_token === "string" && record.access_token.trim().length > 0 && typeof record.expires_at === "number";
+	}
+
+	function isRefreshLock(value: unknown): value is RefreshLock {
+		if (typeof value !== "object" || value === null || Array.isArray(value)) {
+			return false;
+		}
+
+		const record = value as Record<string, unknown>;
+		return record.refreshing === true && typeof record.startedAt === "number" && Number.isFinite(record.startedAt);
+	}
+
+	// Singleton promise: serialises concurrent token refresh attempts so a single-use
+	// refresh_token is never sent twice in parallel by two simultaneous 401 responses.
+	let tokenRefreshPromise: Promise<string | null> | null = null;
+
+	async function readStoredAuth(): Promise<StoredAuth | undefined> {
+		const [localSnapshot, sessionSnapshot] = await Promise.all([
+			chrome.storage.local.get(AUTH_STORAGE_KEY),
+			chrome.storage.session.get(AUTH_STORAGE_KEY),
+		]);
+
+		for (const snapshot of [localSnapshot, sessionSnapshot]) {
+			const auth = snapshot[AUTH_STORAGE_KEY];
+			if (isStoredAuth(auth)) {
+				return auth;
+			}
+		}
+
+		return undefined;
+	}
+
+	async function writeStoredAuth(auth: StoredAuth): Promise<void> {
+		await Promise.all([
+			chrome.storage.local.set({ [AUTH_STORAGE_KEY]: auth }),
+			chrome.storage.session.set({ [AUTH_STORAGE_KEY]: auth }),
+		]);
+	}
+
+	async function clearStoredAuth(): Promise<void> {
+		await Promise.all([
+			chrome.storage.local.remove(AUTH_STORAGE_KEY),
+			chrome.storage.session.remove(AUTH_STORAGE_KEY),
+		]);
+	}
+
+	async function readRefreshLock(): Promise<RefreshLock | undefined> {
+		const snapshot = await chrome.storage.session.get(REFRESH_LOCK_STORAGE_KEY);
+		const lock = snapshot[REFRESH_LOCK_STORAGE_KEY];
+		return isRefreshLock(lock) ? lock : undefined;
+	}
+
+	async function writeRefreshLock(): Promise<void> {
+		await chrome.storage.session.set({
+			[REFRESH_LOCK_STORAGE_KEY]: {
+				refreshing: true,
+				startedAt: Date.now(),
+			},
+		});
+	}
+
+	async function clearRefreshLock(): Promise<void> {
+		await chrome.storage.session.remove(REFRESH_LOCK_STORAGE_KEY);
+	}
+
+	async function waitForUpdatedAuth(previousAccessToken: string | null): Promise<string | null> {
+		const deadline = Date.now() + REFRESH_LOCK_MAX_AGE_MS;
+
+		while (Date.now() < deadline) {
+			const stored = await readStoredAuth();
+			if (stored && (!previousAccessToken || stored.access_token !== previousAccessToken)) {
+				return stored.access_token;
+			}
+
+			await new Promise((resolve) => {
+				setTimeout(resolve, REFRESH_LOCK_POLL_INTERVAL_MS);
+			});
+		}
+
+		return null;
+	}
+
+	async function doRefreshAccessToken(): Promise<string | null> {
+		let lockWasWritten = false;
+
+		try {
+			const auth = await readStoredAuth();
+			const lock = await readRefreshLock();
+
+			if (lock && lock.refreshing) {
+				if (Date.now() - lock.startedAt <= REFRESH_LOCK_MAX_AGE_MS) {
+					return await waitForUpdatedAuth(auth?.access_token ?? null);
+				}
+
+				await clearRefreshLock();
+			}
+
+			if (!auth || !auth.refresh_token) {
+				return null;
+			}
+
+			await writeRefreshLock();
+			lockWasWritten = true;
+
+			const authTokenUrl = getBackendUrl("/auth/token");
+			if (!authTokenUrl) {
+				return null;
+			}
+
+			const response = await fetch(authTokenUrl, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Accept": "application/json",
+				},
+				body: JSON.stringify({ refresh_token: auth.refresh_token }),
+			});
+
+			if (!response.ok) {
+				await clearStoredAuth();
+				return null;
+			}
+
+			const data = (await response.json()) as Record<string, unknown>;
+			const newAccessToken = typeof data.token === "string" ? data.token.trim() : "";
+			if (!newAccessToken) {
+				await clearStoredAuth();
+				return null;
+			}
+
+			const newRefreshToken =
+				typeof data.refresh_token === "string" && data.refresh_token.trim().length > 0
+					? data.refresh_token.trim()
+					: auth.refresh_token;
+			const expiresIn = typeof data.expires_in === "number" ? data.expires_in : 3600;
+			const newAuth: StoredAuth = {
+				access_token: newAccessToken,
+				refresh_token: newRefreshToken,
+				expires_at: Date.now() + expiresIn * 1000,
+			};
+			await writeStoredAuth(newAuth);
+			return newAccessToken;
+		} catch {
+			return null;
+		} finally {
+			if (lockWasWritten) {
+				await clearRefreshLock();
+			}
+		}
+	}
+
+	function refreshAccessToken(): Promise<string | null> {
+		if (tokenRefreshPromise) {
+			return tokenRefreshPromise;
+		}
+		tokenRefreshPromise = doRefreshAccessToken().finally(() => {
+			tokenRefreshPromise = null;
+		});
+		return tokenRefreshPromise;
+	}
+
+	// Fires the request once; on 401 attempts a token refresh and retries exactly once.
+	// Returns the final Response (which may still be non-ok if retry also failed).
+	async function fetchWithTokenRefresh(
+		url: URL,
+		jwt: string,
+		accept: string,
+		bodyJson: string,
+		requestId: string,
+		signal: AbortSignal,
+	): Promise<Response> {
+		const firstResponse = await fetch(url, {
+			method: "POST",
+			headers: buildRequestHeaders(jwt, accept, requestId),
+			body: bodyJson,
+			signal,
+		});
+
+		if (firstResponse.status !== 401) {
+			return firstResponse;
+		}
+
+		const newToken = await refreshAccessToken();
+		if (!newToken) {
+			return firstResponse;
+		}
+
+		return fetch(url, {
+			method: "POST",
+			headers: buildRequestHeaders(newToken, accept, requestId),
+			body: bodyJson,
+			signal,
+		});
+	}
+
+	async function fetchAccountStatus(jwt: string): Promise<Record<string, unknown> | null> {
+		const accountStatusUrl = getBackendUrl("/account/status");
+		if (!accountStatusUrl) {
+			return null;
+		}
+
+		const response = await fetch(accountStatusUrl, {
+			method: "GET",
+			headers: {
+				Authorization: `Bearer ${jwt}`,
+				Accept: "application/json",
+			},
+		});
+
+		if (!response.ok) {
+			return null;
+		}
+
+		return (await response.json()) as Record<string, unknown>;
+	}
+
+	function isTrustedInternalSender(sender: chrome.runtime.MessageSender): boolean {
+		return sender.id === chrome.runtime.id
+			&& sender.tab === undefined
+			&& typeof sender.url === "string"
+			&& sender.url.startsWith(`chrome-extension://${chrome.runtime.id}/`)
+			&& sender.url.endsWith("/popup.html");
+	}
+
+	function isTrustedBridgePortSender(sender: chrome.runtime.MessageSender | undefined): boolean {
+		return sender?.id === chrome.runtime.id && typeof sender.tab?.id === "number";
+	}
+
+	function getBackendUrl(pathname: string): URL | null {
+		if (!BACKEND_BASE_URL) {
+			return null;
+		}
+
+		try {
+			return new URL(pathname, BACKEND_BASE_URL);
+		} catch {
+			return null;
+		}
+	}
+
+	chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+		if (!isTrustedInternalSender(sender) || !isPlainObject(message) || typeof message.type !== "string") {
+			return false;
+		}
+
+		const refreshTokenMessage = refreshTokenMessageSchema.safeParse(message);
+		if (refreshTokenMessage.success) {
+			void (async () => {
+				const accessToken = await refreshAccessToken();
+				sendResponse({ accessToken });
+			})().catch((error) => {
+				console.warn("Failed to refresh access token from popup", error);
+				sendResponse({ accessToken: null });
+			});
+			return true;
+		}
+
+		const accountStatusMessage = accountStatusRequestSchema.safeParse(message);
+		if (accountStatusMessage.success) {
+			void (async () => {
+				const payload = await fetchAccountStatus(accountStatusMessage.data.jwt);
+				sendResponse(payload);
+			})().catch((error) => {
+				console.warn("Failed to fetch account status from popup", error);
+				sendResponse(null);
+			});
+			return true;
+		}
+
+		return false;
+	});
 
 	const activeRequestsById = new Map<BridgeRequestId, ActiveRequest>();
 	const orphanedTabIds = new Set<number>();
@@ -129,6 +492,8 @@ export default defineBackground(() => {
 				return typeof value.data === "string";
 			case "error":
 				return typeof value.message === "string";
+			case "warning":
+				return typeof value.message === "string";
 			case "done":
 				return true;
 			default:
@@ -136,65 +501,16 @@ export default defineBackground(() => {
 		}
 	}
 
-	function isBridgeMessage(message: unknown): message is BridgeMessage {
-		if (!isPlainObject(message) || !isBridgeVerb(message.verb) || typeof message.jwt !== "string" || message.jwt.trim().length === 0) {
-			return false;
-		}
-
-		if (message.verb === "CANCEL") {
-			return true;
-		}
-
-		return isPlainObject(message.payload) || isPlainObject(message.request) || Object.keys(message).some((key) => !["verb", "jwt", "requestId", "payload", "request"].includes(key));
-	}
-
 	type ValidationFailure = { ok: false; reason: string };
 	type ValidationSuccess = { ok: true; message: BridgeMessage };
 
 	function validateBridgeMessage(raw: unknown): ValidationFailure | ValidationSuccess {
-		if (!isPlainObject(raw)) {
-			return { ok: false, reason: "message is not an object" };
+		const parsed = bridgeMessageSchema.safeParse(raw);
+		if (!parsed.success) {
+			return { ok: false, reason: "invalid bridge message shape" };
 		}
 
-		if (!isBridgeVerb(raw.verb)) {
-			return { ok: false, reason: `unknown verb ${String(raw.verb)}` };
-		}
-
-		if (typeof raw.jwt !== "string" || raw.jwt.trim().length === 0) {
-			return { ok: false, reason: "missing jwt" };
-		}
-
-		if (raw.verb === "CANCEL") {
-			return { ok: true, message: raw as unknown as BridgeMessage };
-		}
-
-		const body = isPlainObject(raw.payload) ? raw.payload : isPlainObject(raw.request) ? raw.request : null;
-		if (!body) {
-			return { ok: false, reason: `${raw.verb} payload is missing` };
-		}
-
-		if (raw.verb === "SEGMENT") {
-			const segments = body ? body.segments : undefined;
-			if (!Array.isArray(segments) || segments.length === 0) {
-				return { ok: false, reason: "SEGMENT payload.segments must be a non-empty array" };
-			}
-		}
-
-		if (raw.verb === "ENHANCE") {
-			const section = body ? body.section : undefined;
-			if (!isPlainObject(section)) {
-				return { ok: false, reason: "ENHANCE payload.section must be an object" };
-			}
-		}
-
-		if (raw.verb === "BIND") {
-			const sections = body ? body.sections : undefined;
-			if (!Array.isArray(sections) || sections.length === 0) {
-				return { ok: false, reason: "BIND payload.sections must be a non-empty array" };
-			}
-		}
-
-		return { ok: true, message: raw as unknown as BridgeMessage };
+		return { ok: true, message: parsed.data };
 	}
 
 	function getRequestId(message: BridgeMessage): BridgeRequestId {
@@ -418,15 +734,30 @@ export default defineBackground(() => {
 		}
 
 		try {
-			const response = await fetch(new URL(getEndpointPath("SEGMENT"), BACKEND_BASE_URL), {
-				method: "POST",
-				headers: buildRequestHeaders(message.jwt, "application/json", requestId),
-				body: JSON.stringify(getRequestBody(message)),
-				signal: requestState.controller.signal,
-			});
+			const segmentUrl = getBackendUrl(getEndpointPath("SEGMENT"));
+			if (!segmentUrl) {
+				setTerminalState(requestId, true);
+				safePostMessage(port, {
+					type: "error",
+					requestId,
+					message: "Backend URL is not configured.",
+				}, portClosed);
+				return;
+			}
+			const segmentBody = JSON.stringify(getRequestBody(message));
+			const response = await fetchWithTokenRefresh(
+				segmentUrl,
+				message.jwt,
+				"application/json",
+				segmentBody,
+				requestId,
+				requestState.controller.signal,
+			);
 
 			if (!response.ok) {
-				const errorMessage = await readErrorMessage(response);
+				const errorMessage = response.status === 401
+					? "Session expired. Please sign in again."
+					: await readErrorMessage(response);
 				setTerminalState(requestId, true);
 				safePostMessage(port, { type: "error", requestId, message: errorMessage }, portClosed);
 				return;
@@ -486,15 +817,30 @@ export default defineBackground(() => {
 		const decoder = new TextDecoder();
 
 		try {
-			const response = await fetch(new URL(getEndpointPath(message.verb), BACKEND_BASE_URL), {
-				method: "POST",
-				headers: buildRequestHeaders(message.jwt, "text/event-stream", requestId),
-				body: JSON.stringify(getRequestBody(message)),
-				signal: requestState.controller.signal,
-			});
+			const streamUrl = getBackendUrl(getEndpointPath(message.verb));
+			if (!streamUrl) {
+				setTerminalState(requestId, true);
+				safePostMessage(port, {
+					type: "error",
+					requestId,
+					message: "Backend URL is not configured.",
+				}, portClosed);
+				return;
+			}
+			const streamBody = JSON.stringify(getRequestBody(message));
+			const response = await fetchWithTokenRefresh(
+				streamUrl,
+				message.jwt,
+				"text/event-stream",
+				streamBody,
+				requestId,
+				requestState.controller.signal,
+			);
 
 			if (!response.ok) {
-				const errorMessage = await readErrorMessage(response);
+				const errorMessage = response.status === 401
+					? "Session expired. Please sign in again."
+					: await readErrorMessage(response);
 				setTerminalState(requestId, true);
 				safePostMessage(port, { type: "error", requestId, message: errorMessage }, portClosed);
 				return;
@@ -619,15 +965,7 @@ export default defineBackground(() => {
 			return;
 		}
 
-		const expectedExtensionId = (() => {
-			try {
-				return chrome.runtime.id;
-			} catch {
-				return undefined;
-			}
-		})();
-
-		if (expectedExtensionId && port.sender?.id !== expectedExtensionId) {
+		if (!isTrustedBridgePortSender(port.sender)) {
 			console.warn("[SW] rejecting port from unknown sender", { senderId: port.sender?.id });
 			port.disconnect();
 			return;
@@ -639,13 +977,10 @@ export default defineBackground(() => {
 
 		console.log("Accepted bridge port connection", { tabId });
 
-		if (typeof tabId === "number" && Number.isFinite(tabId) && sessionRecoveryPromise) {
-			void sessionRecoveryPromise.then(() => {
-				if (!portClosed) {
-					sendOrphanedTabSignal(port, tabId, `recovery-${tabId}`, isPortClosed);
-				}
-			});
-		}
+		// The connect-time orphan signal with a synthetic "recovery-<tabId>" requestId was
+		// silently dropped by the content script (no handler matched it). Orphan detection
+		// is handled correctly by the message-time path below: the first real message after
+		// a SW restart hits orphanedTabIds.has(currentTabId) and returns a matched error.
 
 		port.onMessage.addListener((rawMessage) => {
 			const validation = validateBridgeMessage(rawMessage);
@@ -711,6 +1046,15 @@ export default defineBackground(() => {
 				void dispatchStreamingRequest(port, message as EnhanceBridgeMessage | BindBridgeMessage, requestId, isPortClosed);
 			})().catch((error) => {
 				console.warn("Bridge message handling failed", { tabId, message, error });
+				const requestId = getRequestId(message);
+				if (!portClosed && !hasTerminalBeenSent(requestId)) {
+					setTerminalState(requestId, true);
+					safePostMessage(port, {
+						type: "error",
+						requestId,
+						message: "Bridge request failed unexpectedly.",
+					}, isPortClosed);
+				}
 			});
 		});
 
@@ -733,4 +1077,3 @@ export default defineBackground(() => {
 		});
 	});
 });
-

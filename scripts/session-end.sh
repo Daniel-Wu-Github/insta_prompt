@@ -33,7 +33,7 @@ if [[ -n "$MODIFIED_TS" ]]; then
     if echo "$MODIFIED_TS" | grep -q "^$pkg/"; then
       PKG_PATH="$PROJECT_DIR/$pkg"
       if [[ -f "$PKG_PATH/package.json" ]]; then
-        PKG_ERRORS="$(cd "$PKG_PATH" && npx tsc --noEmit 2>&1 | head -40 || true)"
+        PKG_ERRORS="$(cd "$PKG_PATH" && ./node_modules/.bin/tsc --noEmit 2>&1 | head -40 || true)"
         if [[ -n "$PKG_ERRORS" ]]; then
           TS_ERRORS="$TS_ERRORS
 ### TypeScript Errors ($pkg)

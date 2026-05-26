@@ -8,8 +8,39 @@ type TierRoutePolicy = {
 
 const RECOGNIZED_TIERS = new Set<string>(TIER_VALUES);
 
-// Step 2 default policy keeps recognized tiers open unless explicitly gated.
-const DEFAULT_STRICT_TIER_ROUTE_POLICIES: readonly TierRoutePolicy[] = [];
+// Explicit allowlist derived from docs/LLM_ROUTING.md routing table.
+// Every protected route must appear here; any tier absent from allowedTiers
+// receives a 403 TIER_FORBIDDEN before the route handler is reached.
+//
+// /segment  — all tiers: fast Groq classifier, no model differentiation by tier.
+// /enhance  — all tiers: free → Groq llama-3.3-70b, pro/byok → Anthropic models.
+//             Tier is passed to selectModel() in the route handler; the middleware
+//             only enforces that the tier is recognized and route-eligible.
+// /bind     — same allowlist and rationale as /enhance.
+// /projects — v2 surface, no tier restriction yet; open to all recognized tiers.
+//
+// The combination of this middleware (route eligibility) + selectModel()
+// (tier → provider/model mapping) is what prevents a free-tier user from
+// reaching Anthropic models: they can call /enhance and /bind, but
+// selectModel({ tier: "free", ... }) always returns a Groq model, never Anthropic.
+const DEFAULT_STRICT_TIER_ROUTE_POLICIES: readonly TierRoutePolicy[] = [
+	{
+		routePrefix: "/segment",
+		allowedTiers: ["free", "pro", "byok"],
+	},
+	{
+		routePrefix: "/enhance",
+		allowedTiers: ["free", "pro", "byok"],
+	},
+	{
+		routePrefix: "/bind",
+		allowedTiers: ["free", "pro", "byok"],
+	},
+	{
+		routePrefix: "/projects",
+		allowedTiers: ["free", "pro", "byok"],
+	},
+];
 let strictTierRoutePolicies: readonly TierRoutePolicy[] = DEFAULT_STRICT_TIER_ROUTE_POLICIES;
 
 export function __setStrictTierRoutePoliciesForTests(policies: readonly TierRoutePolicy[]): void {

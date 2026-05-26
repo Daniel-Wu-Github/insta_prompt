@@ -1,8 +1,8 @@
 {
 	"manifest_version": 3,
 	"name": "PromptCompiler",
-	"description": "Step 0 bootstrap extension surface for PromptCompiler.",
-	"version": "0.1.0",
+	"description": "AI prompt compiler: classify, expand, and assemble rough ideas into polished prompts — directly in any text field.",
+	"version": "1.0.0",
 	"permissions": ["storage", "alarms"],
 	"host_permissions": ["<all_urls>"]
 }

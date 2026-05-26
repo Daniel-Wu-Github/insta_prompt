@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Hono } from "hono";
 
 import { enhanceRouteHandler } from "../services/routeHandlers";
+import type { AppEnv } from "../types";
 
 type EnhanceStreamEvent =
 	| { type: "token"; data: string }
@@ -32,8 +33,8 @@ let originalFetch: typeof globalThis.fetch;
 let originalGroqEnvValue: string | undefined;
 const groqEnvVarName = "GROQ_API_KEY";
 
-function createEnhanceApp(): Hono {
-	const app = new Hono();
+function createEnhanceApp(): Hono<AppEnv> {
+	const app = new Hono<AppEnv>();
 
 	app.use("*", async (c, next) => {
 		c.set("tier", "free");
@@ -54,7 +55,7 @@ function createGroqSseResponse(blocks: string[]): Response {
 	});
 }
 
-async function postEnhance(app: Hono, body: unknown, signal?: AbortSignal): Promise<Response> {
+async function postEnhance(app: Hono<AppEnv>, body: unknown, signal?: AbortSignal): Promise<Response> {
 	return await app.fetch(
 		new Request("http://localhost/enhance", {
 			method: "POST",
@@ -153,7 +154,7 @@ describe("/enhance route", () => {
 				'data: {"choices":[{"delta":{"content":"world"}}]}',
 				"data: [DONE]",
 			]);
-		}) as typeof globalThis.fetch;
+		}) as unknown as typeof globalThis.fetch;
 
 		const response = await postEnhance(app, VALID_ENHANCE_BODY);
 		expect(response.status).toBe(200);
@@ -170,15 +171,25 @@ describe("/enhance route", () => {
 		expect(events[events.length - 1]).toEqual({ type: "done" });
 
 		expect(capturedProviderBody).not.toBeNull();
-		const messages = (capturedProviderBody?.messages ?? []) as Array<{
-			role: string;
-			content: string;
-		}>;
+		const providerBody = capturedProviderBody as
+			| {
+					messages?: Array<{
+						role: string;
+						content: string;
+					}>;
+					max_completion_tokens?: number;
+			  }
+			| null;
+		if (!providerBody) {
+			throw new Error("Expected provider body");
+		}
+
+		const messages = providerBody.messages ?? [];
 		expect(messages.length).toBe(1);
 		expect(messages[0]?.role).toBe("user");
 		expect(messages[0]?.content).toContain("Goal type: action");
 		expect(messages[0]?.content).toContain("Use a structured response with 2-3 short sections.");
-		expect(capturedProviderBody?.max_completion_tokens).toBe(500);
+		expect(providerBody.max_completion_tokens).toBe(500);
 	});
 
 	it("emits exactly one mapped error event and keeps HTTP status unchanged when upstream fails mid-stream", async () => {
@@ -189,7 +200,7 @@ describe("/enhance route", () => {
 				'data: {"choices":[{"delta":{"content":"partial "}}]}',
 				"data: {not-json}",
 			]);
-		}) as typeof globalThis.fetch;
+		}) as unknown as typeof globalThis.fetch;
 
 		const response = await postEnhance(app, VALID_ENHANCE_BODY);
 		expect(response.status).toBe(200);
@@ -292,12 +303,12 @@ describe("/enhance route", () => {
 		abortController.abort();
 
 		const readWithTimeout = async (): Promise<ReadableStreamReadResult<Uint8Array>> => {
-			return await Promise.race([
+			return (await Promise.race([
 				reader!.read(),
 				new Promise<ReadableStreamReadResult<Uint8Array>>((_, reject) =>
 					setTimeout(() => reject(new Error("read-timeout")), 300),
 				),
-			]);
+			])) as ReadableStreamReadResult<Uint8Array>;
 		};
 
 		let readError: unknown = null;

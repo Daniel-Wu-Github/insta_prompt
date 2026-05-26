@@ -616,3 +616,22 @@
 	- Fulfillment: Implements the requested overlay sync fixes and updates skill guidance.
 	- Deviation: None.
 
+## Entry 030 - 2026-05-24 - Added Beast Mode Agent Definitions
+
+- Task: Add the Beast Mode 3.1 custom agent to the repo-backed agent config surfaces and explain how to invoke it in Copilot CLI, Claude Code, and Gemini CLI.
+- What the agent did: Added matching Beast Mode 3.1 agent files for GitHub Copilot, Claude Code, and Gemini CLI, using each tool's native agent directory and markdown frontmatter format.
+- How the agent did it: Read the official CLI docs for custom agents, created the agent files with a shared prompt body, and verified the file contents and documented selection commands.
+- Files edited:
+	- .github/agents/beast-mode-3-1.agent.md
+	- .claude/agents/beast-mode-3-1.md
+	- .gemini/agents/beast-mode-3-1.md
+	- logging/progress_log.md
+- Verification:
+	- Confirmed each agent file exists at the documented path.
+	- Confirmed each file has valid YAML frontmatter with `name` and `description`.
+	- Confirmed the Copilot CLI agent can be selected with `/agent` or `copilot --agent beast-mode-3-1 --prompt "..."`
+	- Confirmed Claude Code agent files live under `.claude/agents/` and are selected with `/agents` or `claude --agents`.
+	- Confirmed Gemini CLI custom subagents live under `.gemini/agents/` and are invoked with `@beast-mode-3-1` or viewed with `/agents`.
+- Task alignment:
+	- Fulfillment: The requested agent was saved in the repo configuration surfaces and the selection commands were documented for all three CLIs.
+	- Deviation: None.

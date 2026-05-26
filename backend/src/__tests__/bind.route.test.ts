@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Hono } from "hono";
 
 import { bindRouteHandler } from "../services/routeHandlers";
+import type { AppEnv } from "../types";
 
 type BindStreamEvent =
 	| { type: "token"; data: string }
@@ -38,8 +39,8 @@ let originalGroqEnvValue: string | undefined;
 let originalSupabaseUrlValue: string | undefined;
 let originalSupabaseServiceKeyValue: string | undefined;
 
-function createBindApp(): Hono {
-	const app = new Hono();
+function createBindApp(): Hono<AppEnv> {
+	const app = new Hono<AppEnv>();
 
 	app.use("*", async (c, next) => {
 		c.set("tier", "free");
@@ -51,7 +52,7 @@ function createBindApp(): Hono {
 	return app;
 }
 
-async function postBind(app: Hono, body: unknown, signal?: AbortSignal): Promise<Response> {
+async function postBind(app: Hono<AppEnv>, body: unknown, signal?: AbortSignal): Promise<Response> {
 	return await app.fetch(
 		new Request("http://localhost/bind", {
 			method: "POST",
@@ -205,7 +206,7 @@ describe("/bind route", () => {
 			}
 
 			throw new Error(`Unexpected fetch call: ${url}`);
-		}) as typeof globalThis.fetch;
+		}) as unknown as typeof globalThis.fetch;
 
 		const outOfOrderSections = [
 			{ canonical_order: 6, goal_type: "edge_case", expansion: "Handle empty states." },
@@ -224,7 +225,12 @@ describe("/bind route", () => {
 		expect(events.filter((event) => event.type === "done")).toHaveLength(1);
 
 		expect(capturedProviderBody).not.toBeNull();
-		const messages = (capturedProviderBody?.messages ?? []) as Array<{ role: string; content: string }>;
+		const providerBody = capturedProviderBody as { messages?: Array<{ role: string; content: string }> } | null;
+		if (!providerBody) {
+			throw new Error("Expected provider body");
+		}
+
+		const messages = providerBody.messages ?? [];
 		expect(messages.length).toBe(1);
 
 		const prompt = messages[0]?.content ?? "";
@@ -265,7 +271,7 @@ describe("/bind route", () => {
 			}
 
 			throw new Error(`Unexpected fetch call: ${url}`);
-		}) as typeof globalThis.fetch;
+		}) as unknown as typeof globalThis.fetch;
 
 		const requestBody = {
 			mode: "balanced",
@@ -308,7 +314,7 @@ describe("/bind route", () => {
 		expect(insertRow.section_count).toBe(2);
 	});
 
-	it("emits one error event and no done when persistence fails after provider completion", async () => {
+	it("still emits done and logs persistence failures after provider completion", async () => {
 		const app = createBindApp();
 		let insertCallCount = 0;
 
@@ -339,7 +345,7 @@ describe("/bind route", () => {
 			}
 
 			throw new Error(`Unexpected fetch call: ${url}`);
-		}) as typeof globalThis.fetch;
+		}) as unknown as typeof globalThis.fetch;
 
 		const response = await postBind(app, VALID_BIND_BODY);
 		expect(response.status).toBe(200);
@@ -349,9 +355,8 @@ describe("/bind route", () => {
 		const errorEvents = events.filter((event): event is Extract<BindStreamEvent, { type: "error" }> => event.type === "error");
 
 		expect(insertCallCount).toBe(1);
-		expect(doneEvents).toHaveLength(0);
-		expect(errorEvents).toHaveLength(1);
-		expect(errorEvents[0]?.message).toBe("Bind history persistence failed.");
+		expect(doneEvents).toHaveLength(1);
+		expect(errorEvents).toHaveLength(0);
 	});
 
 	it("stops streaming and avoids persistence writes when request is aborted early", async () => {
@@ -450,12 +455,12 @@ describe("/bind route", () => {
 		abortController.abort();
 
 		const readWithTimeout = async (): Promise<ReadableStreamReadResult<Uint8Array>> => {
-			return await Promise.race([
+			return (await Promise.race([
 				reader!.read(),
 				new Promise<ReadableStreamReadResult<Uint8Array>>((_, reject) =>
 					setTimeout(() => reject(new Error("read-timeout")), 300),
 				),
-			]);
+			])) as ReadableStreamReadResult<Uint8Array>;
 		};
 
 		let readError: unknown = null;

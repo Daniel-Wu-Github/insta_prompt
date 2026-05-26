@@ -17,6 +17,11 @@ type ContentScriptModule = {
 const nativeMutationObserver = globalThis.MutationObserver;
 
 let lastConnectMock: ReturnType<typeof vi.fn> | undefined;
+const DEFAULT_AUTH = {
+	access_token: "test-jwt",
+	refresh_token: "test-refresh-token",
+	expires_at: Date.now() + 3_600_000,
+};
 
 function getLastBridgePort(): ChromeConnectHandle {
 	if (!lastConnectMock) {
@@ -71,8 +76,8 @@ function installTestGlobals(): void {
 	vi.stubGlobal("chrome", {
 		runtime: { connect: connectMock, id: "test-extension-id" },
 		storage: {
-			local: { get: vi.fn(async () => ({})) },
-			session: { get: vi.fn(async () => ({})) },
+			local: { get: vi.fn(async () => ({ ["promptcompiler.auth"]: DEFAULT_AUTH })) },
+			session: { get: vi.fn(async () => ({ ["promptcompiler.auth"]: DEFAULT_AUTH })) },
 			sync: { get: vi.fn(async () => ({})) },
 		},
 	});
@@ -171,13 +176,15 @@ describe("Step 10 acceptance state machine", () => {
 
 		let spans = getOverlaySpans();
 		expect(spans.filter((span) => span.dataset.accepted === "true").length).toBe(2);
+		expect(spans.find((span) => span.dataset.focused === "true")?.dataset.segmentIndex).toBe("2");
 
 		textarea.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Tab", shiftKey: true }));
 
 		spans = getOverlaySpans();
 		const accepted = spans.filter((span) => span.dataset.accepted === "true");
-		expect(accepted.length).toBe(1);
-		expect(accepted[0]?.dataset.segmentIndex).toBe("0");
+		expect(accepted.length).toBe(2);
+		expect(accepted.map((span) => span.dataset.segmentIndex)).toEqual(["0", "1"]);
+		expect(spans.find((span) => span.dataset.focused === "true")?.dataset.segmentIndex).toBe("2");
 	});
 
 	it("upstream edit marks accepted segments stale", async () => {

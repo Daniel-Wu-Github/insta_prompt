@@ -12,4 +12,9 @@ export type StreamErrorEvent = {
   message: string;
 };
 
-export type StreamEvent = StreamTokenEvent | StreamDoneEvent | StreamErrorEvent;
+export type StreamWarningEvent = {
+  type: "warning";
+  message: string;
+};
+
+export type StreamEvent = StreamTokenEvent | StreamDoneEvent | StreamErrorEvent | StreamWarningEvent;
