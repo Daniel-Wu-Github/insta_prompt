@@ -5,7 +5,7 @@ import {
   MODE_VALUES,
   SECTION_STATUS_VALUES,
   TIER_VALUES,
-} from "../../../shared/contracts";
+} from "../../shared/contracts";
 
 const goalTypeSchema = z.enum(GOAL_TYPE_VALUES);
 const modeSchema = z.enum(MODE_VALUES);

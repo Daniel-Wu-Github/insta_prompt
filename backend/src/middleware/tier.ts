@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import { TIER_VALUES, type Tier } from "../../../shared/contracts";
+import { TIER_VALUES, type Tier } from "../../shared/contracts";
 
 type TierRoutePolicy = {
 	routePrefix: string;

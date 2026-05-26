@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 
-import type { AuthTokenResponse } from "../../../shared/contracts";
+import type { AuthTokenResponse } from "../../shared/contracts";
 import { readJsonBody, validationErrorResponse, zodValidationErrorResponse } from "../lib/http";
 import { authTokenRequestSchema } from "../lib/schemas";
 import { consumeAuthTokenIpQuota } from "../services/rateLimit";

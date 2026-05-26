@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 
-import type { Tier } from "../../../shared/contracts";
+import type { Tier } from "../../shared/contracts";
 import { readJsonBody, validationErrorResponse, zodValidationErrorResponse } from "../lib/http";
 import { bindRequestSchema, enhanceRequestSchema, segmentRequestSchema, segmentResponseSchema } from "../lib/schemas";
 import { parseWithSchema } from "../lib/validation";

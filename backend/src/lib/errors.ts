@@ -1,6 +1,6 @@
 import type { ZodError } from "zod";
 
-import type { ValidationErrorBody } from "../../../shared/contracts/errors";
+import type { ValidationErrorBody } from "../../shared/contracts/errors";
 
 export function toValidationError(
   error: ZodError,

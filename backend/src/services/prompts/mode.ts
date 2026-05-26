@@ -1,4 +1,4 @@
-import type { Mode } from "../../../../shared/contracts";
+import type { Mode } from "../../../shared/contracts";
 
 export const ENHANCE_MODE_INSTRUCTIONS: Record<Mode, readonly string[]> = {
 	efficiency: [

@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import type { AuthTokenResponse, Tier } from "../../../shared/contracts";
+import type { AuthTokenResponse, Tier } from "../../shared/contracts";
 
 const DEFAULT_TIER: Tier = "free";
 const TIER_VALUES: readonly Tier[] = ["free", "pro", "byok"];

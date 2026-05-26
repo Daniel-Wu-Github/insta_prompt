@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-import type { GoalType, Section, SegmentResponse } from "../../../shared/contracts";
+import type { GoalType, Section, SegmentResponse } from "../../shared/contracts";
 import { canonicalSlotForGoalType, type ModelConfig } from "./llm";
 import {
 	anthropicStreamingAdapter,

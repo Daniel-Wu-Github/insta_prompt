@@ -1,5 +1,5 @@
-import type { Mode, Tier } from "../../../shared/contracts";
-import type { GoalType } from "../../../shared/contracts";
+import type { Mode, Tier } from "../../shared/contracts";
+import type { GoalType } from "../../shared/contracts";
 
 import {
 	bindPrompt,

@@ -1,4 +1,4 @@
-import type { GoalType } from "../../../../shared/contracts";
+import type { GoalType } from "../../../shared/contracts";
 
 import { BIND_MODE_INSTRUCTIONS, renderInstructionBlock } from "./mode";
 import type { BindPromptInput, BindPromptSection } from "./types";

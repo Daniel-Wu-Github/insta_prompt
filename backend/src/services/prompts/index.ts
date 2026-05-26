@@ -1,4 +1,4 @@
-import type { GoalType } from "../../../../shared/contracts";
+import type { GoalType } from "../../../shared/contracts";
 
 import { actionPrompt } from "./action";
 import { bindPrompt } from "./bind";

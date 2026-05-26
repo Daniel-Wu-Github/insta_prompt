@@ -1,4 +1,4 @@
-import type { StreamEvent } from "../../../shared/contracts";
+import type { StreamEvent } from "../../shared/contracts";
 
 const encoder = new TextEncoder();
 

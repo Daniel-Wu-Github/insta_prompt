@@ -1,4 +1,4 @@
-import type { GoalType, Mode, Section } from "../../../../shared/contracts";
+import type { GoalType, Mode, Section } from "../../../shared/contracts";
 
 export type PromptSibling = Pick<Section, "id" | "text" | "goal_type">;
 
