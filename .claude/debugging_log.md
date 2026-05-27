@@ -3030,3 +3030,808 @@ To get access to the TypeScript compiler, [34mtsc[0m, from the command line ei
 /home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
 ```
 
+
+---
+## Session End — 2026-05-26 20:22:12Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+**Accumulated session errors:**
+### TS check — index.ts — 08:53:05Z
+```
+npm warn exec The following package was not found and will be installed: tsc@2.0.4
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+
+---
+## Session End — 2026-05-26 20:27:25Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+**Accumulated session errors:**
+### TS check — index.ts — 08:53:05Z
+```
+npm warn exec The following package was not found and will be installed: tsc@2.0.4
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+
+---
+## Session End — 2026-05-26 20:33:31Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+**Accumulated session errors:**
+### TS check — index.ts — 08:53:05Z
+```
+npm warn exec The following package was not found and will be installed: tsc@2.0.4
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+
+---
+## Session End — 2026-05-26 23:01:10Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+**Accumulated session errors:**
+### TS check — index.ts — 08:53:05Z
+```
+npm warn exec The following package was not found and will be installed: tsc@2.0.4
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+
+---
+## Session End — 2026-05-26 23:11:31Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+**Accumulated session errors:**
+### TS check — index.ts — 08:53:05Z
+```
+npm warn exec The following package was not found and will be installed: tsc@2.0.4
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
