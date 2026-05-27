@@ -15,18 +15,18 @@ alter table public.enhancement_history
   references public.projects(id)
   on delete set null;
 
-create extension if not exists vector;
+create extension if not exists vector with schema extensions;
 
 create table public.context_chunks (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
   file_path text not null,
   content text not null,
-  embedding vector(1536),
+  embedding extensions.vector(1536),
   created_at timestamptz not null default now()
 );
 
 create index context_chunks_embedding_ivfflat_idx
   on public.context_chunks
-  using ivfflat (embedding vector_cosine_ops)
+  using ivfflat (embedding extensions.vector_cosine_ops)
   with (lists = 100);
