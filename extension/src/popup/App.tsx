@@ -27,6 +27,19 @@ function isStoredAuth(value: unknown): value is StoredAuth {
 	return typeof record.access_token === "string" && record.access_token.trim().length > 0 && typeof record.expires_at === "number";
 }
 
+function decodeJwtEmail(token: string): string | null {
+	try {
+		const part = token.split(".")[1];
+		if (!part) return null;
+		const padded = part.replace(/-/g, "+").replace(/_/g, "/");
+		const payload = JSON.parse(atob(padded)) as Record<string, unknown>;
+		const email = payload.email;
+		return typeof email === "string" && email.trim().length > 0 ? email.trim() : null;
+	} catch {
+		return null;
+	}
+}
+
 type SupabaseAuthResponse = {
 	access_token?: string;
 	refresh_token?: string;
@@ -38,8 +51,8 @@ type SupabaseAuthResponse = {
 
 export default function App() {
 	const { settings, isLoading: settingsLoading, setMode, setProjectId } = useSettings();
-	const account = useAccountStatus();
 
+	// undefined = still loading from storage; null = not authenticated
 	const [auth, setAuth] = useState<StoredAuth | null | undefined>(undefined);
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
@@ -48,6 +61,10 @@ export default function App() {
 	const [sessionNotice, setSessionNotice] = useState<string | null>(null);
 	const [isSignUp, setIsSignUp] = useState(false);
 	const suppressAuthRemovalNoticeRef = useRef(false);
+
+	// Pass auth down so useAccountStatus re-fetches when the token changes (e.g. after sign-in).
+	// auth ?? null collapses undefined (loading) and null (signed out) both to null.
+	const account = useAccountStatus(auth ?? null);
 
 	useEffect(() => {
 		chrome.storage.local.get(AUTH_STORAGE_KEY, (result) => {
@@ -268,10 +285,17 @@ export default function App() {
 		account.usage !== null &&
 		account.usage.count >= account.usage.limit;
 
+	const userEmail = decodeJwtEmail(auth.access_token);
+
 	return (
 		<main className="w-[360px] min-h-[480px] bg-app-bg flex flex-col p-5">
-			<div className="flex items-center justify-between mb-5">
-				<h1 className="text-base font-semibold text-text tracking-tight">PromptCompiler</h1>
+			<div className="flex items-start justify-between mb-5">
+				<div className="min-w-0">
+					<h1 className="text-base font-semibold text-text tracking-tight">PromptCompiler</h1>
+					{userEmail !== null && (
+						<p className="text-[11px] text-muted mt-0.5 truncate max-w-[280px]">{userEmail}</p>
+					)}
+				</div>
 			</div>
 
 			<div className="flex-1">
@@ -279,10 +303,11 @@ export default function App() {
 				<AccountStatus
 					tier={account.tier}
 					usage={account.usage}
+					dailyReset={account.dailyReset}
 					isLoading={account.isLoading}
 					error={account.error}
 				/>
-				{account.error && (
+				{account.error && !account.isLoading && (
 					<p className="text-xs text-warning mb-4">
 						Could not load account status. Try signing out and back in.
 					</p>

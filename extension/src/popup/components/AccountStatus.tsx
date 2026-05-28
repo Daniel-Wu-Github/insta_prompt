@@ -4,6 +4,7 @@ import type { AccountUsage } from "../hooks/useAccountStatus";
 type Props = {
 	tier: Tier;
 	usage: AccountUsage | null;
+	dailyReset: number | null;
 	isLoading: boolean;
 	error: boolean;
 };
@@ -20,7 +21,16 @@ const TIER_LABELS: Record<Tier, string> = {
 	byok: "BYOK",
 };
 
-export function AccountStatus({ tier, usage, isLoading, error }: Props) {
+function formatTimeUntilReset(resetEpochSeconds: number): string {
+	const diff = Math.max(0, resetEpochSeconds - Date.now() / 1000);
+	const hours = Math.floor(diff / 3600);
+	const minutes = Math.floor((diff % 3600) / 60);
+	if (hours > 0) return `Resets in ${hours}h ${minutes}m`;
+	if (minutes > 0) return `Resets in ${minutes}m`;
+	return "Resets soon";
+}
+
+export function AccountStatus({ tier, usage, dailyReset, isLoading, error }: Props) {
 	const pct =
 		usage && usage.limit > 0
 			? Math.min(100, Math.round((usage.count / usage.limit) * 100))
@@ -49,6 +59,11 @@ export function AccountStatus({ tier, usage, isLoading, error }: Props) {
 					/>
 				)}
 			</div>
+			{!isLoading && !error && dailyReset !== null && tier === "free" && (
+				<p className="text-[11px] text-muted mt-1.5">
+					{formatTimeUntilReset(dailyReset)}
+				</p>
+			)}
 		</section>
 	);
 }
