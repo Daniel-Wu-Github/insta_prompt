@@ -3,9 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { AccountStatus } from "./components/AccountStatus";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { ModeToggle } from "./components/ModeToggle";
+import { PauseToggle } from "./components/PauseToggle";
 import { ProjectSelector } from "./components/ProjectSelector";
 import { UpgradeCTA } from "./components/UpgradeCTA";
 import { useAccountStatus } from "./hooks/useAccountStatus";
+import { usePause } from "./hooks/usePause";
 import { useSettings } from "./hooks/useSettings";
 
 const AUTH_STORAGE_KEY = "promptcompiler.auth";
@@ -51,6 +53,7 @@ type SupabaseAuthResponse = {
 
 export default function App() {
 	const { settings, isLoading: settingsLoading, setMode, setProjectId } = useSettings();
+	const { paused, toggle: togglePause } = usePause();
 
 	// undefined = still loading from storage; null = not authenticated
 	const [auth, setAuth] = useState<StoredAuth | null | undefined>(undefined);
@@ -300,6 +303,7 @@ export default function App() {
 
 			<div className="flex-1">
 				<ModeToggle mode={settings.mode} onChange={setMode} />
+				<PauseToggle paused={paused} onToggle={togglePause} />
 				<AccountStatus
 					tier={account.tier}
 					usage={account.usage}

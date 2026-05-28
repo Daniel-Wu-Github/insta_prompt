@@ -6,6 +6,7 @@ export default defineContentScript({
 	main() {
 		const BRIDGE_PORT_NAME = "insta_prompt_bridge";
 		const SETTINGS_STORAGE_KEY = "promptcompiler.settings";
+		const PAUSE_STORAGE_KEY = "promptcompiler.paused";
 		const INSTRUMENTED_ATTRIBUTE = "data-insta-instrumented";
 		const INSTRUMENTED_VALUE = "true";
 		const DEBOUNCE_DELAY_MS = 400;
@@ -261,10 +262,12 @@ export default defineContentScript({
 
 		const AUTH_STORAGE_KEY = "promptcompiler.auth";
 
-		const resolveBridgeContext = async (): Promise<{ mode: Mode; jwt: string | null }> => {
+		const resolveBridgeContext = async (): Promise<{ mode: Mode; jwt: string | null; paused: boolean }> => {
 			const syncSnapshot = await readSyncStorageSnapshot();
 			const localSnapshot = await chrome.storage.local.get(null);
 			const sessionSnapshot = await readSessionStorageSnapshot();
+
+			const paused = syncSnapshot[PAUSE_STORAGE_KEY] === true;
 
 			let mode: Mode = DEFAULT_BRIDGE_MODE;
 			for (const snapshot of [syncSnapshot, localSnapshot]) {
@@ -283,7 +286,7 @@ export default defineContentScript({
 			if (typeof storedAuth === "object" && storedAuth !== null && !Array.isArray(storedAuth)) {
 				const accessToken = (storedAuth as Record<string, unknown>).access_token;
 				if (typeof accessToken === "string" && accessToken.trim().length > 0) {
-					return { mode, jwt: accessToken.trim() };
+					return { mode, jwt: accessToken.trim(), paused };
 				}
 			}
 
@@ -292,12 +295,12 @@ export default defineContentScript({
 				for (const candidate of Object.values(snapshot)) {
 					const jwt = extractBridgeJwtCandidate(candidate);
 					if (jwt) {
-						return { mode, jwt };
+						return { mode, jwt, paused };
 					}
 				}
 			}
 
-			return { mode, jwt: null };
+			return { mode, jwt: null, paused };
 		};
 
 		const buildSegmentBridgeMessage = async (normalizedText: string): Promise<{
@@ -305,12 +308,14 @@ export default defineContentScript({
 			jwt: string | null;
 			requestId: string;
 			payload: SegmentRequest;
+			paused: boolean;
 		}> => {
-			const { mode, jwt } = await resolveBridgeContext();
+			const { mode, jwt, paused } = await resolveBridgeContext();
 
 			return {
 				verb: "SEGMENT",
 				jwt,
+				paused,
 				requestId: crypto.randomUUID(),
 				payload: {
 					segments: [normalizedText],
@@ -2451,11 +2456,13 @@ export default defineContentScript({
 
 					activeInputState = nextState;
 
-					if (!bridgeMessage.jwt) {
-						console.warn("[content] skipping SEGMENT dispatch because no JWT was available");
-					} else {
-						postToBridge(bridgeMessage);
+					if (!bridgeMessage.jwt || bridgeMessage.paused) {
+						if (!bridgeMessage.jwt) {
+							console.warn("[content] skipping SEGMENT dispatch because no JWT was available");
+						}
+						return;
 					}
+					postToBridge(bridgeMessage);
 					renderDraftSegments(nextState, normalizedText, draftSegments, false);
 					if (import.meta.env.DEV) {
 						console.log("Debounced extracted text:\n", extractedText);
@@ -2477,8 +2484,8 @@ export default defineContentScript({
 		};
 
 		const extractInputText = (element: HTMLTextAreaElement | HTMLElement): string => {
-			if (isValidTextarea(element)) {
-				return element.value;
+			if (isValidTextarea(element) || element instanceof HTMLInputElement) {
+				return (element as HTMLTextAreaElement | HTMLInputElement).value;
 			}
 
 			return extractContenteditableText(element);
@@ -2496,8 +2503,15 @@ export default defineContentScript({
 			);
 		};
 
+		const isValidTextInput = (element: Element): element is HTMLInputElement => {
+			return (
+				element instanceof HTMLInputElement &&
+				(element.type === "text" || element.type === "search")
+			);
+		};
+
 		const isValidInput = (element: Element): element is HTMLTextAreaElement | HTMLElement => {
-			return isValidTextarea(element) || isValidContenteditable(element);
+			return isValidTextarea(element) || isValidContenteditable(element) || isValidTextInput(element);
 		};
 
 		const isInstrumented = (element: Element): boolean => {
@@ -2531,7 +2545,7 @@ export default defineContentScript({
 				markInstrumented(node);
 			}
 
-			for (const element of root.querySelectorAll("textarea, [contenteditable]:not([contenteditable='false'])")) {
+			for (const element of root.querySelectorAll("textarea, [contenteditable]:not([contenteditable='false']), input[type='text'], input[type='search']")) {
 				if (isValidInput(element) && !isInstrumented(element)) {
 					markInstrumented(element);
 				}
