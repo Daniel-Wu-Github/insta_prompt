@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "wxt";
 
 export default defineConfig({
@@ -19,5 +20,8 @@ export default defineConfig({
 		host_permissions: ["<all_urls>"],
 	},
 	modules: ["@wxt-dev/module-react"],
+	vite: () => ({
+		plugins: [tailwindcss()],
+	}),
 });
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { AccountStatus } from "./components/AccountStatus";
+import { LoadingSpinner } from "./components/LoadingSpinner";
 import { ModeToggle } from "./components/ModeToggle";
 import { ProjectSelector } from "./components/ProjectSelector";
 import { UpgradeCTA } from "./components/UpgradeCTA";
@@ -9,7 +10,6 @@ import { useSettings } from "./hooks/useSettings";
 
 const AUTH_STORAGE_KEY = "promptcompiler.auth";
 
-// Injected at build time via .env — must be set for login to work.
 const SUPABASE_URL = (import.meta as unknown as { env: Record<string, string | undefined> }).env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = (import.meta as unknown as { env: Record<string, string | undefined> }).env.VITE_SUPABASE_ANON_KEY;
 
@@ -40,7 +40,6 @@ export default function App() {
 	const { settings, isLoading: settingsLoading, setMode, setProjectId } = useSettings();
 	const account = useAccountStatus();
 
-	// undefined = still loading from storage; null = not authenticated
 	const [auth, setAuth] = useState<StoredAuth | null | undefined>(undefined);
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
@@ -62,14 +61,9 @@ export default function App() {
 			changes: { [key: string]: chrome.storage.StorageChange },
 			areaName: string,
 		): void => {
-			if (areaName !== "local" && areaName !== "session") {
-				return;
-			}
-
+			if (areaName !== "local" && areaName !== "session") return;
 			const authChange = changes[AUTH_STORAGE_KEY];
-			if (!authChange) {
-				return;
-			}
+			if (!authChange) return;
 
 			if (isStoredAuth(authChange.newValue)) {
 				setAuth(authChange.newValue);
@@ -91,9 +85,7 @@ export default function App() {
 		};
 
 		chrome.storage.onChanged.addListener(handleStorageChange);
-		return () => {
-			chrome.storage.onChanged.removeListener(handleStorageChange);
-		};
+		return () => { chrome.storage.onChanged.removeListener(handleStorageChange); };
 	}, [auth]);
 
 	const handleLogin = async (): Promise<void> => {
@@ -112,32 +104,25 @@ export default function App() {
 		try {
 			const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
 				method: "POST",
-				headers: {
-					"apikey": SUPABASE_ANON_KEY,
-					"Content-Type": "application/json",
-				},
+				headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
 				body: JSON.stringify({ email: email.trim(), password }),
 			});
 
 			const data = (await response.json()) as SupabaseAuthResponse;
 
 			if (!response.ok) {
-				const message =
+				setAuthError(
 					(data.error_description?.trim() ?? "") ||
 					(data.msg?.trim() ?? "") ||
-					`Sign-in failed (${response.status})`;
-				setAuthError(message);
+					`Sign-in failed (${response.status})`,
+				);
 				return;
 			}
 
 			const access_token = data.access_token?.trim();
-			if (!access_token) {
-				setAuthError("Sign-in response is missing access_token.");
-				return;
-			}
+			if (!access_token) { setAuthError("Sign-in response is missing access_token."); return; }
 
 			const refresh_token = data.refresh_token?.trim() ?? null;
-			// Supabase returns expires_at in Unix seconds; store as milliseconds.
 			const expires_at =
 				typeof data.expires_at === "number"
 					? data.expires_at * 1000
@@ -155,14 +140,8 @@ export default function App() {
 	};
 
 	const handleSignUp = async (): Promise<void> => {
-		if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-			setAuthError("Auth not configured.");
-			return;
-		}
-		if (!email.trim() || !password.trim()) {
-			setAuthError("Email and password are required.");
-			return;
-		}
+		if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { setAuthError("Auth not configured."); return; }
+		if (!email.trim() || !password.trim()) { setAuthError("Email and password are required."); return; }
 
 		setAuthLoading(true);
 		setAuthError(null);
@@ -170,21 +149,18 @@ export default function App() {
 		try {
 			const response = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
 				method: "POST",
-				headers: {
-					"apikey": SUPABASE_ANON_KEY,
-					"Content-Type": "application/json",
-				},
+				headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
 				body: JSON.stringify({ email: email.trim(), password }),
 			});
 
 			const data = (await response.json()) as SupabaseAuthResponse;
 
 			if (!response.ok) {
-				const message =
+				setAuthError(
 					(data.error_description?.trim() ?? "") ||
 					(data.msg?.trim() ?? "") ||
-					`Sign-up failed (${response.status})`;
-				setAuthError(message);
+					`Sign-up failed (${response.status})`,
+				);
 				return;
 			}
 
@@ -221,53 +197,65 @@ export default function App() {
 	};
 
 	if (auth === undefined || settingsLoading) {
-		return <main style={{ padding: 12 }}>Loading…</main>;
+		return <LoadingSpinner />;
 	}
 
 	if (auth === null) {
 		return (
-			<main style={{ width: 320, padding: 12, fontFamily: "system-ui, sans-serif" }}>
-				<h1 style={{ margin: "0 0 12px 0", fontSize: 16 }}>PromptCompiler</h1>
-				<p style={{ margin: "0 0 8px 0", fontSize: 13, color: "#555" }}>
-					{isSignUp ? "Create an account." : "Sign in to continue."}
-				</p>
+			<main className="w-[360px] min-h-[480px] bg-app-bg flex flex-col p-5">
+				<div className="mb-6">
+					<h1 className="text-base font-semibold text-text tracking-tight">PromptCompiler</h1>
+					<p className="text-xs text-muted mt-0.5">
+						{isSignUp ? "Create your account." : "Sign in to continue."}
+					</p>
+				</div>
+
 				{sessionNotice !== null && (
-					<p style={{ margin: "0 0 8px 0", fontSize: 12, color: "#b45309" }}>{sessionNotice}</p>
+					<p className="text-xs text-warning mb-3">{sessionNotice}</p>
 				)}
-				<input
-					type="email"
-					placeholder="Email"
-					value={email}
-					onChange={(e) => { setEmail(e.target.value); }}
-					style={{ display: "block", width: "100%", marginBottom: 8, padding: "6px 8px", fontSize: 13, boxSizing: "border-box" }}
-				/>
-				<input
-					type="password"
-					placeholder="Password"
-					value={password}
-					onChange={(e) => { setPassword(e.target.value); }}
-					onKeyDown={(e) => { if (e.key === "Enter" && !authLoading) void (isSignUp ? handleSignUp() : handleLogin()); }}
-					style={{ display: "block", width: "100%", marginBottom: 8, padding: "6px 8px", fontSize: 13, boxSizing: "border-box" }}
-				/>
+
+				<div className="flex flex-col gap-2 mb-4">
+					<input
+						type="email"
+						placeholder="Email"
+						value={email}
+						onChange={(e) => { setEmail(e.target.value); }}
+						className="w-full px-3 py-2.5 rounded-lg bg-surface border border-border text-text text-sm placeholder:text-muted focus:outline-none focus:border-brand transition-colors"
+					/>
+					<input
+						type="password"
+						placeholder="Password"
+						value={password}
+						onChange={(e) => { setPassword(e.target.value); }}
+						onKeyDown={(e) => { if (e.key === "Enter" && !authLoading) void (isSignUp ? handleSignUp() : handleLogin()); }}
+						className="w-full px-3 py-2.5 rounded-lg bg-surface border border-border text-text text-sm placeholder:text-muted focus:outline-none focus:border-brand transition-colors"
+					/>
+				</div>
+
 				{authError !== null && (
-					<p style={{ margin: "0 0 8px 0", fontSize: 12, color: "#c00" }}>{authError}</p>
+					<p className="text-xs text-error mb-3">{authError}</p>
 				)}
+
 				<button
+					type="button"
 					onClick={() => { void (isSignUp ? handleSignUp() : handleLogin()); }}
 					disabled={authLoading}
-					style={{ padding: "6px 16px", fontSize: 13, cursor: authLoading ? "default" : "pointer" }}
+					className="w-full py-2.5 rounded-lg bg-brand hover:bg-brand-hover disabled:opacity-50 disabled:cursor-default text-white text-sm font-semibold transition-colors cursor-pointer mb-4"
 				>
-					{authLoading ? (isSignUp ? "Creating account…" : "Signing in…") : (isSignUp ? "Sign up" : "Sign in")}
+					{authLoading
+						? (isSignUp ? "Creating account…" : "Signing in…")
+						: (isSignUp ? "Sign up" : "Sign in")}
 				</button>
-				<p style={{ margin: "12px 0 0 0", fontSize: 12, color: "#555" }}>
+
+				<p className="text-xs text-muted text-center">
 					{isSignUp ? "Already have an account? " : "No account? "}
-					<a
-						href="#"
-						onClick={(e) => { e.preventDefault(); setIsSignUp(!isSignUp); setAuthError(null); }}
-						style={{ color: "#0066cc" }}
+					<button
+						type="button"
+						onClick={() => { setIsSignUp(!isSignUp); setAuthError(null); }}
+						className="text-brand hover:text-brand-hover underline underline-offset-2 cursor-pointer bg-transparent border-none p-0 text-xs"
 					>
 						{isSignUp ? "Sign in" : "Sign up"}
-					</a>
+					</button>
 				</p>
 			</main>
 		);
@@ -281,27 +269,32 @@ export default function App() {
 		account.usage.count >= account.usage.limit;
 
 	return (
-		<main style={{ width: 320, padding: 12, fontFamily: "system-ui, sans-serif" }}>
-			<h1 style={{ margin: "0 0 12px 0", fontSize: 16 }}>PromptCompiler</h1>
+		<main className="w-[360px] min-h-[480px] bg-app-bg flex flex-col p-5">
+			<div className="flex items-center justify-between mb-5">
+				<h1 className="text-base font-semibold text-text tracking-tight">PromptCompiler</h1>
+			</div>
 
-			<ModeToggle mode={settings.mode} onChange={setMode} />
-			<ProjectSelector projectId={settings.projectId} onChange={setProjectId} />
-			<AccountStatus
-				tier={account.tier}
-				usage={account.usage}
-				isLoading={account.isLoading}
-				error={account.error}
-			/>
-			{account.error && (
-				<p style={{ margin: "0 0 8px 0", fontSize: 12, color: "#b45309" }}>
-					Could not load account status. Try signing out and back in.
-				</p>
-			)}
-			<UpgradeCTA visible={showUpgradeCTA} />
+			<div className="flex-1">
+				<ModeToggle mode={settings.mode} onChange={setMode} />
+				<AccountStatus
+					tier={account.tier}
+					usage={account.usage}
+					isLoading={account.isLoading}
+					error={account.error}
+				/>
+				{account.error && (
+					<p className="text-xs text-warning mb-4">
+						Could not load account status. Try signing out and back in.
+					</p>
+				)}
+				<ProjectSelector projectId={settings.projectId} onChange={setProjectId} />
+				<UpgradeCTA visible={showUpgradeCTA} />
+			</div>
 
 			<button
+				type="button"
 				onClick={() => { void handleLogout(); }}
-				style={{ marginTop: 12, padding: "4px 12px", fontSize: 12, cursor: "pointer", color: "#555" }}
+				className="self-end text-xs text-muted hover:text-text transition-colors cursor-pointer bg-transparent border-none p-0 mt-2"
 			>
 				Sign out
 			</button>
