@@ -1,7 +1,7 @@
 import { Redis as UpstashRedis } from "@upstash/redis";
 import { Redis as IORedis } from "ioredis";
 
-export const FREE_DAILY_LIMIT = 30;
+export const FREE_DAILY_LIMIT = 100;
 export const AUTH_TOKEN_IP_LIMIT = 20;
 export const AUTH_TOKEN_IP_WINDOW_SECONDS = 60;
 const DEFAULT_PROTECTED_BURST_LIMIT = 60;
@@ -105,7 +105,7 @@ function withRedisTimeout<T>(operation: Promise<T>, operationName: string): Prom
 	});
 }
 
-function getNextUtcMidnightEpochSeconds(now: Date): number {
+export function getNextUtcMidnightEpochSeconds(now: Date): number {
 	return Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) / 1000);
 }
 
