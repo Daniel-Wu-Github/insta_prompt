@@ -7,11 +7,11 @@ description: "Use when responses need structured, traceable communication for mu
 
 ## When to Use
 
-Use this skill for multi-step tasks, process changes, or work that needs clear traceability for reviewers.
+Use this skill at when you have made any code edits.
 
 ## When Not to Use
 
-Do not use this skill for one-line confirmations or simple yes/no responses.
+Do not use this skill for simple questions, clarifications, or when no code changes were made.
 
 ## Files and Surfaces
 

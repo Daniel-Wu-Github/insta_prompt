@@ -9,7 +9,11 @@ export function UpgradeCTA({ visible }: Props) {
 
 	return (
 		<section>
-			<button type="button" style={{ width: "100%", padding: 8 }}>
+			<button
+				type="button"
+				style={{ width: "100%", padding: 8, cursor: "pointer" }}
+				onClick={() => chrome.tabs.create({ url: "https://promptcompiler-backend.fly.dev" })}
+			>
 				Upgrade to Pro
 			</button>
 		</section>

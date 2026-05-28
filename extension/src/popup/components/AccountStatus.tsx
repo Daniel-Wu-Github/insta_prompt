@@ -21,9 +21,11 @@ export function AccountStatus({ tier, usage, isLoading, error }: Props) {
 		return `${usage.count}/${usage.limit}`;
 	})();
 
+	const tierLabel = tier === "byok" ? "BYOK" : tier.charAt(0).toUpperCase() + tier.slice(1);
+
 	return (
 		<section style={{ marginBottom: 10 }}>
-			<div style={{ fontSize: 12, marginBottom: 4 }}>Tier: {tier}</div>
+			<div style={{ fontSize: 12, marginBottom: 4 }}>Tier: {tierLabel}</div>
 			<div style={{ fontSize: 12 }}>Usage: {usageLabel}</div>
 		</section>
 	);

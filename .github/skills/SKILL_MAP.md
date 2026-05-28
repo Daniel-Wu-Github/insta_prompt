@@ -62,6 +62,7 @@ All agents must do these steps before using or editing skills:
 | detailed-chat-output | [detailed-chat-output/SKILL.md](detailed-chat-output/SKILL.md) | Keep output structure clear and complete | Multi-step or high-risk tasks that need clear traceability |
 | self-improvement-loop | [self-improvement-loop/SKILL.md](self-improvement-loop/SKILL.md) | Improve instructions after mistakes or drift | Repeated errors, stale docs, or avoidable rework |
 | skill-improvement-loop | [skill-improvement-loop/SKILL.md](skill-improvement-loop/SKILL.md) | Summarize mistakes, evaluate skill effectiveness, and improve skills | Skill quality issues or missed auto-loading behavior |
+| handoff-prompt | [handoff-prompt/SKILL.md](handoff-prompt/SKILL.md) | Produce a self-contained handoff prompt in chat to continue the session in a new conversation | Only when the user explicitly requests a handoff prompt |
 
 ## Maintenance Rules
 

@@ -47,6 +47,7 @@ export default function App() {
 	const [authError, setAuthError] = useState<string | null>(null);
 	const [authLoading, setAuthLoading] = useState(false);
 	const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+	const [isSignUp, setIsSignUp] = useState(false);
 	const suppressAuthRemovalNoticeRef = useRef(false);
 
 	useEffect(() => {
@@ -153,6 +154,64 @@ export default function App() {
 		}
 	};
 
+	const handleSignUp = async (): Promise<void> => {
+		if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+			setAuthError("Auth not configured.");
+			return;
+		}
+		if (!email.trim() || !password.trim()) {
+			setAuthError("Email and password are required.");
+			return;
+		}
+
+		setAuthLoading(true);
+		setAuthError(null);
+
+		try {
+			const response = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+				method: "POST",
+				headers: {
+					"apikey": SUPABASE_ANON_KEY,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ email: email.trim(), password }),
+			});
+
+			const data = (await response.json()) as SupabaseAuthResponse;
+
+			if (!response.ok) {
+				const message =
+					(data.error_description?.trim() ?? "") ||
+					(data.msg?.trim() ?? "") ||
+					`Sign-up failed (${response.status})`;
+				setAuthError(message);
+				return;
+			}
+
+			const access_token = data.access_token?.trim();
+			if (!access_token) {
+				setAuthError("Account created. Check your email to confirm, then sign in.");
+				setIsSignUp(false);
+				return;
+			}
+
+			const refresh_token = data.refresh_token?.trim() ?? null;
+			const expires_at =
+				typeof data.expires_at === "number"
+					? data.expires_at * 1000
+					: Date.now() + (typeof data.expires_in === "number" ? data.expires_in * 1000 : 3_600_000);
+
+			const stored: StoredAuth = { access_token, refresh_token, expires_at };
+			await chrome.storage.local.set({ [AUTH_STORAGE_KEY]: stored });
+			setAuth(stored);
+			setSessionNotice(null);
+		} catch (error) {
+			setAuthError(error instanceof Error ? error.message : "Sign-up failed.");
+		} finally {
+			setAuthLoading(false);
+		}
+	};
+
 	const handleLogout = async (): Promise<void> => {
 		suppressAuthRemovalNoticeRef.current = true;
 		await chrome.storage.local.remove(AUTH_STORAGE_KEY);
@@ -169,7 +228,9 @@ export default function App() {
 		return (
 			<main style={{ width: 320, padding: 12, fontFamily: "system-ui, sans-serif" }}>
 				<h1 style={{ margin: "0 0 12px 0", fontSize: 16 }}>PromptCompiler</h1>
-				<p style={{ margin: "0 0 8px 0", fontSize: 13, color: "#555" }}>Sign in to continue.</p>
+				<p style={{ margin: "0 0 8px 0", fontSize: 13, color: "#555" }}>
+					{isSignUp ? "Create an account." : "Sign in to continue."}
+				</p>
 				{sessionNotice !== null && (
 					<p style={{ margin: "0 0 8px 0", fontSize: 12, color: "#b45309" }}>{sessionNotice}</p>
 				)}
@@ -185,19 +246,29 @@ export default function App() {
 					placeholder="Password"
 					value={password}
 					onChange={(e) => { setPassword(e.target.value); }}
-					onKeyDown={(e) => { if (e.key === "Enter" && !authLoading) void handleLogin(); }}
+					onKeyDown={(e) => { if (e.key === "Enter" && !authLoading) void (isSignUp ? handleSignUp() : handleLogin()); }}
 					style={{ display: "block", width: "100%", marginBottom: 8, padding: "6px 8px", fontSize: 13, boxSizing: "border-box" }}
 				/>
 				{authError !== null && (
 					<p style={{ margin: "0 0 8px 0", fontSize: 12, color: "#c00" }}>{authError}</p>
 				)}
 				<button
-					onClick={() => { void handleLogin(); }}
+					onClick={() => { void (isSignUp ? handleSignUp() : handleLogin()); }}
 					disabled={authLoading}
 					style={{ padding: "6px 16px", fontSize: 13, cursor: authLoading ? "default" : "pointer" }}
 				>
-					{authLoading ? "Signing in…" : "Sign in"}
+					{authLoading ? (isSignUp ? "Creating account…" : "Signing in…") : (isSignUp ? "Sign up" : "Sign in")}
 				</button>
+				<p style={{ margin: "12px 0 0 0", fontSize: 12, color: "#555" }}>
+					{isSignUp ? "Already have an account? " : "No account? "}
+					<a
+						href="#"
+						onClick={(e) => { e.preventDefault(); setIsSignUp(!isSignUp); setAuthError(null); }}
+						style={{ color: "#0066cc" }}
+					>
+						{isSignUp ? "Sign in" : "Sign up"}
+					</a>
+				</p>
 			</main>
 		);
 	}
@@ -223,7 +294,7 @@ export default function App() {
 			/>
 			{account.error && (
 				<p style={{ margin: "0 0 8px 0", fontSize: 12, color: "#b45309" }}>
-					Account status is unavailable. If the session expired, sign in again.
+					Could not load account status. Try signing out and back in.
 				</p>
 			)}
 			<UpgradeCTA visible={showUpgradeCTA} />
