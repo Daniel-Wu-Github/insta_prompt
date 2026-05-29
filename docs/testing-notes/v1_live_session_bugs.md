@@ -77,6 +77,24 @@ Recorded during first end-to-end live test of the deployed stack:
   2. Add a test/admin flag in Fly secrets to bypass rate limiting for known test accounts.
   3. Accept the limit and document it clearly in the popup (currently only shown as `Usage: 0/30` with no context).
 
+### BUG-3.2 — Clause underline segments have no visible gap between them
+
+- **Severity:** UX — users cannot tell where one clause ends and another begins
+- **Description:** Adjacent clause segments are underlined with no visual break between them. The entire prompt reads as one long continuous underline, making it impossible to see clause boundaries without hovering each segment individually.
+- **Fix needed:** In the overlay segment renderer (`renderDraftOverlaySegments` in `extension/src/content/index.ts`), add a small right-side padding or 1–2px transparent gap between adjacent `<span>` elements so underlines do not visually merge. Alternatively, introduce a subtle underline break at segment boundaries using `textDecorationSkipInk` or a gap character.
+
+### BUG-3.3 — Paused state leaves previous underlines fully active (now greyed)
+
+- **Severity:** UX — paused state was visually indistinguishable from active
+- **Description:** When the user toggles Pause in the popup, new segmentation is correctly suppressed, but the underlines from the last active segmentation remained at full color/opacity. Hovering one showed a "stale" preview, but the underline itself gave no indication that enhancements were paused.
+- **Fix (addressed Phase 2 follow-up):** On the paused dispatch gate in `extension/src/content/index.ts`, mark the existing overlay stale — `applyDraftOverlayFreshness(host, true)` greys it to `DRAFT_STALE_OPACITY` (0.45) and accepted spans switch to the amber-dashed stale treatment. Typing after un-pausing re-segments and restores full opacity. Reuses the existing stale visual language rather than inventing a new one.
+
+### BUG-3.4 — Hover popover has no color legend
+
+- **Severity:** UX — users cannot map underline colors to clause types
+- **Description:** The hover popover showed a status word (Loading/Ready/Stale) and the preview body, but no key explaining what each underline color means. Users had to memorize the palette.
+- **Fix (addressed Phase 2 follow-up):** Added a compact legend to the **top-right of the hover popover**, opposite the status word. Shows the six goal-type swatches in canonical order plus a "Stale" swatch (grey, dashed). Built via `buildDraftHoverLegend` with `createElement` only (no `innerHTML`). The authoritative color/state reference now lives in `docs/VISUAL_LEGEND.md`.
+
 ---
 
 ## Test 4 — Bind (Ctrl+Enter trigger)
@@ -224,6 +242,9 @@ content;
 | BUG-2.2 | Overlay / popover positioning | UX | Code |
 | BUG-2.3 | Overlay / legend missing | UX | Code |
 | BUG-3.1 | Rate limit | Config | Config |
+| BUG-3.2 | Overlay / clause gap | UX | Code |
+| BUG-3.3 | Pause greying | UX | Code (addressed) |
+| BUG-3.4 | Hover popover legend | UX | Code (addressed) |
 | BUG-4.1 | Bind keybinding / Windows | Blocking | Code |
 
 ---

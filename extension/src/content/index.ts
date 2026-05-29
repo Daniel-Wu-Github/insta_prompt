@@ -225,15 +225,11 @@ export default defineContentScript({
 		};
 
 		const isStorageAccessRestrictedError = (error: unknown): boolean => {
-			if (error instanceof Error) {
-				return error.message.includes("Access to storage is not allowed");
-			}
-
-			if (typeof error === "string") {
-				return error.includes("Access to storage is not allowed");
-			}
-
-			return false;
+			const msg = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+			return (
+				msg.includes("Access to storage is not allowed") ||
+				msg.includes("Extension context invalidated")
+			);
 		};
 
 		const readSessionStorageSnapshot = async (): Promise<Record<string, unknown>> => {
@@ -262,9 +258,20 @@ export default defineContentScript({
 
 		const AUTH_STORAGE_KEY = "promptcompiler.auth";
 
+		const readLocalStorageSnapshot = async (): Promise<Record<string, unknown>> => {
+			try {
+				return await chrome.storage.local.get(null);
+			} catch (error) {
+				if (isStorageAccessRestrictedError(error)) {
+					return {};
+				}
+				throw error;
+			}
+		};
+
 		const resolveBridgeContext = async (): Promise<{ mode: Mode; jwt: string | null; paused: boolean }> => {
 			const syncSnapshot = await readSyncStorageSnapshot();
-			const localSnapshot = await chrome.storage.local.get(null);
+			const localSnapshot = await readLocalStorageSnapshot();
 			const sessionSnapshot = await readSessionStorageSnapshot();
 
 			const paused = syncSnapshot[PAUSE_STORAGE_KEY] === true;
@@ -353,6 +360,53 @@ export default defineContentScript({
 			return left.start === right.start && left.end === right.end && left.text === right.text && left.goalType === right.goalType && left.confidence === right.confidence;
 		};
 
+		// Human-readable labels for the hover-popover legend, in canonical bind order.
+		const GOAL_TYPE_LEGEND_LABEL: Record<GoalType, string> = {
+			context: "Context",
+			tech_stack: "Tech stack",
+			constraint: "Constraint",
+			action: "Action",
+			output_format: "Output format",
+			edge_case: "Edge case",
+		};
+
+		// Builds the compact color legend shown in the top-right of the hover popover.
+		// Swatches mirror the underline color tokens; the trailing "Stale" entry matches
+		// the greyed/dashed treatment used for stale and paused overlays.
+		const buildDraftHoverLegend = (): HTMLDivElement => {
+			const legend = document.createElement("div");
+			legend.dataset.draftHoverLegend = "true";
+			legend.setAttribute("aria-hidden", "true");
+
+			const orderedGoalTypes = [...GOAL_TYPE_VALUES].sort(
+				(left, right) => CANONICAL_ORDER_BY_GOAL_TYPE[left] - CANONICAL_ORDER_BY_GOAL_TYPE[right],
+			);
+
+			const appendEntry = (label: string, swatchColor: string, dashed: boolean): void => {
+				const item = document.createElement("div");
+				item.dataset.draftHoverLegendItem = "true";
+
+				const swatch = document.createElement("span");
+				swatch.dataset.draftHoverLegendSwatch = "true";
+				swatch.style.borderBottomColor = swatchColor;
+				swatch.style.borderBottomStyle = dashed ? "dashed" : "solid";
+
+				const text = document.createElement("span");
+				text.textContent = label;
+
+				item.append(swatch, text);
+				legend.appendChild(item);
+			};
+
+			for (const goalType of orderedGoalTypes) {
+				appendEntry(GOAL_TYPE_LEGEND_LABEL[goalType], GOAL_TYPE_PALETTE[goalType].color, false);
+			}
+			// Stale / paused indicator — greyed, dashed.
+			appendEntry("Stale", "rgb(156 163 175)", true);
+
+			return legend;
+		};
+
 		const createDraftHoverPopoverShell = (): {
 			containerElement: HTMLDivElement;
 			panelElement: HTMLDivElement;
@@ -403,14 +457,49 @@ export default defineContentScript({
 	-webkit-user-select: none;
 }
 
+[data-draft-hover-header] {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 6px;
+}
+
 [data-draft-hover-status] {
 	display: block;
 	font-size: 11px;
 	font-weight: 700;
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
-	margin-bottom: 6px;
 	color: rgb(165, 180, 252);
+	flex: 0 0 auto;
+}
+
+[data-draft-hover-legend] {
+	display: grid;
+	grid-template-columns: auto auto;
+	gap: 2px 8px;
+	flex: 0 0 auto;
+}
+
+[data-draft-hover-legend-item] {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 9px;
+	line-height: 1.2;
+	letter-spacing: 0.02em;
+	color: rgb(148, 163, 184);
+	white-space: nowrap;
+}
+
+[data-draft-hover-legend-swatch] {
+	display: inline-block;
+	width: 10px;
+	height: 0;
+	border-bottom-width: 2px;
+	border-bottom-style: solid;
+	flex: 0 0 auto;
 }
 
 [data-draft-hover-body] {
@@ -441,13 +530,18 @@ export default defineContentScript({
 			panelElement.dataset.state = "loading";
 			panelElement.setAttribute("role", "tooltip");
 
+			const headerElement = document.createElement("div");
+			headerElement.dataset.draftHoverHeader = "true";
+
 			const statusElement = document.createElement("div");
 			statusElement.dataset.draftHoverStatus = "true";
+
+			headerElement.append(statusElement, buildDraftHoverLegend());
 
 			const bodyElement = document.createElement("div");
 			bodyElement.dataset.draftHoverBody = "true";
 
-			panelElement.append(statusElement, bodyElement);
+			panelElement.append(headerElement, bodyElement);
 			shadowRoot.append(styleElement, panelElement);
 			getOverlayContainer().appendChild(containerElement);
 
@@ -2459,10 +2553,24 @@ export default defineContentScript({
 					if (!bridgeMessage.jwt || bridgeMessage.paused) {
 						if (!bridgeMessage.jwt) {
 							console.warn("[content] skipping SEGMENT dispatch because no JWT was available");
+							clearDraftRendering(nextState);
+							clearDraftRendering(renderedDraftOverlayState);
+						} else if (bridgeMessage.paused) {
+							// Paused: keep the existing overlay on screen but mark it stale so the
+							// underlines grey out (DRAFT_STALE_OPACITY + dashed stale color), signalling
+							// that enhancements are not live. Re-segmentation/dispatch stays suppressed.
+							nextState.draftIsStale = true;
+							if (nextState.draftOverlayElement) {
+								applyDraftOverlayFreshness(nextState.draftOverlayElement, true);
+							}
+							restampAcceptedSegmentVisuals(nextState);
 						}
 						return;
 					}
-					postToBridge(bridgeMessage);
+					// `paused` is a content-script-only gate; the background bridge schema
+					// is `.strict()` and rejects unknown keys, so it must not go over the wire.
+					const { paused: _paused, ...wireMessage } = bridgeMessage;
+					postToBridge(wireMessage);
 					renderDraftSegments(nextState, normalizedText, draftSegments, false);
 					if (import.meta.env.DEV) {
 						console.log("Debounced extracted text:\n", extractedText);
@@ -2755,6 +2863,18 @@ export default defineContentScript({
 
 		scanDocumentForInputs();
 		observeForInputDiscovery();
+
+		chrome.storage.onChanged.addListener((changes, areaName) => {
+			if (areaName !== "local") return;
+			const authChange = changes[AUTH_STORAGE_KEY];
+			if (authChange !== undefined && authChange.newValue === undefined) {
+				clearActiveInputWork(activeInputState);
+				clearDraftRendering(activeInputState);
+				clearDraftRendering(renderedDraftOverlayState);
+				activeInputState = undefined;
+			}
+		});
+
 		getBridgePort(); // establish initial connection eagerly
 	},
 });
