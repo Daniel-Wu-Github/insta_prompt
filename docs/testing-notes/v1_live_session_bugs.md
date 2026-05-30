@@ -51,12 +51,17 @@ Recorded during first end-to-end live test of the deployed stack:
 - **Severity:** UX — popover can be clipped or scroll off-screen
 - **Description:** The hover popover always appears anchored to the bottom of the entire clause underline span, not at the cursor position. On long clauses this means the popover appears far from where the mouse is. If the clause is near the bottom of the viewport the popover is clipped below the browser's bottom border and becomes unreadable.
 - **Fix needed:** In the underline/preview rendering layer, use `MouseEvent.clientX/Y` to position the popover near the cursor, and add viewport-edge detection to flip the popover above the cursor when there is insufficient space below.
+- **Fix (addressed Phase 3):** `positionDraftHoverPreview` now anchors to `hoverState.clientX/clientY` (offset 18px below the cursor) instead of the clause span's bounding box, with the existing edge-flip logic now computed relative to the cursor Y. Falls back to the span rect only if pointer coordinates are unavailable.
 
 ### BUG-2.3 — Overlay panel missing clause type legend
 
 - **Severity:** UX — users cannot interpret underline colors without a key
 - **Description:** The overlay shows "READY" status and displays clause metadata (Task Definition, Key Constraints, Output Shape) but has no legend mapping underline color to clause type (context, tech\_stack, constraint, action, output\_format, edge\_case). The legend should appear in the top-right corner of the overlay panel, opposite "READY".
 - **Fix needed:** Add a compact inline legend component to the overlay panel top bar. Each entry should show the color swatch and the clause type label.
+- **Fix (addressed Phase 3):** Redesigned rather than literally placed in the panel. The legend was **removed from the hover popover** (it answered "what do colors mean globally" at the wrong moment) and split across two surfaces:
+  1. **Hover popover header** now shows per-clause metadata: `READY · Clause 3 of 5 · Action · 91%`, where the clause type is rendered inline in its own color (the in-context legend) and confidence is shown as a percent. Clause number honors the new ordering preference (see below).
+  2. **Persistent overlay HUD** — a small always-on color-key pill anchored to the bottom-right of the active input while underlines exist (`ensureLegendHud`/`destroyLegendHud`), showing all six goal-type swatches in canonical order. Built via `createElement` only, torn down with the overlay.
+  - **New: clause ordering toggle.** Popup gains a "Clause numbering" toggle (`ClauseOrderingToggle` + `useClauseOrdering`, stored in `chrome.storage.sync` under `promptcompiler.clauseOrdering`, default `entry`). Entry = position in text (`Clause 3 of 5`); Canonical = fixed slot in compiled prompt (`Slot 4 of 6`). Content script reads it as a display-only preference — **not** sent over the bridge — and re-renders the open popover on change.
 
 ---
 
@@ -112,6 +117,7 @@ Recorded during first end-to-end live test of the deployed stack:
   2. The listener may not be attached to the correct element or may be blocked by the target site's own keyboard handler.
   3. The bind-gate precondition (at least one accepted section) may not be satisfied, silently preventing bind from firing.
 - **Fix needed:** Audit `hotkey-bind-commit-ux` implementation to confirm `ctrlKey` is included alongside `metaKey` in the bind trigger condition. Verify the listener is attached at the correct point in the DOM and that the gate condition is met before the keydown fires.
+- **Fix (addressed Phase 3):** Audit found `ctrlKey` **is** already in the keydown condition (`event.metaKey || event.ctrlKey`) — the keypress reaches `dispatchBindRequest`, but the bind gate (`isBindGateOpen`) was closed and failed **silently** (console-only `logBindGateBlocked`). On Windows this looked like a dead keybinding. Fix surfaces the gate result: `logBindGateBlocked` now also opens the ghost panel with status `"Tab to accept · ⌘/Ctrl+Enter to bind"` and a reason (`describeBindGateBlock`: no accepted clauses / stale accepted / already binding), auto-dismissing after 2s unless a real bind takes over the panel. The underlying gate is unchanged — this is feedback only.
 
 - **Error Log:** Bind action blocked in chrome console logs: var content=(function(){function e(e){return e}var t=[`context`,`tech_stack`,`constraint`,`action`,`output_format`,`edge_case`],n=[`efficiency`,`balanced`,`detailed`],r=e({matches:[`<all_urls>`],runAt:`document_idle`,main(){let e=`data-insta-instrumented`,r=`true`,i=`promptcompiler-dev-jwt`,a=`2147483647`,o=.85,s=`0.45`,c={context:1,tech_stack:2,constraint:3,action:4,output_format:5,edge_case:6},l={action:{cssVariable:`--insta-goal-type-action-color`,color:`rgb(124 58 237)`},tech_stack:{cssVariable:`--insta-goal-type-tech-stack-color`,color:`rgb(15 118 110)`},constraint:{cssVariable:`--insta-goal-type-constraint-color`,color:`rgb(244 63 94)`},output_format:{cssVariable:`--insta-goal-type-output-format-color`,color:`rgb(29 78 216)`},context:{cssVariable:`--insta-goal-type-context-color`,color:`rgb(217 119 6)`},edge_case:{cssVariable:`--insta-goal-type-edge-case-color`,color:`rgb(107 114 128)`}},u=new Set(`ADDRESS.ARTICLE.ASIDE.BLOCKQUOTE.DIV.DL.DT.DD.FIELDSET.FIGCAPTION.FIGURE.FOOTER.FORM.H1.H2.H3.H4.H5.H6.HEADER.HR.LI.MAIN.NAV.OL.P.PRE.SECTION.TABLE.TBODY.TD.TH.TR.UL`.split(`.`)),d,f,p,m,h=!1,g=null,_=e=>u.has(e.tagName),v=e=>e.replace(/\r\n?/g,`
 `),ee=e=>typeof e==`string`&&n.includes(e),te=e=>typeof e==`string`&&t.includes(e),y=e=>{if(typeof e==`string`){let t=e.trim();return t.length>0?t:void 0}if(typeof e!=`object`||!e||Array.isArray(e))return;let t=e;for(let e of[`token`,`accessToken`,`access_token`,`jwt`]){let n=t[e];if(typeof n!=`string`)continue;let r=n.trim();if(r.length>0)return r}for(let e of[`session`,`auth`,`data`]){let n=y(t[e]);if(n)return n}},b=e=>e instanceof Error?e.message.includes(`Access to storage is not allowed`):typeof e==`string`?e.includes(`Access to storage is not allowed`):!1,ne=async()=>{try{return await chrome.storage.session.get(null)}catch(e){if(b(e))return{};throw e}},re=async()=>{try{return await chrome.storage.sync.get(null)}catch(e){if(b(e))return{};throw e}},x=async()=>{let e=await re(),t=await chrome.storage.local.get(null),n=await ne(),r=`balanced`;for(let n of[e,t]){let e=n[`promptcompiler.settings`];if(typeof e==`object`&&e&&!Array.isArray(e)){let t=e.mode;if(ee(t)){r=t;break}}}let i=t[`promptcompiler.auth`];if(typeof i==`object`&&i&&!Array.isArray(i)){let e=i.access_token;if(typeof e==`string`&&e.trim().length>0)return{mode:r,jwt:e.trim()}}for(let e of[n,t])for(let t of Object.values(e)){let e=y(t);if(e)return{mode:r,jwt:e}}return{mode:r,jwt:null}},ie=async e=>{let{mode:t,jwt:n}=await x();return{verb:`SEGMENT`,jwt:n,requestId:crypto.randomUUID(),payload:{segments:[e],mode:t}}},ae=e=>{for(let n of t){let t=l[n];e.style.setProperty(t.cssVariable,t.color)}},S=(e,t)=>{e.dataset.draftStale=t?`true`:`false`,e.style.opacity=t?s:`1`},oe=e=>`${e.goalType.replace(/_/g,` `)} preview: ${e.text}`,se=e=>[...e].sort((e,t)=>c[e.goal_type]-c[t.goal_type]),ce=(e,t)=>e.start===t.start&&e.end===t.end&&e.text===t.text&&e.goalType===t.goalType&&e.confidence===t.confidence,le=()=>{let e=document.createElement(`div`);e.setAttribute(`aria-hidden`,`true`),e.dataset.instaDraftHoverPopover=`true`,e.style.position=`fixed`,e.style.left=`0px`,e.style.top=`0px`,e.style.zIndex=a,e.style.pointerEvents=`none`,e.style.contain=`layout paint style`;let t=e.attachShadow({mode:`open`}),n=document.createElement(`style`);n.textContent=`
@@ -239,13 +245,13 @@ content;
 | BUG-1.1 | Auth / Supabase config | Blocking | Config |
 | BUG-1.2 | Popup UX | UX gap | Code |
 | BUG-2.1 | Content script / Google search | Feature gap | Code |
-| BUG-2.2 | Overlay / popover positioning | UX | Code |
-| BUG-2.3 | Overlay / legend missing | UX | Code |
+| BUG-2.2 | Overlay / popover positioning | UX | Code (addressed Phase 3) |
+| BUG-2.3 | Overlay / legend missing | UX | Code (addressed Phase 3) |
 | BUG-3.1 | Rate limit | Config | Config |
 | BUG-3.2 | Overlay / clause gap | UX | Code |
 | BUG-3.3 | Pause greying | UX | Code (addressed) |
 | BUG-3.4 | Hover popover legend | UX | Code (addressed) |
-| BUG-4.1 | Bind keybinding / Windows | Blocking | Code |
+| BUG-4.1 | Bind keybinding / Windows | Blocking | Code (addressed Phase 3) |
 
 ---
 

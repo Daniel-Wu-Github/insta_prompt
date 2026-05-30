@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
 import { AccountStatus } from "./components/AccountStatus";
+import { ClauseOrderingToggle } from "./components/ClauseOrderingToggle";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { ModeToggle } from "./components/ModeToggle";
 import { PauseToggle } from "./components/PauseToggle";
 import { ProjectSelector } from "./components/ProjectSelector";
 import { UpgradeCTA } from "./components/UpgradeCTA";
 import { useAccountStatus } from "./hooks/useAccountStatus";
+import { useClauseOrdering } from "./hooks/useClauseOrdering";
 import { usePause } from "./hooks/usePause";
 import { useSettings } from "./hooks/useSettings";
 
@@ -54,6 +56,7 @@ type SupabaseAuthResponse = {
 export default function App() {
 	const { settings, isLoading: settingsLoading, setMode, setProjectId } = useSettings();
 	const { paused, toggle: togglePause } = usePause();
+	const { ordering: clauseOrdering, set: setClauseOrdering } = useClauseOrdering();
 
 	// undefined = still loading from storage; null = not authenticated
 	const [auth, setAuth] = useState<StoredAuth | null | undefined>(undefined);
@@ -304,6 +307,7 @@ export default function App() {
 			<div className="flex-1">
 				<ModeToggle mode={settings.mode} onChange={setMode} />
 				<PauseToggle paused={paused} onToggle={togglePause} />
+					<ClauseOrderingToggle ordering={clauseOrdering} onChange={setClauseOrdering} />
 				<AccountStatus
 					tier={account.tier}
 					usage={account.usage}

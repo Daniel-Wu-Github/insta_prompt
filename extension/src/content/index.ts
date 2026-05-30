@@ -7,6 +7,7 @@ export default defineContentScript({
 		const BRIDGE_PORT_NAME = "insta_prompt_bridge";
 		const SETTINGS_STORAGE_KEY = "promptcompiler.settings";
 		const PAUSE_STORAGE_KEY = "promptcompiler.paused";
+		const CLAUSE_ORDERING_STORAGE_KEY = "promptcompiler.clauseOrdering";
 		const INSTRUMENTED_ATTRIBUTE = "data-insta-instrumented";
 		const INSTRUMENTED_VALUE = "true";
 		const DEBOUNCE_DELAY_MS = 400;
@@ -69,6 +70,10 @@ export default defineContentScript({
 		type InputLifecycleState = "IDLE" | "TYPING" | "SEGMENTING";
 		type DraftRenderMode = "highlight" | "overlay";
 		type DraftHoverPreviewStatus = "loading" | "ready" | "stale";
+		// "entry" = clause number by left-to-right position in the text (default, matches
+		// what the user sees and how Tab cycles). "canonical" = clause's slot in the final
+		// compiled prompt (context=1 … edge_case=6); a display-only preference set in the popup.
+		type ClauseOrdering = "entry" | "canonical";
 
 		interface DraftSegment {
 			id: string;
@@ -106,6 +111,8 @@ export default defineContentScript({
 			ghostPanelBodyElement: HTMLDivElement | undefined;
 			ghostPanelStatusElement: HTMLDivElement | undefined;
 			ghostPanelLayoutListener: EventListener | undefined;
+			legendHudElement: HTMLDivElement | undefined;
+			legendHudLayoutListener: EventListener | undefined;
 			bindPhase: "IDLE" | "BINDING" | "COMPLETE";
 			bindHistoryWarning: string | undefined;
 			bindRecoveryObserver: MutationObserver | undefined;
@@ -117,11 +124,16 @@ export default defineContentScript({
 		interface DraftHoverPreviewState {
 			sourceElement: HTMLTextAreaElement | HTMLElement;
 			segment: DraftSegment;
+			// Position of `segment` in the draftSegments array (0-based, entry order).
+			segmentIndex: number;
+			// Total number of clauses in the current draft, for the "Clause X of N" label.
+			totalSegments: number;
 			status: DraftHoverPreviewStatus;
 			containerElement: HTMLDivElement;
 			shadowRoot: ShadowRoot;
 			panelElement: HTMLDivElement;
 			statusElement: HTMLDivElement;
+			metaElement: HTMLDivElement;
 			bodyElement: HTMLDivElement;
 			readyTimerId: number | undefined;
 			anchorRect: DOMRectReadOnly;
@@ -171,6 +183,10 @@ export default defineContentScript({
 		let activeDraftHoverPreviewState: DraftHoverPreviewState | undefined;
 		let lastDraftHoverPoint: { clientX: number; clientY: number } | undefined;
 		let draftOverlaySyncListenersInstalled = false;
+		// Display-only preference, read from chrome.storage.sync and kept fresh via the
+		// storage.onChanged listener below. Defaults to "entry" until the first read resolves.
+		// Never sent over the bridge — it only affects the clause number shown in the hover popover.
+		let clauseOrderingPreference: ClauseOrdering = "entry";
 		// Null when the SW port has been killed and not yet reconnected.
 		let _bridgePort: chrome.runtime.Port | null = null;
 
@@ -269,6 +285,18 @@ export default defineContentScript({
 			}
 		};
 
+		const isClauseOrdering = (value: unknown): value is ClauseOrdering => {
+			return value === "entry" || value === "canonical";
+		};
+
+		// Refresh the cached clause-ordering preference from sync storage. Called once on
+		// startup and again whenever the popup writes a new value (via storage.onChanged).
+		const refreshClauseOrderingPreference = async (): Promise<void> => {
+			const syncSnapshot = await readSyncStorageSnapshot();
+			const stored = syncSnapshot[CLAUSE_ORDERING_STORAGE_KEY];
+			clauseOrderingPreference = isClauseOrdering(stored) ? stored : "entry";
+		};
+
 		const resolveBridgeContext = async (): Promise<{ mode: Mode; jwt: string | null; paused: boolean }> => {
 			const syncSnapshot = await readSyncStorageSnapshot();
 			const localSnapshot = await readLocalStorageSnapshot();
@@ -360,7 +388,8 @@ export default defineContentScript({
 			return left.start === right.start && left.end === right.end && left.text === right.text && left.goalType === right.goalType && left.confidence === right.confidence;
 		};
 
-		// Human-readable labels for the hover-popover legend, in canonical bind order.
+		// Human-readable labels for goal types, used in the hover-popover header and the
+		// persistent overlay legend HUD. Kept in canonical bind order where iterated.
 		const GOAL_TYPE_LEGEND_LABEL: Record<GoalType, string> = {
 			context: "Context",
 			tech_stack: "Tech stack",
@@ -370,47 +399,30 @@ export default defineContentScript({
 			edge_case: "Edge case",
 		};
 
-		// Builds the compact color legend shown in the top-right of the hover popover.
-		// Swatches mirror the underline color tokens; the trailing "Stale" entry matches
-		// the greyed/dashed treatment used for stale and paused overlays.
-		const buildDraftHoverLegend = (): HTMLDivElement => {
-			const legend = document.createElement("div");
-			legend.dataset.draftHoverLegend = "true";
-			legend.setAttribute("aria-hidden", "true");
+		// Goal types in canonical bind order — reused by the header (canonical numbering)
+		// and the overlay legend HUD.
+		const GOAL_TYPES_IN_CANONICAL_ORDER: GoalType[] = [...GOAL_TYPE_VALUES].sort(
+			(left, right) => CANONICAL_ORDER_BY_GOAL_TYPE[left] - CANONICAL_ORDER_BY_GOAL_TYPE[right],
+		);
 
-			const orderedGoalTypes = [...GOAL_TYPE_VALUES].sort(
-				(left, right) => CANONICAL_ORDER_BY_GOAL_TYPE[left] - CANONICAL_ORDER_BY_GOAL_TYPE[right],
-			);
-
-			const appendEntry = (label: string, swatchColor: string, dashed: boolean): void => {
-				const item = document.createElement("div");
-				item.dataset.draftHoverLegendItem = "true";
-
-				const swatch = document.createElement("span");
-				swatch.dataset.draftHoverLegendSwatch = "true";
-				swatch.style.borderBottomColor = swatchColor;
-				swatch.style.borderBottomStyle = dashed ? "dashed" : "solid";
-
-				const text = document.createElement("span");
-				text.textContent = label;
-
-				item.append(swatch, text);
-				legend.appendChild(item);
-			};
-
-			for (const goalType of orderedGoalTypes) {
-				appendEntry(GOAL_TYPE_LEGEND_LABEL[goalType], GOAL_TYPE_PALETTE[goalType].color, false);
+		// Computes the clause label shown in the hover popover header for a given segment,
+		// honoring the user's clause-ordering preference.
+		//   - "entry":     "Clause 3 of 5" — 1-based position in text, with total count.
+		//   - "canonical": "Slot 4 of 6"   — the clause's fixed position in the compiled
+		//                  prompt (context=1 … edge_case=6). No live count, since multiple
+		//                  clauses can share a slot.
+		const formatClauseLabel = (segmentIndex: number, totalSegments: number, goalType: GoalType): string => {
+			if (clauseOrderingPreference === "canonical") {
+				return `Slot ${CANONICAL_ORDER_BY_GOAL_TYPE[goalType]} of ${GOAL_TYPES_IN_CANONICAL_ORDER.length}`;
 			}
-			// Stale / paused indicator — greyed, dashed.
-			appendEntry("Stale", "rgb(156 163 175)", true);
-
-			return legend;
+			return `Clause ${segmentIndex + 1} of ${totalSegments}`;
 		};
 
 		const createDraftHoverPopoverShell = (): {
 			containerElement: HTMLDivElement;
 			panelElement: HTMLDivElement;
 			statusElement: HTMLDivElement;
+			metaElement: HTMLDivElement;
 			bodyElement: HTMLDivElement;
 		} => {
 			const containerElement = document.createElement("div");
@@ -459,14 +471,13 @@ export default defineContentScript({
 
 [data-draft-hover-header] {
 	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 10px;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px 8px;
 	margin-bottom: 6px;
 }
 
 [data-draft-hover-status] {
-	display: block;
 	font-size: 11px;
 	font-weight: 700;
 	letter-spacing: 0.08em;
@@ -475,30 +486,32 @@ export default defineContentScript({
 	flex: 0 0 auto;
 }
 
-[data-draft-hover-legend] {
-	display: grid;
-	grid-template-columns: auto auto;
-	gap: 2px 8px;
+/* "Clause 3 of 5 · Action · 91%" — the per-clause metadata line. The goal-type
+   token inside is colored inline to match the underline (the in-context legend). */
+[data-draft-hover-meta] {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	letter-spacing: 0.02em;
+	color: rgb(148, 163, 184);
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+[data-draft-hover-meta-sep] {
+	color: rgb(71, 85, 105);
 	flex: 0 0 auto;
 }
 
-[data-draft-hover-legend-item] {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	font-size: 9px;
-	line-height: 1.2;
-	letter-spacing: 0.02em;
-	color: rgb(148, 163, 184);
+[data-draft-hover-meta-type] {
+	font-weight: 700;
 	white-space: nowrap;
+	flex: 0 0 auto;
 }
 
-[data-draft-hover-legend-swatch] {
-	display: inline-block;
-	width: 10px;
-	height: 0;
-	border-bottom-width: 2px;
-	border-bottom-style: solid;
+[data-draft-hover-meta-confidence] {
+	font-variant-numeric: tabular-nums;
 	flex: 0 0 auto;
 }
 
@@ -536,7 +549,13 @@ export default defineContentScript({
 			const statusElement = document.createElement("div");
 			statusElement.dataset.draftHoverStatus = "true";
 
-			headerElement.append(statusElement, buildDraftHoverLegend());
+			// Per-clause metadata ("Clause 3 of 5 · Action · 91%"). Populated in
+			// renderDraftHoverPreview; the goal-type token is colored inline to match
+			// the underline, which doubles as the in-context color legend.
+			const metaElement = document.createElement("div");
+			metaElement.dataset.draftHoverMeta = "true";
+
+			headerElement.append(statusElement, metaElement);
 
 			const bodyElement = document.createElement("div");
 			bodyElement.dataset.draftHoverBody = "true";
@@ -545,7 +564,7 @@ export default defineContentScript({
 			shadowRoot.append(styleElement, panelElement);
 			getOverlayContainer().appendChild(containerElement);
 
-			return { containerElement, panelElement, statusElement, bodyElement };
+			return { containerElement, panelElement, statusElement, metaElement, bodyElement };
 		};
 
 		const clearDraftHoverPreview = (options?: { preservePointer?: boolean }): void => {
@@ -571,10 +590,41 @@ export default defineContentScript({
 			}
 		};
 
+		// Rebuilds the header meta line "Clause 3 of 5 · Action · 91%" for a hover state.
+		// Built with createElement only (no innerHTML); the goal-type token is colored to
+		// match the underline so the header doubles as the in-context color legend.
+		const renderDraftHoverMeta = (hoverState: DraftHoverPreviewState): void => {
+			const { metaElement, segment, segmentIndex, totalSegments } = hoverState;
+			metaElement.textContent = "";
+
+			const clauseLabel = document.createElement("span");
+			clauseLabel.textContent = formatClauseLabel(segmentIndex, totalSegments, segment.goalType);
+
+			const sep = document.createElement("span");
+			sep.dataset.draftHoverMetaSep = "true";
+			sep.textContent = "·";
+
+			const typeLabel = document.createElement("span");
+			typeLabel.dataset.draftHoverMetaType = "true";
+			typeLabel.textContent = GOAL_TYPE_LEGEND_LABEL[segment.goalType];
+			typeLabel.style.color = GOAL_TYPE_PALETTE[segment.goalType].color;
+
+			const sep2 = document.createElement("span");
+			sep2.dataset.draftHoverMetaSep = "true";
+			sep2.textContent = "·";
+
+			const confidenceLabel = document.createElement("span");
+			confidenceLabel.dataset.draftHoverMetaConfidence = "true";
+			confidenceLabel.textContent = `${Math.round(segment.confidence * 100)}%`;
+
+			metaElement.append(clauseLabel, sep, typeLabel, sep2, confidenceLabel);
+		};
+
 		const renderDraftHoverPreview = (hoverState: DraftHoverPreviewState): void => {
 			const { statusElement, bodyElement, panelElement, segment, status } = hoverState;
 
 			panelElement.dataset.state = status;
+			renderDraftHoverMeta(hoverState);
 
 			switch (status) {
 				case "loading":
@@ -595,13 +645,22 @@ export default defineContentScript({
 		};
 
 		const positionDraftHoverPreview = (hoverState: DraftHoverPreviewState): void => {
+			// BUG-2.2: anchor the popover to the cursor (clientX/Y) rather than the clause
+			// span's bounding box, so it tracks the mouse on long/wrapped clauses. The
+			// span rect is still used as a fallback for the rare case where the pointer
+			// coordinates have not been captured yet.
 			const viewportPadding = 12;
-			const anchorRect = hoverState.anchorRect;
 			const estimatedWidth = 320;
 			const estimatedHeight = hoverState.panelElement.getBoundingClientRect().height || 96;
-			const clampedLeft = Math.max(viewportPadding, Math.min(anchorRect.left, window.innerWidth - estimatedWidth - viewportPadding));
-			const belowTop = anchorRect.bottom + 10;
-			const aboveTop = anchorRect.top - estimatedHeight - 10;
+
+			const anchorX = Number.isFinite(hoverState.clientX) ? hoverState.clientX : hoverState.anchorRect.left;
+			const anchorY = Number.isFinite(hoverState.clientY) ? hoverState.clientY : hoverState.anchorRect.bottom;
+
+			const clampedLeft = Math.max(viewportPadding, Math.min(anchorX, window.innerWidth - estimatedWidth - viewportPadding));
+			// Offset below the cursor so the popover does not sit under the pointer; flip
+			// above the cursor when there is not enough room below.
+			const belowTop = anchorY + 18;
+			const aboveTop = anchorY - estimatedHeight - 12;
 			const shouldPlaceAbove = belowTop + estimatedHeight > window.innerHeight - viewportPadding && aboveTop >= viewportPadding;
 
 			hoverState.containerElement.style.left = `${clampedLeft}px`;
@@ -646,7 +705,7 @@ export default defineContentScript({
 			overlayState: ActiveInputState,
 			clientX: number,
 			clientY: number,
-		): { segment: DraftSegment; rect: DOMRect } | undefined => {
+		): { segment: DraftSegment; segmentIndex: number; rect: DOMRect } | undefined => {
 			const contentElement = overlayState.draftOverlayContentElement;
 			if (!contentElement) {
 				return undefined;
@@ -670,7 +729,7 @@ export default defineContentScript({
 					continue;
 				}
 
-				return { segment, rect };
+				return { segment, segmentIndex, rect };
 			}
 
 			return undefined;
@@ -716,11 +775,14 @@ export default defineContentScript({
 			const hoverState: DraftHoverPreviewState = {
 				sourceElement,
 				segment: hitTarget.segment,
+				segmentIndex: hitTarget.segmentIndex,
+				totalSegments: overlayState.draftSegments.length,
 				status: isStale ? "stale" : "loading",
 				containerElement: undefined as unknown as HTMLDivElement,
 				shadowRoot: undefined as unknown as ShadowRoot,
 				panelElement: undefined as unknown as HTMLDivElement,
 				statusElement: undefined as unknown as HTMLDivElement,
+				metaElement: undefined as unknown as HTMLDivElement,
 				bodyElement: undefined as unknown as HTMLDivElement,
 				readyTimerId: undefined,
 				anchorRect: hitTarget.rect,
@@ -733,6 +795,7 @@ export default defineContentScript({
 			hoverState.shadowRoot = hoverShell.containerElement.shadowRoot as ShadowRoot;
 			hoverState.panelElement = hoverShell.panelElement;
 			hoverState.statusElement = hoverShell.statusElement;
+			hoverState.metaElement = hoverShell.metaElement;
 			hoverState.bodyElement = hoverShell.bodyElement;
 			activeDraftHoverPreviewState = hoverState;
 
@@ -882,6 +945,137 @@ export default defineContentScript({
 			return document.body ?? document.documentElement;
 		};
 
+		// ── Persistent overlay legend HUD (BUG-2.3) ───────────────────────────────
+		// A small always-on color key anchored to the bottom-right of the active input
+		// while underlines exist. It owns the "what do the colors mean" reference so the
+		// hover popover can stay focused on the single clause under the cursor. Built with
+		// createElement only and torn down with the overlay (dom-memory-management).
+
+		const positionLegendHud = (state: ActiveInputState): void => {
+			const hud = state.legendHudElement;
+			if (!hud || !state.element.isConnected) {
+				return;
+			}
+			const rect = state.element.getBoundingClientRect();
+			// Bottom-right corner of the input, nudged inside the viewport.
+			const left = Math.max(12, Math.min(window.innerWidth - 12 - hud.offsetWidth, rect.right - hud.offsetWidth - 8));
+			const top = Math.max(12, Math.min(window.innerHeight - 12 - hud.offsetHeight, rect.bottom - hud.offsetHeight - 8));
+			hud.style.left = `${left}px`;
+			hud.style.top = `${top}px`;
+		};
+
+		const destroyLegendHud = (state: ActiveInputState): void => {
+			if (state.legendHudLayoutListener) {
+				window.removeEventListener("scroll", state.legendHudLayoutListener, true);
+				window.removeEventListener("resize", state.legendHudLayoutListener);
+				state.legendHudLayoutListener = undefined;
+			}
+			if (state.legendHudElement) {
+				state.legendHudElement.remove();
+				state.legendHudElement = undefined;
+			}
+		};
+
+		const ensureLegendHud = (state: ActiveInputState): void => {
+			if (state.legendHudElement && state.legendHudElement.isConnected) {
+				positionLegendHud(state);
+				return;
+			}
+
+			const containerElement = document.createElement("div");
+			containerElement.setAttribute("aria-hidden", "true");
+			containerElement.dataset.instaLegendHud = "true";
+			containerElement.style.position = "fixed";
+			containerElement.style.left = "0px";
+			containerElement.style.top = "0px";
+			containerElement.style.zIndex = DRAFT_OVERLAY_Z_INDEX;
+			containerElement.style.pointerEvents = "none";
+			containerElement.style.contain = "layout paint style";
+
+			const shadowRoot = containerElement.attachShadow({ mode: "open" });
+			const styleElement = document.createElement("style");
+			styleElement.textContent = `
+:host {
+	all: initial;
+	position: fixed;
+	left: 0;
+	top: 0;
+	z-index: ${DRAFT_OVERLAY_Z_INDEX};
+	pointer-events: none;
+	contain: layout paint style;
+}
+
+[data-legend-panel] {
+	all: initial;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	box-sizing: border-box;
+	max-width: min(420px, calc(100vw - 24px));
+	border-radius: 9px;
+	border: 1px solid rgba(148, 163, 184, 0.24);
+	background: rgba(15, 23, 42, 0.92);
+	box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28);
+	padding: 6px 9px;
+	font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	pointer-events: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+[data-legend-item] {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 10px;
+	line-height: 1.2;
+	letter-spacing: 0.01em;
+	color: rgb(203, 213, 225);
+	white-space: nowrap;
+}
+
+[data-legend-swatch] {
+	display: inline-block;
+	width: 11px;
+	height: 0;
+	border-bottom-width: 2px;
+	border-bottom-style: solid;
+	flex: 0 0 auto;
+}
+`;
+
+			const panelElement = document.createElement("div");
+			panelElement.dataset.legendPanel = "true";
+
+			for (const goalType of GOAL_TYPES_IN_CANONICAL_ORDER) {
+				const item = document.createElement("div");
+				item.dataset.legendItem = "true";
+
+				const swatch = document.createElement("span");
+				swatch.dataset.legendSwatch = "true";
+				swatch.style.borderBottomColor = GOAL_TYPE_PALETTE[goalType].color;
+				swatch.style.borderBottomStyle = "solid";
+
+				const text = document.createElement("span");
+				text.textContent = GOAL_TYPE_LEGEND_LABEL[goalType];
+
+				item.append(swatch, text);
+				panelElement.appendChild(item);
+			}
+
+			shadowRoot.append(styleElement, panelElement);
+			getOverlayContainer().appendChild(containerElement);
+			state.legendHudElement = containerElement;
+
+			const layoutListener: EventListener = () => positionLegendHud(state);
+			window.addEventListener("scroll", layoutListener, true);
+			window.addEventListener("resize", layoutListener);
+			state.legendHudLayoutListener = layoutListener;
+
+			positionLegendHud(state);
+		};
+
 		const copyDraftOverlayStyles = (source: HTMLElement, target: HTMLDivElement): void => {
 			const computedStyle = window.getComputedStyle(source);
 
@@ -950,6 +1144,8 @@ export default defineContentScript({
 				state.draftOverlayElement.remove();
 				state.draftOverlayElement = undefined;
 			}
+
+			destroyLegendHud(state);
 
 			if (state.draftOverlayScrollListener) {
 				state.element.removeEventListener("scroll", state.draftOverlayScrollListener);
@@ -1375,6 +1571,7 @@ export default defineContentScript({
 			state.draftText = extractedText;
 			state.draftSegments = segments;
 			renderedDraftOverlayState = state;
+			ensureLegendHud(state);
 			restoreDraftHoverPreviewFromLastPointer(state.element);
 		};
 
@@ -2014,6 +2211,23 @@ export default defineContentScript({
 			);
 		};
 
+		// BUG-4.1: surface why a bind keypress did nothing. The gate was previously
+		// console-only, so on Windows (where Ctrl+Enter reaches this path but the gate is
+		// closed) the user saw no feedback at all. Show the reason in the ghost panel and
+		// auto-dismiss after 2s — unless a real bind/commit has since taken over the panel.
+		const describeBindGateBlock = (state: ActiveInputState): string => {
+			if (state.bindPhase !== "IDLE" || state.activeBindRequestId !== undefined) {
+				return "Compilation already in progress…";
+			}
+			if (state.acceptedSegmentIndices.size === 0) {
+				return "Accept at least one clause first — hover a clause and press Tab.";
+			}
+			if (state.hasStaleAccepted) {
+				return "Your accepted clauses are stale — re-accept them after the recent edit.";
+			}
+			return "Bind is not available right now.";
+		};
+
 		const logBindGateBlocked = (state: ActiveInputState): void => {
 			console.warn("[content] bind blocked", {
 				accepted: state.acceptedSegmentIndices.size,
@@ -2021,6 +2235,19 @@ export default defineContentScript({
 				bindPhase: state.bindPhase,
 				activeBindRequestId: state.activeBindRequestId,
 			});
+
+			ensureGhostPanel(state);
+			updateGhostPanelStatus(state, "Tab to accept · ⌘/Ctrl+Enter to bind");
+			if (state.ghostPanelBodyElement) {
+				state.ghostPanelBodyElement.textContent = describeBindGateBlock(state);
+			}
+
+			window.setTimeout(() => {
+				// Only dismiss if nothing real has claimed the panel in the meantime.
+				if (state.bindPhase === "IDLE" && state.activeBindRequestId === undefined && state.pendingGhostText.length === 0) {
+					removeGhostPanel(state);
+				}
+			}, 2000);
 		};
 
 		const collectAcceptedBindSections = (state: ActiveInputState): Array<{
@@ -2414,6 +2641,8 @@ export default defineContentScript({
 					ghostPanelBodyElement: previousState.ghostPanelBodyElement,
 					ghostPanelStatusElement: previousState.ghostPanelStatusElement,
 					ghostPanelLayoutListener: previousState.ghostPanelLayoutListener,
+					legendHudElement: previousState.legendHudElement,
+					legendHudLayoutListener: previousState.legendHudLayoutListener,
 					bindPhase: previousState.bindPhase,
 					bindHistoryWarning: undefined,
 					bindRecoveryObserver: previousState.bindRecoveryObserver,
@@ -2447,6 +2676,8 @@ export default defineContentScript({
 					ghostPanelBodyElement: undefined,
 					ghostPanelStatusElement: undefined,
 					ghostPanelLayoutListener: undefined,
+					legendHudElement: undefined,
+					legendHudLayoutListener: undefined,
 					bindPhase: "IDLE",
 					bindHistoryWarning: undefined,
 					bindRecoveryObserver: undefined,
@@ -2863,8 +3094,22 @@ export default defineContentScript({
 
 		scanDocumentForInputs();
 		observeForInputDiscovery();
+		void refreshClauseOrderingPreference();
 
 		chrome.storage.onChanged.addListener((changes, areaName) => {
+			if (areaName === "sync") {
+				const orderingChange = changes[CLAUSE_ORDERING_STORAGE_KEY];
+				if (orderingChange !== undefined) {
+					const next = orderingChange.newValue;
+					clauseOrderingPreference = isClauseOrdering(next) ? next : "entry";
+					// Re-render the open hover popover so its clause number reflects the new mode.
+					if (activeDraftHoverPreviewState) {
+						renderDraftHoverPreview(activeDraftHoverPreviewState);
+					}
+				}
+				return;
+			}
+
 			if (areaName !== "local") return;
 			const authChange = changes[AUTH_STORAGE_KEY];
 			if (authChange !== undefined && authChange.newValue === undefined) {
