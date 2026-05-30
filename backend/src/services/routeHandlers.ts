@@ -144,15 +144,12 @@ export async function segmentRouteHandler(c: Context<AppEnv>) {
 		segments: classifiedIntermediate.sections,
 	};
 
-	if (IS_DEV) {
-		console.log("\n=== 🧠 GROQ SEMANTIC ANALYSIS ===");
-		aiResult.segments.forEach((seg, index) => {
-			console.log(`Clause ${index + 1}: "${seg.text}"`);
-			console.log(`  ➔ Goal: ${seg.goal_type}`);
-			console.log(`  ➔ Confidence: ${seg.confidence}`);
-		});
-		console.log("=================================\n");
-	}
+	// Always log for debugging — remove before shipping to real users.
+	console.log("[segment] raw LLM sections:", JSON.stringify(aiResult.segments.map(s => ({
+		goal_type: s.goal_type,
+		confidence: s.confidence,
+		text: s.text.slice(0, 40),
+	}))));
 
 	const response = normalizeSegmentClassificationIntermediate(classifiedIntermediate);
 
@@ -184,6 +181,7 @@ export async function enhanceRouteHandler(c: Context<AppEnv>) {
 	}
 
 	const tier = c.get("tier") as Tier;
+	const effectiveTierForModel: Tier = c.req.header("x-force-groq") === "1" ? "free" : tier;
 	const byokConfig: ByokConfig | null = null;
 	const abortSignal = c.req.raw.signal;
 
@@ -191,7 +189,7 @@ export async function enhanceRouteHandler(c: Context<AppEnv>) {
 
 	const model = selectModel({
 		callType: "enhance",
-		tier,
+		tier: effectiveTierForModel,
 		mode: parsed.data.mode,
 		byokConfig,
 	});
@@ -199,7 +197,7 @@ export async function enhanceRouteHandler(c: Context<AppEnv>) {
 	const handoff = prepareEnhanceServiceHandoff({
 		route: {
 			callType: "enhance",
-			tier,
+			tier: effectiveTierForModel,
 			mode: parsed.data.mode,
 			byokConfig,
 		},
@@ -357,6 +355,7 @@ export async function bindRouteHandler(c: Context<AppEnv>) {
 	const rawInput = JSON.stringify(parsed.data.sections);
 	const sectionCount = parsed.data.sections.length;
 	const tier = c.get("tier") as Tier;
+	const effectiveTierForModel: Tier = c.req.header("x-force-groq") === "1" ? "free" : tier;
 	const userId = c.get("userId") as string | undefined;
 	const requestId = c.get("requestId");
 	const byokConfig: ByokConfig | null = null;
@@ -381,7 +380,7 @@ export async function bindRouteHandler(c: Context<AppEnv>) {
 
 	const route = {
 		callType: "bind" as const,
-		tier,
+		tier: effectiveTierForModel,
 		mode: parsed.data.mode,
 		byokConfig,
 	};

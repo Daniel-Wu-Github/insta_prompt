@@ -9,6 +9,7 @@ COPY backend/src ./src
 COPY shared ./shared
 
 ENV PORT=8080
+ENV NODE_ENV=production
 EXPOSE 8080
 
 CMD ["bun", "run", "src/index.ts"]

@@ -102,7 +102,7 @@ export function createSegmentClassificationPrompt(segments: string[]): SegmentPr
 			"- Keep one output section per input segment.",
 			"- text must preserve input segment meaning.",
 			"- goal_type can be any classifier label; normalization is handled server-side later.",
-			"- confidence should be a number if available.",
+			"- confidence is YOUR OWN calibrated certainty score for the goal_type label you chose (0.0 = very uncertain, 0.5 = somewhat sure, 1.0 = very certain). Vary it per segment based on how obvious the classification is.",
 			"- depends_on must be an array of integer section indices (0-based).",
 			"Input segments:",
 			formatSegmentsForPrompt(segments),

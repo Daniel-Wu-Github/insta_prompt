@@ -386,3 +386,43 @@
   Message: Claude Code is waiting for your approval or input
   Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
 
+[01:10:28Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[01:17:01Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[02:18:08Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[02:20:32Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[02:32:48Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[02:34:55Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:13:44Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:47:20Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:56:54Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[07:23:10Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+

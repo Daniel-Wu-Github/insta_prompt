@@ -111,8 +111,6 @@ export default defineContentScript({
 			ghostPanelBodyElement: HTMLDivElement | undefined;
 			ghostPanelStatusElement: HTMLDivElement | undefined;
 			ghostPanelLayoutListener: EventListener | undefined;
-			legendHudElement: HTMLDivElement | undefined;
-			legendHudLayoutListener: EventListener | undefined;
 			bindPhase: "IDLE" | "BINDING" | "COMPLETE";
 			bindHistoryWarning: string | undefined;
 			bindRecoveryObserver: MutationObserver | undefined;
@@ -250,6 +248,11 @@ export default defineContentScript({
 
 		const readSessionStorageSnapshot = async (): Promise<Record<string, unknown>> => {
 			try {
+				// chrome.storage.session can be undefined in some content-script contexts
+				// (e.g. after an extension reload with the old script still running).
+				if (typeof chrome?.storage?.session?.get !== "function") {
+					return {};
+				}
 				return await chrome.storage.session.get(null);
 			} catch (error) {
 				if (isStorageAccessRestrictedError(error)) {
@@ -951,130 +954,6 @@ export default defineContentScript({
 		// hover popover can stay focused on the single clause under the cursor. Built with
 		// createElement only and torn down with the overlay (dom-memory-management).
 
-		const positionLegendHud = (state: ActiveInputState): void => {
-			const hud = state.legendHudElement;
-			if (!hud || !state.element.isConnected) {
-				return;
-			}
-			const rect = state.element.getBoundingClientRect();
-			// Bottom-right corner of the input, nudged inside the viewport.
-			const left = Math.max(12, Math.min(window.innerWidth - 12 - hud.offsetWidth, rect.right - hud.offsetWidth - 8));
-			const top = Math.max(12, Math.min(window.innerHeight - 12 - hud.offsetHeight, rect.bottom - hud.offsetHeight - 8));
-			hud.style.left = `${left}px`;
-			hud.style.top = `${top}px`;
-		};
-
-		const destroyLegendHud = (state: ActiveInputState): void => {
-			if (state.legendHudLayoutListener) {
-				window.removeEventListener("scroll", state.legendHudLayoutListener, true);
-				window.removeEventListener("resize", state.legendHudLayoutListener);
-				state.legendHudLayoutListener = undefined;
-			}
-			if (state.legendHudElement) {
-				state.legendHudElement.remove();
-				state.legendHudElement = undefined;
-			}
-		};
-
-		const ensureLegendHud = (state: ActiveInputState): void => {
-			if (state.legendHudElement && state.legendHudElement.isConnected) {
-				positionLegendHud(state);
-				return;
-			}
-
-			const containerElement = document.createElement("div");
-			containerElement.setAttribute("aria-hidden", "true");
-			containerElement.dataset.instaLegendHud = "true";
-			containerElement.style.position = "fixed";
-			containerElement.style.left = "0px";
-			containerElement.style.top = "0px";
-			containerElement.style.zIndex = DRAFT_OVERLAY_Z_INDEX;
-			containerElement.style.pointerEvents = "none";
-			containerElement.style.contain = "layout paint style";
-
-			const shadowRoot = containerElement.attachShadow({ mode: "open" });
-			const styleElement = document.createElement("style");
-			styleElement.textContent = `
-:host {
-	all: initial;
-	position: fixed;
-	left: 0;
-	top: 0;
-	z-index: ${DRAFT_OVERLAY_Z_INDEX};
-	pointer-events: none;
-	contain: layout paint style;
-}
-
-[data-legend-panel] {
-	all: initial;
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 4px 10px;
-	box-sizing: border-box;
-	max-width: min(420px, calc(100vw - 24px));
-	border-radius: 9px;
-	border: 1px solid rgba(148, 163, 184, 0.24);
-	background: rgba(15, 23, 42, 0.92);
-	box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28);
-	padding: 6px 9px;
-	font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-	pointer-events: none;
-	user-select: none;
-	-webkit-user-select: none;
-}
-
-[data-legend-item] {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	font-size: 10px;
-	line-height: 1.2;
-	letter-spacing: 0.01em;
-	color: rgb(203, 213, 225);
-	white-space: nowrap;
-}
-
-[data-legend-swatch] {
-	display: inline-block;
-	width: 11px;
-	height: 0;
-	border-bottom-width: 2px;
-	border-bottom-style: solid;
-	flex: 0 0 auto;
-}
-`;
-
-			const panelElement = document.createElement("div");
-			panelElement.dataset.legendPanel = "true";
-
-			for (const goalType of GOAL_TYPES_IN_CANONICAL_ORDER) {
-				const item = document.createElement("div");
-				item.dataset.legendItem = "true";
-
-				const swatch = document.createElement("span");
-				swatch.dataset.legendSwatch = "true";
-				swatch.style.borderBottomColor = GOAL_TYPE_PALETTE[goalType].color;
-				swatch.style.borderBottomStyle = "solid";
-
-				const text = document.createElement("span");
-				text.textContent = GOAL_TYPE_LEGEND_LABEL[goalType];
-
-				item.append(swatch, text);
-				panelElement.appendChild(item);
-			}
-
-			shadowRoot.append(styleElement, panelElement);
-			getOverlayContainer().appendChild(containerElement);
-			state.legendHudElement = containerElement;
-
-			const layoutListener: EventListener = () => positionLegendHud(state);
-			window.addEventListener("scroll", layoutListener, true);
-			window.addEventListener("resize", layoutListener);
-			state.legendHudLayoutListener = layoutListener;
-
-			positionLegendHud(state);
-		};
 
 		const copyDraftOverlayStyles = (source: HTMLElement, target: HTMLDivElement): void => {
 			const computedStyle = window.getComputedStyle(source);
@@ -1144,8 +1023,6 @@ export default defineContentScript({
 				state.draftOverlayElement.remove();
 				state.draftOverlayElement = undefined;
 			}
-
-			destroyLegendHud(state);
 
 			if (state.draftOverlayScrollListener) {
 				state.element.removeEventListener("scroll", state.draftOverlayScrollListener);
@@ -1571,7 +1448,6 @@ export default defineContentScript({
 			state.draftText = extractedText;
 			state.draftSegments = segments;
 			renderedDraftOverlayState = state;
-			ensureLegendHud(state);
 			restoreDraftHoverPreviewFromLastPointer(state.element);
 		};
 
@@ -2641,8 +2517,6 @@ export default defineContentScript({
 					ghostPanelBodyElement: previousState.ghostPanelBodyElement,
 					ghostPanelStatusElement: previousState.ghostPanelStatusElement,
 					ghostPanelLayoutListener: previousState.ghostPanelLayoutListener,
-					legendHudElement: previousState.legendHudElement,
-					legendHudLayoutListener: previousState.legendHudLayoutListener,
 					bindPhase: previousState.bindPhase,
 					bindHistoryWarning: undefined,
 					bindRecoveryObserver: previousState.bindRecoveryObserver,
@@ -2676,8 +2550,6 @@ export default defineContentScript({
 					ghostPanelBodyElement: undefined,
 					ghostPanelStatusElement: undefined,
 					ghostPanelLayoutListener: undefined,
-					legendHudElement: undefined,
-					legendHudLayoutListener: undefined,
 					bindPhase: "IDLE",
 					bindHistoryWarning: undefined,
 					bindRecoveryObserver: undefined,

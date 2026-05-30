@@ -309,10 +309,11 @@ export default defineBackground(() => {
 		bodyJson: string,
 		requestId: string,
 		signal: AbortSignal,
+		forceGroq?: boolean,
 	): Promise<Response> {
 		const firstResponse = await fetch(url, {
 			method: "POST",
-			headers: buildRequestHeaders(jwt, accept, requestId),
+			headers: buildRequestHeaders(jwt, accept, requestId, forceGroq),
 			body: bodyJson,
 			signal,
 		});
@@ -328,7 +329,7 @@ export default defineBackground(() => {
 
 		return fetch(url, {
 			method: "POST",
-			headers: buildRequestHeaders(newToken, accept, requestId),
+			headers: buildRequestHeaders(newToken, accept, requestId, forceGroq),
 			body: bodyJson,
 			signal,
 		});
@@ -551,13 +552,18 @@ export default defineBackground(() => {
 		}
 	}
 
-	function buildRequestHeaders(jwt: string, accept: string, requestId?: string): Headers {
+	const FORCE_GROQ_STORAGE_KEY = "promptcompiler.forceGroq";
+
+	function buildRequestHeaders(jwt: string, accept: string, requestId?: string, forceGroq?: boolean): Headers {
 		const headers = new Headers();
 		headers.set("Authorization", `Bearer ${jwt}`);
 		headers.set("Content-Type", "application/json");
 		headers.set("Accept", accept);
 		if (requestId && requestId.length > 0) {
 			headers.set("X-Request-ID", requestId);
+		}
+		if (forceGroq) {
+			headers.set("X-Force-Groq", "1");
 		}
 		return headers;
 	}
@@ -746,6 +752,7 @@ export default defineBackground(() => {
 				return;
 			}
 			const segmentBody = JSON.stringify(getRequestBody(message));
+			const { [FORCE_GROQ_STORAGE_KEY]: forceGroqRaw } = await chrome.storage.sync.get(FORCE_GROQ_STORAGE_KEY);
 			const response = await fetchWithTokenRefresh(
 				segmentUrl,
 				message.jwt,
@@ -753,6 +760,7 @@ export default defineBackground(() => {
 				segmentBody,
 				requestId,
 				requestState.controller.signal,
+				forceGroqRaw === true,
 			);
 
 			if (!response.ok) {
@@ -829,6 +837,7 @@ export default defineBackground(() => {
 				return;
 			}
 			const streamBody = JSON.stringify(getRequestBody(message));
+			const { [FORCE_GROQ_STORAGE_KEY]: forceGroqRaw } = await chrome.storage.sync.get(FORCE_GROQ_STORAGE_KEY);
 			const response = await fetchWithTokenRefresh(
 				streamUrl,
 				message.jwt,
@@ -836,6 +845,7 @@ export default defineBackground(() => {
 				streamBody,
 				requestId,
 				requestState.controller.signal,
+				forceGroqRaw === true,
 			);
 
 			if (!response.ok) {
