@@ -18,7 +18,6 @@ export const sectionSchema = z
     text: z.string().min(1),
     goal_type: goalTypeSchema,
     canonical_order: z.number().int().min(1).max(6),
-    confidence: z.number().min(0).max(1),
     depends_on: z.array(z.string().min(1)),
     expansion: z.string().min(1).optional(),
     status: sectionStatusSchema.optional(),

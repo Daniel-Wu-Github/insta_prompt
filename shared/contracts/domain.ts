@@ -44,7 +44,6 @@ export interface Section {
   text: string;
   goal_type: GoalType;
   canonical_order: number;
-  confidence: number;
   depends_on: string[];
   expansion?: string;
   status?: SectionStatus;

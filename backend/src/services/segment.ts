@@ -13,12 +13,10 @@ import {
 } from "./providers";
 
 const DEFAULT_SEGMENT_CLASSIFIER_TEMPERATURE = 0;
-const DEFAULT_SEGMENT_CONFIDENCE = 0.5;
 const GOAL_TYPE_FALLBACK: GoalType = "action";
 const STABLE_SECTION_ID_HEX_LENGTH = 24;
 const SEGMENT_FAILURE_FALLBACK_GOAL_TYPE: GoalType = "context";
 const SEGMENT_FAILURE_FALLBACK_CANONICAL_ORDER = 1;
-const SEGMENT_FAILURE_FALLBACK_CONFIDENCE = 0.1;
 
 const dependencyIndexSchema = z.union([z.number().int(), z.string().regex(/^-?\d+$/)]);
 
@@ -26,7 +24,6 @@ const segmentIntermediateSectionSchema = z
 	.object({
 		text: z.string().min(1),
 		goal_type: z.string().min(1),
-		confidence: z.unknown().optional(),
 		depends_on: z.array(dependencyIndexSchema).optional(),
 		canonical_order: z.number().optional(),
 		id: z.string().optional(),
@@ -97,12 +94,11 @@ export function createSegmentClassificationPrompt(segments: string[]): SegmentPr
 		userPrompt: [
 			"Classify each segment into one section record in the same order as input.",
 			"Return a single JSON object with this exact top-level shape:",
-			'{"sections":[{"text":"<segment text>","goal_type":"<raw label>","confidence":0.0,"depends_on":[0]}]}',
+			'{"sections":[{"text":"<segment text>","goal_type":"<raw label>","depends_on":[0]}]}',
 			"Rules:",
 			"- Keep one output section per input segment.",
 			"- text must preserve input segment meaning.",
 			"- goal_type can be any classifier label; normalization is handled server-side later.",
-			"- confidence is YOUR OWN calibrated certainty score for the goal_type label you chose (0.0 = very uncertain, 0.5 = somewhat sure, 1.0 = very certain). Vary it per segment based on how obvious the classification is.",
 			"- depends_on must be an array of integer section indices (0-based).",
 			"Input segments:",
 			formatSegmentsForPrompt(segments),
@@ -255,22 +251,6 @@ function deriveStableSectionId(text: string, occurrenceCount: number): string {
 	return `s_${digest}`;
 }
 
-function normalizeConfidence(rawConfidence: unknown): number {
-	if (typeof rawConfidence !== "number" || !Number.isFinite(rawConfidence)) {
-		return DEFAULT_SEGMENT_CONFIDENCE;
-	}
-
-	if (rawConfidence < 0) {
-		return 0;
-	}
-
-	if (rawConfidence > 1) {
-		return 1;
-	}
-
-	return rawConfidence;
-}
-
 function translateDependencyIndices(
 	rawDependencies: readonly SegmentDependencyIndex[] | undefined,
 	sectionIdsByIndex: readonly string[],
@@ -396,7 +376,6 @@ export function normalizeSegmentClassificationIntermediate(
 			text: normalizedText,
 			goal_type: normalizedGoalType,
 			canonical_order: canonicalSlotForGoalType(normalizedGoalType),
-			confidence: normalizeConfidence(section.confidence),
 			raw_dependencies: section.depends_on,
 		};
 	});
@@ -415,7 +394,6 @@ export function normalizeSegmentClassificationIntermediate(
 			text: section.text,
 			goal_type: section.goal_type,
 			canonical_order: section.canonical_order,
-			confidence: section.confidence,
 			depends_on: sanitizedDependenciesBySection[index] ?? [],
 		};
 	});
@@ -434,7 +412,6 @@ function createDeterministicSegmentFallbackIntermediate(
 				text: segment,
 				goal_type: SEGMENT_FAILURE_FALLBACK_GOAL_TYPE,
 				canonical_order: SEGMENT_FAILURE_FALLBACK_CANONICAL_ORDER,
-				confidence: SEGMENT_FAILURE_FALLBACK_CONFIDENCE,
 				depends_on: [],
 			};
 		}),

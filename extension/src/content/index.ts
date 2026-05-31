@@ -17,8 +17,6 @@ export default defineContentScript({
 		const DRAFT_HIGHLIGHT_NAME = "insta-prompt-draft-highlight";
 		const DRAFT_HIGHLIGHT_STYLE_ID = "insta-prompt-draft-highlight-style";
 		const DRAFT_OVERLAY_Z_INDEX = "2147483647";
-		const DRAFT_HIGH_CONFIDENCE_THRESHOLD = 0.85;
-		const DRAFT_LOW_CONFIDENCE_THRESHOLD = 0.55;
 		const DRAFT_STALE_OPACITY = "0.45";
 		const DRAFT_ACCEPTED_OPACITY = "0.4";
 		const DRAFT_ACCEPTED_STALE_OPACITY = "0.3";
@@ -82,7 +80,6 @@ export default defineContentScript({
 			end: number;
 			text: string;
 			goalType: GoalType;
-			confidence: number;
 		}
 
 		interface ActiveInputState {
@@ -388,7 +385,7 @@ export default defineContentScript({
 		};
 
 		const isSameDraftSegment = (left: DraftSegment, right: DraftSegment): boolean => {
-			return left.start === right.start && left.end === right.end && left.text === right.text && left.goalType === right.goalType && left.confidence === right.confidence;
+			return left.start === right.start && left.end === right.end && left.text === right.text && left.goalType === right.goalType;
 		};
 
 		// Human-readable labels for goal types, used in the hover-popover header and the
@@ -513,11 +510,6 @@ export default defineContentScript({
 	flex: 0 0 auto;
 }
 
-[data-draft-hover-meta-confidence] {
-	font-variant-numeric: tabular-nums;
-	flex: 0 0 auto;
-}
-
 [data-draft-hover-body] {
 	display: block;
 	white-space: pre-wrap;
@@ -612,15 +604,7 @@ export default defineContentScript({
 			typeLabel.textContent = GOAL_TYPE_LEGEND_LABEL[segment.goalType];
 			typeLabel.style.color = GOAL_TYPE_PALETTE[segment.goalType].color;
 
-			const sep2 = document.createElement("span");
-			sep2.dataset.draftHoverMetaSep = "true";
-			sep2.textContent = "·";
-
-			const confidenceLabel = document.createElement("span");
-			confidenceLabel.dataset.draftHoverMetaConfidence = "true";
-			confidenceLabel.textContent = `${Math.round(segment.confidence * 100)}%`;
-
-			metaElement.append(clauseLabel, sep, typeLabel, sep2, confidenceLabel);
+			metaElement.append(clauseLabel, sep, typeLabel);
 		};
 
 		const renderDraftHoverPreview = (hoverState: DraftHoverPreviewState): void => {
@@ -879,7 +863,6 @@ export default defineContentScript({
 					text: normalizedText.slice(start, end),
 					// Placeholder until the backend /segment response updates these fields.
 					goalType: GOAL_TYPE_VALUES[0],
-					confidence: 0,
 				});
 			};
 
@@ -1183,8 +1166,8 @@ export default defineContentScript({
 			const rect = sourceElement.getBoundingClientRect();
 			hostElement.style.left = `${rect.left}px`;
 			hostElement.style.top = `${rect.top}px`;
-			hostElement.style.width = `${rect.width}px`;
-			hostElement.style.height = `${rect.height}px`;
+			hostElement.style.width = `${sourceElement.clientWidth}px`;
+			hostElement.style.height = `${sourceElement.clientHeight}px`;
 			if (segmentRootElement) {
 				segmentRootElement.style.width = `${sourceElement.clientWidth}px`;
 			}
@@ -1247,7 +1230,6 @@ export default defineContentScript({
 			isStaleAccepted: boolean,
 		): void => {
 			const paletteEntry = GOAL_TYPE_PALETTE[segment.goalType];
-			const isHighConfidence = segment.confidence >= DRAFT_HIGH_CONFIDENCE_THRESHOLD;
 
 			segmentSpan.dataset.accepted = isAccepted ? "true" : "false";
 			segmentSpan.dataset.focused = isFocused ? "true" : "false";
@@ -1263,8 +1245,8 @@ export default defineContentScript({
 			} else {
 				segmentSpan.style.opacity = "1";
 				segmentSpan.style.textDecorationColor = `var(${paletteEntry.cssVariable})`;
-				segmentSpan.style.textDecorationStyle = isHighConfidence ? "solid" : "dashed";
-				segmentSpan.style.textDecorationThickness = isHighConfidence ? "2px" : "1.5px";
+				segmentSpan.style.textDecorationStyle = "solid";
+				segmentSpan.style.textDecorationThickness = "2px";
 				segmentSpan.style.outline = isFocused ? `1px solid var(${paletteEntry.cssVariable})` : "none";
 				segmentSpan.style.outlineOffset = isFocused ? "1px" : "0";
 			}
@@ -1327,14 +1309,12 @@ export default defineContentScript({
 
 				const segmentSpan = document.createElement("span");
 				const paletteEntry = GOAL_TYPE_PALETTE[segment.goalType];
-				const isHighConfidence = segment.confidence >= DRAFT_HIGH_CONFIDENCE_THRESHOLD;
 				const isAccepted = acceptedSegmentIndices.has(segmentIndex);
 				const isFocused = focusedSegmentIndex === segmentIndex;
 				const isStaleAccepted = isAccepted && hasStaleAccepted;
 
 				segmentSpan.dataset.goalType = segment.goalType;
 				segmentSpan.dataset.segmentIndex = String(segmentIndex);
-				segmentSpan.dataset.confidence = segment.confidence.toFixed(2);
 				segmentSpan.dataset.draftStale = isStale ? "true" : "false";
 				segmentSpan.style.display = "inline";
 				segmentSpan.style.color = "transparent";
@@ -1352,8 +1332,8 @@ export default defineContentScript({
 				segmentSpan.style.setProperty("-webkit-text-fill-color", "transparent");
 				segmentSpan.style.textDecorationLine = "underline";
 				segmentSpan.style.textDecorationColor = `var(${paletteEntry.cssVariable})`;
-				segmentSpan.style.textDecorationStyle = isHighConfidence ? "solid" : "dashed";
-				segmentSpan.style.textDecorationThickness = isHighConfidence ? "2px" : "1.5px";
+				segmentSpan.style.textDecorationStyle = "solid";
+				segmentSpan.style.textDecorationThickness = "2px";
 				segmentSpan.style.textUnderlineOffset = "2px";
 				segmentSpan.style.textDecorationSkipInk = "none";
 				applyAcceptanceVisualsToSpan(segmentSpan, segment, isAccepted, isFocused, isStaleAccepted);
@@ -1682,6 +1662,53 @@ export default defineContentScript({
 			if (state.ghostPanelStatusElement) {
 				state.ghostPanelStatusElement.textContent = text;
 			}
+		};
+
+		const _unsupportedToastShownFor = new WeakSet<Element>();
+
+		const showUnsupportedInputToast = (): void => {
+			const container = document.createElement("div");
+			container.setAttribute("aria-hidden", "true");
+			container.style.position = "fixed";
+			container.style.right = "16px";
+			container.style.bottom = "16px";
+			container.style.zIndex = String(Number(DRAFT_OVERLAY_Z_INDEX) + 1);
+			container.style.pointerEvents = "none";
+			container.style.opacity = "1";
+			container.style.transition = "opacity 0.4s ease";
+
+			const shadow = container.attachShadow({ mode: "open" });
+			const style = document.createElement("style");
+			style.textContent = `
+:host { all: initial; pointer-events: none; }
+[data-unsupported-toast] {
+	all: initial;
+	display: block;
+	box-sizing: border-box;
+	border-radius: 10px;
+	border: 1px solid rgba(148, 163, 184, 0.32);
+	background: rgba(15, 23, 42, 0.97);
+	color: rgb(226, 232, 240);
+	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.32);
+	padding: 10px 14px;
+	font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 13px;
+	line-height: 1.5;
+	pointer-events: none;
+	user-select: none;
+	white-space: nowrap;
+}
+`;
+			const toast = document.createElement("div");
+			toast.dataset.unsupportedToast = "true";
+			toast.textContent = "PromptCompiler doesn't support this input";
+			shadow.append(style, toast);
+			getOverlayContainer().appendChild(container);
+
+			setTimeout(() => {
+				container.style.opacity = "0";
+				setTimeout(() => container.remove(), 400);
+			}, 3000);
 		};
 
 		const showSessionExpiredNotice = (state: ActiveInputState): void => {
@@ -2312,7 +2339,6 @@ export default defineContentScript({
 					continue;
 				}
 				const goalType = isGoalTypeValue(section.goal_type) ? section.goal_type : GOAL_TYPE_VALUES[0];
-				const confidence = typeof section.confidence === "number" ? section.confidence : 0.5;
 
 				const pos = fullText.indexOf(text, cursor);
 				if (pos === -1) {
@@ -2326,7 +2352,6 @@ export default defineContentScript({
 					end: pos + text.length,
 					text,
 					goalType,
-					confidence,
 				});
 				cursor = pos + text.length;
 			}
@@ -2435,6 +2460,15 @@ export default defineContentScript({
 						event.preventDefault();
 						event.stopPropagation();
 						cancelActiveBindStream(state);
+						return;
+					}
+					if (state.bindPhase === "COMPLETE") {
+						event.preventDefault();
+						event.stopPropagation();
+						state.bindPhase = "IDLE";
+						state.pendingGhostText = "";
+						state.ghostStreamComplete = false;
+						updateGhostPanelStatus(state, "Tab to accept · ⌘/Ctrl+Enter to bind");
 						return;
 					}
 				}
@@ -2742,6 +2776,22 @@ export default defineContentScript({
 			}
 
 			element.addEventListener("input", handleInputEvent);
+
+			// Search inputs: browser fires "search" when the X clear button is clicked
+			if (element instanceof HTMLInputElement && element.type === "search") {
+				element.addEventListener("search", handleInputEvent);
+			}
+
+			// Contenteditable: detect programmatic content removal (e.g. ChatGPT post-submit clear)
+			if (isValidContenteditable(element)) {
+				const clearObserver = new MutationObserver(() => {
+					if (extractInputText(element).length === 0) {
+						scheduleDebouncedExtraction(element);
+					}
+				});
+				clearObserver.observe(element, { childList: true, subtree: true, characterData: true });
+			}
+
 			element.addEventListener("mousemove", handleSourceMouseMoveEvent);
 			element.addEventListener("mouseleave", handleSourceMouseLeaveEvent);
 			element.addEventListener("blur", handleSourceBlurEvent);
@@ -2974,6 +3024,27 @@ export default defineContentScript({
 		scanDocumentForInputs();
 		observeForInputDiscovery();
 		void refreshClauseOrderingPreference();
+
+		// Toast on focus of writing-surface inputs we can't instrument
+		document.addEventListener("focusin", (event) => {
+			const target = event.target;
+			if (!(target instanceof Element)) {
+				return;
+			}
+			const isWritingSurface = target instanceof HTMLTextAreaElement ||
+				(target instanceof HTMLElement && target.matches('[contenteditable]:not([contenteditable="false"])'));
+			if (!isWritingSurface) {
+				return;
+			}
+			if (isInstrumented(target)) {
+				return;
+			}
+			if (_unsupportedToastShownFor.has(target)) {
+				return;
+			}
+			_unsupportedToastShownFor.add(target);
+			showUnsupportedInputToast();
+		}, true);
 
 		chrome.storage.onChanged.addListener((changes, areaName) => {
 			if (areaName === "sync") {

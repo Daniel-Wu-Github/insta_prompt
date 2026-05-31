@@ -77,7 +77,7 @@ describe("segment service", () => {
 		__resetSegmentProviderAdapterOverridesForTests();
 	});
 
-	it("normalizes taxonomy labels, canonical order, confidence, and trimmed text", () => {
+	it("normalizes taxonomy labels, canonical order, and trimmed text", () => {
 		const intermediate: SegmentClassificationIntermediate = {
 			sections: [
 				{
@@ -125,7 +125,6 @@ describe("segment service", () => {
 			"action",
 		]);
 		expect(normalized.sections.map((section) => section.canonical_order)).toEqual([1, 2, 5, 4]);
-		expect(normalized.sections.map((section) => section.confidence)).toEqual([1, 0, 0.5, 0.5]);
 	});
 
 	it("trims and filters incoming segments before classification", () => {
@@ -216,14 +215,12 @@ describe("segment service", () => {
 					text: "First",
 					goal_type: "context",
 					canonical_order: 1,
-					confidence: 0.1,
 					depends_on: [],
 				},
 				{
 					text: "Second",
 					goal_type: "context",
 					canonical_order: 1,
-					confidence: 0.1,
 					depends_on: [],
 				},
 			],
@@ -258,7 +255,6 @@ describe("segment service", () => {
 					text: "Only segment",
 					goal_type: "context",
 					canonical_order: 1,
-					confidence: 0.1,
 					depends_on: [],
 				},
 			],
@@ -282,7 +278,6 @@ describe("segment service", () => {
 					text: "Only segment",
 					goal_type: "context",
 					canonical_order: 1,
-					confidence: 0.1,
 					depends_on: [],
 				},
 			],

@@ -175,7 +175,6 @@ describe("/segment route", () => {
 				text: string;
 				goal_type: string;
 				canonical_order: number;
-				confidence: number;
 				depends_on: string[];
 			}>;
 		};
@@ -186,7 +185,6 @@ describe("/segment route", () => {
 			text: "install framework",
 			goal_type: "tech_stack",
 			canonical_order: 2,
-			confidence: 1,
 			depends_on: [],
 		});
 	});
@@ -288,7 +286,6 @@ describe("/segment route", () => {
 				text: string;
 				goal_type: string;
 				canonical_order: number;
-				confidence: number;
 				depends_on: string[];
 			}>;
 		};
@@ -299,7 +296,6 @@ describe("/segment route", () => {
 				text: "First clause",
 				goal_type: "context",
 				canonical_order: 1,
-				confidence: 0.1,
 				depends_on: [],
 			},
 			{
@@ -307,7 +303,6 @@ describe("/segment route", () => {
 				text: "Second clause",
 				goal_type: "context",
 				canonical_order: 1,
-				confidence: 0.1,
 				depends_on: [],
 			},
 		]);
@@ -332,7 +327,6 @@ describe("/segment route", () => {
 				text: string;
 				goal_type: string;
 				canonical_order: number;
-				confidence: number;
 				depends_on: string[];
 			}>;
 		};
@@ -343,7 +337,6 @@ describe("/segment route", () => {
 				text: "provider failure",
 				goal_type: "context",
 				canonical_order: 1,
-				confidence: 0.1,
 				depends_on: [],
 			},
 		]);
@@ -379,7 +372,6 @@ describe("/segment route", () => {
 				text: string;
 				goal_type: string;
 				canonical_order: number;
-				confidence: number;
 				depends_on: string[];
 			}>;
 		};
@@ -390,7 +382,6 @@ describe("/segment route", () => {
 				text: "provider failed",
 				goal_type: "context",
 				canonical_order: 1,
-				confidence: 0.1,
 				depends_on: [],
 			},
 		]);
@@ -429,7 +420,6 @@ describe("/segment route", () => {
 				text: string;
 				goal_type: string;
 				canonical_order: number;
-				confidence: number;
 				depends_on: string[];
 			}>;
 		}> = [];
@@ -448,7 +438,6 @@ describe("/segment route", () => {
 						text: string;
 						goal_type: string;
 						canonical_order: number;
-						confidence: number;
 						depends_on: string[];
 					}>;
 				},

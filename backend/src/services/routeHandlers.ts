@@ -147,7 +147,6 @@ export async function segmentRouteHandler(c: Context<AppEnv>) {
 	// Always log for debugging — remove before shipping to real users.
 	console.log("[segment] raw LLM sections:", JSON.stringify(aiResult.segments.map(s => ({
 		goal_type: s.goal_type,
-		confidence: s.confidence,
 		text: s.text.slice(0, 40),
 	}))));
 
