@@ -1316,6 +1316,13 @@ export default defineContentScript({
 			for (const [segmentIndex, segment] of segments.entries()) {
 				if (cursor < segment.start) {
 					fragment.appendChild(document.createTextNode(extractedText.slice(cursor, segment.start)));
+				} else if (segmentIndex > 0) {
+					// Adjacent segments with no gap text: insert a zero-width break to prevent
+					// CSS underline from bleeding across adjacent inline spans.
+					const breaker = document.createElement("span");
+					breaker.style.textDecorationLine = "none";
+					breaker.textContent = "​";
+					fragment.appendChild(breaker);
 				}
 
 				const segmentSpan = document.createElement("span");
