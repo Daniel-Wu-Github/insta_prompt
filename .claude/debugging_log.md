@@ -56,6 +56,22 @@ When the same skill gap appears **2 or more times** in this log, run `skill-impr
 **Resolution:** Strip `paused` from the message before `postToBridge` (destructure it out for the local gate decision only). Wire contract unchanged; schema untouched.
 **Lesson:** When adding a field to any cross-boundary message (content→background), check the receiver's Zod schema FIRST. If `.strict()`, the field must be added to the schema or kept off the wire. Add this check to mv3-extension-boundaries / typescript-safety. This is the exact frontend/backend desync the user warned about — changing the sender without the receiver.
 
+### Debug Entry — 2026-06-09
+
+**Task:** Phase 1 ChatGPT overlay fixes — clear detection, geometry clip, unsupported toast
+**File:** extension/src/content/index.ts:2769 (isInstrumented), 1160 (updateDraftOverlayGeometry), 3027 (focusin listener)
+**Symptom:** (1) Overlay z-index bleeds through ChatGPT's own settings modal. (2) Overlay extends 2 rows below the text area boundary. (3) "PromptCompiler doesn't support this input" toast fires on ChatGPT's main input. (4) `querySelector('[data-insta-instrumented]')` returns null even while underlines are visible.
+**Root cause:** THREE separate root causes:
+  1. **BUG-REACT**: React reconciliation strips HTML attributes including `data-insta-instrumented`. Event listeners survive reconciliation (they're on the DOM node, not in HTML), but the attribute-based `isInstrumented` check returns false. All downstream checks that rely on the attribute (toast guard, duplicate-listener guard) fail.
+  2. **BUG-GEOM**: `clientHeight` (the Phase 1 fix) measures the contenteditable's OWN intrinsic height, not the visible area clipped by its container. ChatGPT's contenteditable grows freely inside a max-height container. Both `clientHeight` and `rect.height` return the full content height (~400px), not the container-clipped height (~200px visible).
+  3. **BUG-ZINDEX**: `z-index: 2147483647` renders above everything including ChatGPT's own modal dialogs.
+**Active skills:** underline-preview-rendering, content-script-instrumentation, dom-memory-management, scope-creep-guard
+**Skill gap:**
+  - `content-script-instrumentation` does not mention that React SPAs strip unknown HTML attributes, making attribute-based idempotency unreliable. Should require WeakSet/WeakMap pattern.
+  - `underline-preview-rendering` says to use `getBoundingClientRect()` for geometry without noting that this returns the full intrinsic size for elements inside overflow-clipped containers. Needs ancestor-walk rule.
+**Resolution:** Documented in handoff.md. BUG-REACT fix: swap `isInstrumented` from attribute check to WeakSet. BUG-GEOM fix: walk ancestor chain to find clip ancestor, intersect rects. BUG-ZINDEX fix: aria-modal observer to hide overlay when modal is open.
+**Lesson:** (1) In React SPAs, NEVER use HTML attributes as idempotency markers for extension instrumentation. Use WeakSet keyed on the element object. (2) `clientHeight` ≠ visible clip height when parent provides the clip. Always walk ancestors when instrumenting dynamic editors in SPAs.
+
 <!-- Session entries are appended below by session-end.sh -->
 
 ---
@@ -11008,4 +11024,517 @@ src/services/supabase.ts(3,46): error TS2307: Cannot find module '../../shared/c
 
 > ⚠️ **AUTO-FLAG:** 44 error(s) this session exceeded threshold (2).
 > Run `skill-improvement-loop` before next task — score active skills and update any with trigger gaps.
+
+
+---
+## Session End — 2026-05-30 07:55:35Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+**Accumulated session errors:**
+### TS check — index.ts — 08:53:05Z
+```
+npm warn exec The following package was not found and will be installed: tsc@2.0.4
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+src/__tests__/segment.service.test.ts(115,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(121,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(127,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(128,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(159,30): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(164,30): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(164,84): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(199,34): error TS7006: Parameter 'dependency' implicitly has an 'any' type.
+src/lib/errors.ts(3,42): error TS2307: Cannot find module '../../shared/contracts/errors' or its corresponding type declarations.
+src/lib/schemas.ts(8,8): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/lib/sse.ts(1,34): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/middleware/tier.ts(2,40): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/routes/auth.ts(3,40): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/llm.ts(1,33): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/llm.ts(2,31): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/bind.ts(1,31): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/index.ts(1,31): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/mode.ts(1,27): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/types.ts(1,46): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/routeHandlers.ts(4,27): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/segment.ts(4,57): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/supabase.ts(3,46): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+```
+
+### TypeScript Errors (backend)
+```
+src/__tests__/segment.service.test.ts(115,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(121,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(127,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(128,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(159,30): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(164,30): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(164,84): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(199,34): error TS7006: Parameter 'dependency' implicitly has an 'any' type.
+src/lib/errors.ts(3,42): error TS2307: Cannot find module '../../shared/contracts/errors' or its corresponding type declarations.
+src/lib/schemas.ts(8,8): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/lib/sse.ts(1,34): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/middleware/tier.ts(2,40): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/routes/auth.ts(3,40): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/llm.ts(1,33): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/llm.ts(2,31): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/bind.ts(1,31): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/index.ts(1,31): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/mode.ts(1,27): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/types.ts(1,46): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/routeHandlers.ts(4,27): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/segment.ts(4,57): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/supabase.ts(3,46): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+```
+
+> ⚠️ **AUTO-FLAG:** 44 error(s) this session exceeded threshold (2).
+> Run `skill-improvement-loop` before next task — score active skills and update any with trigger gaps.
+
+
+---
+## Session End — 2026-05-30 08:02:03Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+**Accumulated session errors:**
+### TS check — index.ts — 08:53:05Z
+```
+npm warn exec The following package was not found and will be installed: tsc@2.0.4
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+
+[41m                                                                               [0m
+[41m[37m                This is not the tsc command you are looking for                [0m
+[41m                                                                               [0m
+
+To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+
+- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+/home/seed/projects/insta_prompt/scripts/session-end.sh: line 36: ./node_modules/.bin/tsc: No such file or directory
+```
+
+### TypeScript Errors (backend)
+```
+src/__tests__/segment.service.test.ts(115,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(121,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(127,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(128,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(159,30): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(164,30): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(164,84): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(199,34): error TS7006: Parameter 'dependency' implicitly has an 'any' type.
+src/lib/errors.ts(3,42): error TS2307: Cannot find module '../../shared/contracts/errors' or its corresponding type declarations.
+src/lib/schemas.ts(8,8): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/lib/sse.ts(1,34): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/middleware/tier.ts(2,40): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/routes/auth.ts(3,40): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/llm.ts(1,33): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/llm.ts(2,31): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/bind.ts(1,31): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/index.ts(1,31): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/mode.ts(1,27): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/types.ts(1,46): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/routeHandlers.ts(4,27): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/segment.ts(4,57): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/supabase.ts(3,46): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+```
+
+### TypeScript Errors (backend)
+```
+src/__tests__/segment.service.test.ts(115,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(121,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(127,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(128,35): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(159,30): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(164,30): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(164,84): error TS7006: Parameter 'section' implicitly has an 'any' type.
+src/__tests__/segment.service.test.ts(199,34): error TS7006: Parameter 'dependency' implicitly has an 'any' type.
+src/lib/errors.ts(3,42): error TS2307: Cannot find module '../../shared/contracts/errors' or its corresponding type declarations.
+src/lib/schemas.ts(8,8): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/lib/sse.ts(1,34): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/middleware/tier.ts(2,40): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/routes/auth.ts(3,40): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/llm.ts(1,33): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/llm.ts(2,31): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/bind.ts(1,31): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/index.ts(1,31): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/mode.ts(1,27): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/prompts/types.ts(1,46): error TS2307: Cannot find module '../../../shared/contracts' or its corresponding type declarations.
+src/services/routeHandlers.ts(4,27): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/segment.ts(4,57): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+src/services/supabase.ts(3,46): error TS2307: Cannot find module '../../shared/contracts' or its corresponding type declarations.
+```
+
+> ⚠️ **AUTO-FLAG:** 44 error(s) this session exceeded threshold (2).
+> Run `skill-improvement-loop` before next task — score active skills and update any with trigger gaps.
+
+
+---
+## Session End — 2026-05-30 08:30:09Z
+
+**Modified TypeScript files:**
+- extension/src/content/index.ts
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-05-30 20:42:49Z
+
+**Modified TypeScript files:**
+- extension/src/content/index.ts
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-05-30 21:05:39Z
+
+**Modified TypeScript files:**
+- extension/src/content/index.ts
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-05-30 21:34:30Z
+
+**Modified TypeScript files:**
+- extension/src/content/index.ts
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-05-31 04:37:14Z
+
+**Modified TypeScript files:**
+- extension/src/content/index.ts
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-05-31 05:47:56Z
+
+**Modified TypeScript files:**
+- extension/src/content/index.ts
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-05-31 06:52:42Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-05-31 07:18:27Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-05-31 07:30:23Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-06-03 01:20:34Z
+
+**Modified TypeScript files:**
+- extension/src/content/index.ts
+
+**Verification Result:** ✅ No TypeScript errors
 
