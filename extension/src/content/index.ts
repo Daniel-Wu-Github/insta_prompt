@@ -1,5 +1,6 @@
 import { GOAL_TYPE_VALUES, MODE_VALUES, type GoalType, type Mode, type SegmentRequest } from "../../../shared/contracts";
 import { brand, clauseAccent, clauseEncoding, rgba, sectionState, zIndex } from "../../../shared/design";
+import { CANONICAL_ORDER_BY_GOAL_TYPE, GOAL_TYPES_IN_CANONICAL_ORDER } from "../../../packages/core";
 
 export default defineContentScript({
 	matches: ["<all_urls>"],
@@ -40,15 +41,8 @@ export default defineContentScript({
 		// BIND-UX-1: Tab now *reviews* (cycles focus) instead of accepting. Acceptance is
 		// the explicit Enter act, and Esc leaves review mode so Enter sends normally again.
 		const REVIEW_HINT = "Tab to review · Enter to accept · ⌘/Ctrl+Enter to bind · Esc to exit";
-		const CANONICAL_ORDER_BY_GOAL_TYPE: Record<GoalType, number> = {
-			// 1-indexed: matches backend canonical_order schema
-			context: 1,
-			tech_stack: 2,
-			constraint: 3,
-			action: 4,
-			output_format: 5,
-			edge_case: 6,
-		};
+		// CANONICAL_ORDER_BY_GOAL_TYPE is now imported from packages/core (Track C1) —
+		// one slot-definition source shared across surfaces (canonical-clause-ordering).
 
 		// AUD-2: clause colors now come from the LOCKED design tokens (shared/design
 		// `clauseAccent`) rather than inline literals. This reconciles three colors that
@@ -399,11 +393,7 @@ export default defineContentScript({
 			edge_case: "Edge case",
 		};
 
-		// Goal types in canonical bind order — reused by the header (canonical numbering)
-		// and the overlay legend HUD.
-		const GOAL_TYPES_IN_CANONICAL_ORDER: GoalType[] = [...GOAL_TYPE_VALUES].sort(
-			(left, right) => CANONICAL_ORDER_BY_GOAL_TYPE[left] - CANONICAL_ORDER_BY_GOAL_TYPE[right],
-		);
+		// GOAL_TYPES_IN_CANONICAL_ORDER is imported from packages/core (Track C1).
 
 		// Computes the clause label shown in the hover popover header for a given segment,
 		// honoring the user's clause-ordering preference.

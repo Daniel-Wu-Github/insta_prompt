@@ -736,3 +736,22 @@
 	- Fulfillment: Clause type is now carried by glyph (header) + underline texture/weight (overlay) in addition to color — the S-VIS-3 redundancy.
 	- Deviation: None. Live visual confirmation of the textures rendering correctly on host sites is part of the Track A5 manual guide (needs a browser).
 	- Residual: None for B4. Track B (design-system-as-code, milestone M1 with Track A) complete.
+
+## Entry 037 - 2026-06-15 - V2 Track C: Core extraction boundary spike + first proven slice (DEC-2, STOP FOR REVIEW)
+
+- Task: "Attempt C" per the run decision — build the highest-risk core extraction on its own branch and STOP for human review rather than merge (plan §7A.5, DEC-2). Deliver the C1 boundary spike + a proven low-risk slice + the C2 contracts, NOT the full state-machine extraction.
+- Branch: v2/track-c-core (stacked on v2/track-b-tokens).
+- What the agent did:
+	- `docs/agent_plans/v2/c1_core_boundary_spike.md`: the C1 design note (plan §9 action #4) — classifies every monolith unit as portable/DOM-bound/mixed, defines the extraction sequence, documents the C2 contracts, and lists open decisions for the reviewer.
+	- Established `packages/core/` (pure TS, zero DOM/Node/chrome — R-ARCH-1), consumed via relative import like `shared/` (root `index.ts` barrel re-exporting `src/`).
+	- `packages/core/src/clause-order.ts`: extracted CANONICAL_ORDER_BY_GOAL_TYPE + GOAL_TYPES_IN_CANONICAL_ORDER + canonicalSlotForGoalType + a stable `sortByCanonicalOrder`. The extension now imports these from core and its local duplicates are removed (fixes the canonical-clause-ordering "same slot-definition source" invariation — the map was duplicated in extension + backend).
+	- `packages/core/src/adapter.ts`: `InputSource` / `RenderTarget` contracts (C2, pure types).
+	- `packages/core/src/transport.ts`: `TransportClient` contract (proxy-only, R-PLAT-1).
+	- `packages/core/README.md` + barrels.
+	- `extension/src/content/__tests__/clause-order.core.test.ts`: 4 tests (slot map, canonical order, out-of-order sort, slot-stable sort) — all pass.
+- Files edited: packages/core/{index.ts,README.md,src/{clause-order,adapter,transport,index}.ts}, extension/src/content/index.ts, extension/src/content/__tests__/clause-order.core.test.ts, docs/agent_plans/v2/c1_core_boundary_spike.md, logging/progress_log.md.
+- Verification: extension tsc 0; backend tsc 0; extension vitest 13 failed / 18 passed (fail count = known-13 baseline → zero new regressions; +4 core tests pass); backend bun test 76/3 (known external, unchanged). Canonical-order extraction is behavior-preserving (value-identical).
+- Task alignment:
+	- Fulfillment: C1 boundary spike + proven extraction slice + C2 contracts delivered on an isolated branch.
+	- Deviation (intentional, per decision): The high-blast-radius steps — section state-machine extraction, settings, orchestration, adapter-dom (C2 impl), and the C3 test harness — were NOT attempted. Plan DEC-2 mandates they land behind the C3 harness with a human-reviewed PR; the stale extension suite makes the harness a prerequisite, and there is no live browser to verify behavior here.
+	- Residual / STOP: Awaiting human review of the spike + this branch. Open decisions enumerated in §6 of the spike note (blast-radius sign-off, shared/ vs packages/core absorption, backend canonical-order unification, monorepo tooling). Nothing pushed; branches are local (push/PR is an outward action requiring explicit go-ahead).
