@@ -680,3 +680,14 @@
 	- Fulfillment: AUD-8 confidence drift eliminated across skills + contract docs; the WeakSet/SPA lesson from BUG-REACT codified into the instrumentation skill.
 	- Deviation: Scope widened from the plan's named files (ui-design-system + EXTENSION/ARCHITECTURE) to also include underline-preview-rendering, typescript-safety, SKILL_MAP, UX_FLOW, BACKEND_API, CLAUSE_PIPELINE — because they carried the same DECISION-1 drift and the ui-design-system skill points at UX_FLOW's table. EXTENSION.md/ARCHITECTURE.md confirmed already clean (no edit).
 	- Residual: None for confidence drift.
+
+## Entry 033 - 2026-06-15 - V2 Track A5: Manual verification guide + escalations (A1/A3)
+
+- Task: Per the run decision "document & escalate, don't fake," produce a runnable manual verification guide for the Track A runtime gates that need a live browser, and escalate the items requiring accounts/decisions.
+- What the agent did: Authored `docs/testing-notes/v2-track-a-manual-verification.md` following the manual-testing-guides skill shape (scope → setup → preflight → build/load → invariants → matrix → E2E → rainy/escalations → notes). Covers A1 (no false toast / no duplicate listeners on React churn), A2 (G-2 ±1px parity + no container bleed), A3 (G-3 zero-retention via DevTools heap snapshot). Documents the known stale-vitest baseline (13f/4p) so a tester can distinguish it from a regression. Escalates: A3 Sentry/observability needs a DSN (account decision); full G-2 pixel matrix needs the Track D2 CSS Custom Highlights rewrite.
+- Files edited: docs/testing-notes/v2-track-a-manual-verification.md, logging/progress_log.md.
+- Verification: Doc-only; commands in the guide are the repo's real ones (npx tsc, npx vitest run, npm run dev, chrome://extensions load-unpacked). No code/tsc impact.
+- Task alignment:
+	- Fulfillment: Live-browser gates (G-2/G-3) and the Sentry decision are now explicit, reproducible, and escalated rather than silently skipped or faked.
+	- Deviation: None.
+	- Residual: A human must execute the guide on the target-site matrix and provision (or decline) Sentry. Track A code is complete; A1/A2 were already in HEAD, A3 implemented this run.
