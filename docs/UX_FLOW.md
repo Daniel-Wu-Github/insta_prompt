@@ -29,7 +29,6 @@ The key design principle: **nothing is replaced in the text box until you explic
         ↓
 4. 600ms idle → semantic classification call fires (POST /segment)
    → Underlines update with goal_type colors
-   → Confidence shown via underline weight (solid vs dashed)
         ↓
 5. Parallel expansion calls fire (POST /enhance × N sections)
    → Expansions stream in behind the scenes into hover previews
@@ -77,9 +76,15 @@ Each `goal_type` gets a consistent color. Users learn the vocabulary naturally o
 | Amber | `context` | "this is for a SaaS dashboard" |
 | Gray | `edge_case` | "handle the empty state" |
 
-### Underline Confidence
-- **Solid underline** — high confidence segmentation (≥0.85)
-- **Dashed underline** — low confidence (< 0.85), user may want to adjust before accepting
+### Underline States
+
+Confidence was removed (DECISION-1); the clause-type color is constant per section. The
+underline treatment instead reflects the section's lifecycle **state**:
+
+- **Solid (clause color)** — ready, or accepted (greyed in place after Tab, not yet committed)
+- **Solid (gray `--pc-color-stale`, reduced opacity)** — stale / accepted-stale: an upstream
+  edit invalidated it and re-expansion is required before it can be bound
+- **Animated affordance** — streaming during the bind / ghost-text pass
 
 ---
 

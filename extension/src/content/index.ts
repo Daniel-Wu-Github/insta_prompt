@@ -3084,7 +3084,7 @@ export default defineContentScript({
 				}
 				if (type === "error") {
 					state.activeSegmentRequestId = undefined;
-					// Mark the overlay stale so the user sees degraded confidence indicators.
+					// Mark the overlay stale so the user sees the degraded (stale) visual state.
 					if (state.draftOverlayElement) {
 						applyDraftOverlayFreshness(state.draftOverlayElement, true);
 					}

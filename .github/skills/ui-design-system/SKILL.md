@@ -11,7 +11,7 @@ user-invocable: false
 Use this skill when creating or modifying any visual UI surface in the extension, including:
 
 - Shadow DOM overlay containers for underlines, popovers, or ghost text in content scripts
-- CSS token definitions and visual palette for goal_type colors and confidence states
+- CSS token definitions and visual palette for clause-type colors and visual states
 - WXT popup component structure, layout, and theming
 - Any code path that renders user-facing text or HTML from LLM output or user input
 - Popover positioning, z-index, and viewport-edge detection
@@ -35,7 +35,7 @@ Primary files:
 
 Primary docs:
 
-- `docs/UX_FLOW.md` — clause colors and underline confidence table
+- `docs/UX_FLOW.md` — clause colors and underline visual-state table
 - `docs/EXTENSION.md` — MV3 process and UI surface ownership
 
 ---
@@ -175,13 +175,21 @@ Always use these tokens — do not invent new color names.
 | `context` | `--pc-color-context` | `#d97706` (amber) |
 | `edge_case` | `--pc-color-edge-case` | `#6b7280` (gray) |
 
-Confidence → Underline style:
+Visual states → Underline style:
 
-| Confidence | Style |
+The clause-type color is constant per section (the table above). Confidence was
+removed (DECISION-1) — there is no confidence-based dashing. What varies is the
+section STATE. Reuse the existing tokens; do not invent new ones.
+
+| State | Style |
 |---|---|
-| ≥ 0.85 | `border-bottom: 2px solid var(--pc-color-*)` |
-| < 0.85 | `border-bottom: 2px dashed var(--pc-color-*)` |
-| Stale | `border-bottom: 2px dashed var(--pc-color-stale); opacity: 0.5` |
+| ready | `border-bottom: 2px solid var(--pc-color-*)` |
+| focused / review | `border-bottom: 2px solid var(--pc-color-*)` + subtle emphasis (background tint or weight bump) |
+| accepted | `border-bottom: 2px solid var(--pc-color-*)`; section greyed pending commit |
+| stale | `border-bottom: 2px solid var(--pc-color-stale); opacity: 0.5` |
+| accepted-stale | `border-bottom: 2px solid var(--pc-color-stale); opacity: 0.5`; greyed, re-expansion required |
+| streaming | clause-type color with an animated in-progress affordance during ghost-text stream |
+| error | error affordance on the clause-type underline (never confidence dashing) |
 
 ---
 

@@ -101,7 +101,6 @@ Current runtime behavior: classify draft segments using the fast classifier path
       "text": "build a dark mode toggle",
       "goal_type": "action",
       "canonical_order": 4,
-      "confidence": 0.95,
       "depends_on": []
     },
     {
@@ -109,7 +108,6 @@ Current runtime behavior: classify draft segments using the fast classifier path
       "text": "use react",
       "goal_type": "tech_stack",
       "canonical_order": 2,
-      "confidence": 0.98,
       "depends_on": []
     },
     {
@@ -117,7 +115,6 @@ Current runtime behavior: classify draft segments using the fast classifier path
       "text": "deploy to vercel",
       "goal_type": "output_format",
       "canonical_order": 5,
-      "confidence": 0.82,
       "depends_on": ["s1"]
     }
   ]
@@ -152,7 +149,7 @@ Cleans up the classified sections before expansion.
 
 **Minimum length:** Fragments under ~6 words are absorbed into their nearest neighbor unless they have a different `goal_type`.
 
-**Confidence encoding:** Sections with `confidence < 0.85` get a dashed underline instead of solid.
+**Underline encoding:** The clause-type color is constant per section; the underline treatment reflects the section's lifecycle state (ready/accepted/stale/streaming), not confidence — confidence was removed (DECISION-1).
 
 ---
 

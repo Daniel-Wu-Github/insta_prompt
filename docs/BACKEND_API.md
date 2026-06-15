@@ -84,7 +84,7 @@ Streaming rule: the response status and headers are committed when the first SSE
 ---
 
 ### POST `/segment`
-Classify raw text segments into sections with goal_type, canonical_order, and confidence.
+Classify raw text segments into sections with goal_type and canonical_order. (Confidence was removed — DECISION-1; the response carries no confidence field.)
 
 Current runtime behavior: provider-backed classification plus deterministic normalization.
 
@@ -103,9 +103,9 @@ Backend normalization responsibilities: emit only `context`, `tech_stack`, `cons
 ```json
 {
   "sections": [
-    { "id": "s1", "text": "build a dark mode toggle", "goal_type": "action", "canonical_order": 4, "confidence": 0.93, "depends_on": [] },
-    { "id": "s2", "text": "use react", "goal_type": "tech_stack", "canonical_order": 2, "confidence": 0.97, "depends_on": [] },
-    { "id": "s3", "text": "deploy to vercel", "goal_type": "output_format", "canonical_order": 5, "confidence": 0.82, "depends_on": ["s1"] }
+    { "id": "s1", "text": "build a dark mode toggle", "goal_type": "action", "canonical_order": 4, "depends_on": [] },
+    { "id": "s2", "text": "use react", "goal_type": "tech_stack", "canonical_order": 2, "depends_on": [] },
+    { "id": "s3", "text": "deploy to vercel", "goal_type": "output_format", "canonical_order": 5, "depends_on": ["s1"] }
   ]
 }
 ```

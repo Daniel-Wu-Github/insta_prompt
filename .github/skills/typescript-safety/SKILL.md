@@ -88,7 +88,7 @@ export type Section = { goal_type: any; text: any };
 
 // CORRECT
 export type GoalType = 'action' | 'tech_stack' | 'constraint' | 'output_format' | 'context' | 'edge_case';
-export type Section = { goal_type: GoalType; text: string; confidence: number };
+export type Section = { goal_type: GoalType; text: string };
 ```
 
 ### Rule 4: Use `unknown` + Narrowing at All I/O Boundaries

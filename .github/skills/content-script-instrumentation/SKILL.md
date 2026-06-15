@@ -50,11 +50,12 @@ Primary files:
 5. Host text nodes MUST NOT be mutated with `<span>` wrappers to render draft states; use the CSS Custom Highlights API (`CSS.highlights`) or an invisible overlay instead.
 6. Safe text extraction from contenteditable MUST preserve block-level newlines (for example, converting `<br>` and `<div>` to `\n`) and MUST NOT rely on `.textContent`.
 7. MutationObserver callbacks MUST explicitly ignore mutations caused by the extension (for example, adding `data-insta-instrumented` attributes) to prevent infinite browser crash loops.
+8. In React/SPA host environments, attributes added to host DOM nodes (e.g. `data-insta-instrumented`) can be stripped by the framework's reconciler during rerenders. Idempotency markers MUST use a module-scope `WeakSet<Element>` (or `WeakMap`) keyed on the element itself as the source of truth; the attribute MAY be kept only for DevTools discoverability, never as the source of truth (root cause of BUG-REACT: false unsupported-input toasts and stacked duplicate listeners).
 
 ## Implementation Procedure
 
 1. Build input discovery selectors for textarea and contenteditable targets, and choose a render path that uses CSS Custom Highlights (`CSS.highlights`) or an invisible overlay instead of span wrappers.
-2. Add attachment marker strategy to prevent duplicate listeners.
+2. Add attachment marker strategy to prevent duplicate listeners, using a module-scope `WeakSet<Element>`/`WeakMap` as the source of truth (not an attribute, which SPA reconcilers may strip).
 3. Register MutationObserver with bounded scope and deterministic teardown.
 4. On relevant mutations, re-run discovery and attach only where missing; explicitly ignore extension-caused mutations such as `data-insta-instrumented` markers.
 5. Safely extract contenteditable text while preserving block-level newlines (for example, converting `<br>` and `<div>` to `\n`) instead of using `.textContent`.

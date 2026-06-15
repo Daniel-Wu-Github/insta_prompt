@@ -658,3 +658,25 @@
 	- Fulfillment: Centralized teardown registry implemented; clear-observer + modal-observer + discovery-observer now have deterministic teardown on removal and invalidation.
 	- Deviation: A1/A2 found already-done; no re-implementation. Full heap-snapshot G-3 verification requires a live browser (escalated to Track A5 manual guide).
 	- Residual: Stale extension test suite (13 failures) deferred to C3. Window scroll/resize singleton listeners and focusin/storage listeners are page-lifetime and left in place (GC'd with the script context); not part of the AUD-10 named surface.
+
+## Entry 032 - 2026-06-15 - V2 Track A4: Confidence doc/skill drift purge (AUD-8)
+
+- Task: Remove stale confidence-based-underline guidance left over after DECISION-1 (confidence removed from LLM/schemas/UI), across skills and source-of-truth docs.
+- Method note: A subagent ("Fix doc/skill drift") did the read/analysis but its Edit tool was denied in-sandbox, so it returned exact edit specs and the Lead applied them. Verified confidence is fully absent from real code (`shared/`, `backend/src`, `extension/src`) before rewriting contract docs to match reality.
+- What the agent did (all edits by the Lead):
+	- `.github/skills/ui-design-system/SKILL.md`: replaced the "Confidence → Underline style" table with a "Visual states → Underline style" table (ready/focused/accepted/stale/accepted-stale/streaming/error); fixed two descriptive lines.
+	- `.github/skills/content-script-instrumentation/SKILL.md`: added Core Invariant #8 (WeakSet/WeakMap idempotency in SPA hosts, root cause of BUG-REACT) and tightened procedure step 2.
+	- `.github/skills/underline-preview-rendering/SKILL.md`: rewrote all 8 confidence references to the section-state model.
+	- `.github/skills/typescript-safety/SKILL.md`: dropped the removed `confidence` field from the example `Section` type.
+	- `.github/skills/SKILL_MAP.md`: registry "Load When" wording confidence-styling → section-state styling.
+	- `docs/UX_FLOW.md`: removed confidence-weight line from the flow; replaced "Underline Confidence" with "Underline States".
+	- `docs/BACKEND_API.md` + `docs/CLAUSE_PIPELINE.md`: removed the `confidence` field from `/segment` response examples and the encoding text to match the real schema (id/text/goal_type/canonical_order/depends_on).
+	- `extension/src/content/index.ts`: fixed one misleading comment ("degraded confidence indicators" → "degraded (stale) visual state"); comment-only, zero behavior change.
+- Files edited: 5 skills + SKILL_MAP + 3 docs + 1 code comment + this log.
+- Verification:
+	- `grep -ri confidence` over source-of-truth docs → only intentional "removed (DECISION-1)" notes remain. `testing-notes/*` left intact (historical record; round2 is the doc that recommended the removal).
+	- extension tsc → exit 0.
+- Task alignment:
+	- Fulfillment: AUD-8 confidence drift eliminated across skills + contract docs; the WeakSet/SPA lesson from BUG-REACT codified into the instrumentation skill.
+	- Deviation: Scope widened from the plan's named files (ui-design-system + EXTENSION/ARCHITECTURE) to also include underline-preview-rendering, typescript-safety, SKILL_MAP, UX_FLOW, BACKEND_API, CLAUSE_PIPELINE — because they carried the same DECISION-1 drift and the ui-design-system skill points at UX_FLOW's table. EXTENSION.md/ARCHITECTURE.md confirmed already clean (no edit).
+	- Residual: None for confidence drift.
