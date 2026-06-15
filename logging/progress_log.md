@@ -691,3 +691,19 @@
 	- Fulfillment: Live-browser gates (G-2/G-3) and the Sentry decision are now explicit, reproducible, and escalated rather than silently skipped or faked.
 	- Deviation: None.
 	- Residual: A human must execute the guide on the target-site matrix and provision (or decline) Sentry. Track A code is complete; A1/A2 were already in HEAD, A3 implemented this run.
+
+## Entry 034 - 2026-06-15 - V2 Track B1+B2: Design tokens + motion system as portable core data (AUD-2)
+
+- Task: Author the canonical design-token layer and named motion system (the artifact every later track/surface consumes) as pure, portable TS — no DOM imports — so it moves cleanly into packages/core in Track C (R-ARCH-1).
+- Branch: v2/track-b-tokens (stacked on v2/track-a-stabilize; A+B = milestone M1).
+- What the agent did:
+	- `shared/design/tokens.ts`: 6 LOCKED clause accents (canonical ui-design-system hexes), 12-step neutral ramps (light+dark), single brand accent, semantic/surface/overlay/scrim per theme, typography scale (px only, no rem), 4px space grid, radius/elevation/border, the 2147483647 z-index ceiling, section-state opacities/color-roles (replaces removed confidence styling), per-clause non-color encoding (glyph + underline texture/thickness for S-VIS-3), and `tokensToCssVars(theme)` runtime emitting a `--pc-*` block.
+	- `shared/design/motion.ts`: ≤5 named easings (snap/float/pulse/silk), duration tokens, `prefersReducedMotion()` (portable, guards missing matchMedia), `motionDurationMs()`, and `transition()` that degrades to opacity-only/instant under reduced-motion (S-MOT-2).
+	- `shared/design/index.ts` barrel.
+	- `extension/src/content/__tests__/design-tokens.test.ts`: 9 tests locking the palette, non-color encoding distinctness, CSS-var emission for both themes, 12-step ramps, z-index ceiling + ordered state opacities, and the reduced-motion collapse behavior.
+- Files edited: shared/design/{tokens,motion,index}.ts, extension/src/content/__tests__/design-tokens.test.ts, logging/progress_log.md.
+- Verification: extension tsc exit 0; `vitest run design-tokens.test.ts` → 9/9 pass.
+- Task alignment:
+	- Fulfillment: B1 (tokens + runtime) and B2 (motion + reduced-motion) delivered as one cohesive, tested, portable module.
+	- Deviation: Authored under `shared/design/` (existing cross-cutting pure-TS home, sibling to shared/contracts) rather than a not-yet-existing packages/core; it relocates into core during Track C. Noted that 3 clause hexes in the live GOAL_TYPE_PALETTE drifted from this locked set — reconciled in B3, not here.
+	- Residual: None; consumed by B3/B4 next.
