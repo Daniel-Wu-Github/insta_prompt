@@ -755,3 +755,20 @@
 	- Fulfillment: C1 boundary spike + proven extraction slice + C2 contracts delivered on an isolated branch.
 	- Deviation (intentional, per decision): The high-blast-radius steps — section state-machine extraction, settings, orchestration, adapter-dom (C2 impl), and the C3 test harness — were NOT attempted. Plan DEC-2 mandates they land behind the C3 harness with a human-reviewed PR; the stale extension suite makes the harness a prerequisite, and there is no live browser to verify behavior here.
 	- Residual / STOP: Awaiting human review of the spike + this branch. Open decisions enumerated in §6 of the spike note (blast-radius sign-off, shared/ vs packages/core absorption, backend canonical-order unification, monorepo tooling). Nothing pushed; branches are local (push/PR is an outward action requiring explicit go-ahead).
+
+## Entry 038 - 2026-06-15 - V2 Track D (partial): Design system + motion APPLIED to shadow surfaces (AUD-1/2/3)
+
+- Task: Scope expansion authorized by the user ("make everything professional grade; standards were too low"). Apply the design tokens + named motion + reduced-motion to the live UI surfaces — the visible polish that B1-B4 only authored as data.
+- Branch: v2/track-d-polish (stacked on v2/track-c-core).
+- Correction to prior audit: the hover popover, ghost panel, and toast ALREADY use Shadow DOM (attachShadow). AUD-1 overstated the isolation gap. The real gap was token/motion APPLICATION, not isolation.
+- What the agent did:
+	- `shared/design/css.ts`: `shadowBaseCss(theme)` emits the `--pc-*` token vars (CSS `all: initial` does NOT reset custom properties, so this is safe alongside each surface's :host reset) + `pc-float-in`/`pc-pulse` keyframes + a global `prefers-reduced-motion` guard. `motionPreset` shorthands keyed to motion tokens.
+	- Applied to popover, ghost panel, and toast: prepended shadowBaseCss; swapped exact-match literals (surface-border, text-primary/secondary, neutral-8, shadow-panel/popover, radius-lg, font-family) for `var(--pc-*)` (zero visual change); added the float-in entrance animation.
+	- Toast fade transition routed through `motionTransition("opacity","slow")` (host is light-DOM, so the shadow reduced-motion guard can't reach it; the helper collapses to 0ms under reduced-motion).
+	- +2 tests asserting var emission, keyframes, reduced-motion guard, and motionPreset timings.
+- Files edited: shared/design/{css.ts,index.ts}, extension/src/content/index.ts, extension/src/content/__tests__/design-tokens.test.ts, logging/progress_log.md.
+- Verification: extension tsc 0; vitest 13 failed / 20 passed (fail count = known-13 baseline → zero new regressions).
+- Task alignment:
+	- Fulfillment: the three chrome surfaces are now token-consistent, motion-correct, and reduced-motion-aware — verifiable here.
+	- Deviation / honest limit: PIXEL parity (G-2 ±1px) and a11y (G-1 axe) certification, the underline-overlay shadow isolation, onboarding (D3), and bundling Inter Variable as a web-accessible @font-face are either browser-gated (need rendering to verify) or larger follow-ups. Font currently falls back to system-ui (professional-acceptable). These are NOT claimed done.
+	- Residual: Visual sign-off requires running the dev build; offered to iterate with screenshots. Track D2/D3 + font bundling sequenced for a browser-in-the-loop pass.

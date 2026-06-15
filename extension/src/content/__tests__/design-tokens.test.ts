@@ -13,6 +13,8 @@ import {
 	transition,
 	motionDurationMs,
 	prefersReducedMotion,
+	shadowBaseCss,
+	motionPreset,
 } from "../../../../shared/design";
 
 describe("design tokens (Track B1)", () => {
@@ -104,5 +106,33 @@ describe("motion system (Track B2)", () => {
 		// no stub -> jsdom may or may not define matchMedia; force absence
 		vi.stubGlobal("matchMedia", undefined);
 		expect(prefersReducedMotion()).toBe(false);
+	});
+});
+
+describe("shadow stylesheet (Track D — design system applied)", () => {
+	it("injects token vars + named keyframes + a reduced-motion guard", () => {
+		const css = shadowBaseCss("dark");
+		// every var referenced by the popover/ghost/toast must be emitted
+		for (const v of [
+			"--pc-surface-border",
+			"--pc-text-primary",
+			"--pc-text-secondary",
+			"--pc-shadow-panel",
+			"--pc-shadow-popover",
+			"--pc-neutral-8",
+			"--pc-radius-lg",
+			"--pc-font-family",
+		]) {
+			expect(css).toContain(`${v}:`);
+		}
+		expect(css).toContain("@keyframes pc-float-in");
+		expect(css).toContain("@keyframes pc-pulse");
+		expect(css).toContain("prefers-reduced-motion: reduce");
+	});
+
+	it("motionPreset shorthands reference the named keyframes + token timings", () => {
+		expect(motionPreset.floatIn).toContain("pc-float-in");
+		expect(motionPreset.floatIn).toContain("320ms"); // duration.slow
+		expect(motionPreset.pulse).toContain("pc-pulse");
 	});
 });

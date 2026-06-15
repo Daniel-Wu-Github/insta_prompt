@@ -1,5 +1,5 @@
 import { GOAL_TYPE_VALUES, MODE_VALUES, type GoalType, type Mode, type SegmentRequest } from "../../../shared/contracts";
-import { brand, clauseAccent, clauseEncoding, rgba, sectionState, zIndex } from "../../../shared/design";
+import { brand, clauseAccent, clauseEncoding, motionPreset, rgba, sectionState, shadowBaseCss, transition as motionTransition, zIndex } from "../../../shared/design";
 import { CANONICAL_ORDER_BY_GOAL_TYPE, GOAL_TYPES_IN_CANONICAL_ORDER } from "../../../packages/core";
 
 export default defineContentScript({
@@ -427,7 +427,7 @@ export default defineContentScript({
 
 			const shadowRoot = containerElement.attachShadow({ mode: "open" });
 			const styleElement = document.createElement("style");
-			styleElement.textContent = `
+			styleElement.textContent = `${shadowBaseCss("dark")}
 :host {
 	all: initial;
 	position: fixed;
@@ -444,12 +444,12 @@ export default defineContentScript({
 	box-sizing: border-box;
 	max-width: min(320px, calc(100vw - 24px));
 	border-radius: 12px;
-	border: 1px solid rgba(148, 163, 184, 0.24);
+	border: 1px solid var(--pc-surface-border);
 	background: rgba(15, 23, 42, 0.98);
-	color: rgb(248, 250, 252);
-	box-shadow: 0 16px 40px rgba(15, 23, 42, 0.24);
+	color: var(--pc-text-primary);
+	box-shadow: var(--pc-shadow-panel);
 	padding: 10px 12px;
-	font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-family: var(--pc-font-family);
 	font-size: 13px;
 	line-height: 1.45;
 	letter-spacing: 0;
@@ -457,6 +457,7 @@ export default defineContentScript({
 	pointer-events: none;
 	user-select: none;
 	-webkit-user-select: none;
+	animation: ${motionPreset.floatIn};
 }
 
 [data-draft-hover-header] {
@@ -1619,7 +1620,7 @@ export default defineContentScript({
 
 			const shadow = containerElement.attachShadow({ mode: "open" });
 			const style = document.createElement("style");
-			style.textContent = `
+			style.textContent = `${shadowBaseCss("dark")}
 :host {
 	all: initial;
 	position: fixed;
@@ -1634,19 +1635,20 @@ export default defineContentScript({
 	display: block;
 	box-sizing: border-box;
 	max-width: min(560px, calc(100vw - 24px));
-	border-radius: 10px;
+	border-radius: var(--pc-radius-lg);
 	border: 1px solid rgba(148, 163, 184, 0.32);
 	background: rgba(15, 23, 42, 0.97);
-	color: rgb(226, 232, 240);
-	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.32);
+	color: var(--pc-neutral-8);
+	box-shadow: var(--pc-shadow-popover);
 	padding: 12px 14px;
-	font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-family: var(--pc-font-family);
 	font-size: 13px;
 	line-height: 1.5;
 	font-style: italic;
 	white-space: pre-wrap;
 	pointer-events: none;
 	user-select: none;
+	animation: ${motionPreset.floatIn};
 }
 
 [data-ghost-status] {
@@ -1737,28 +1739,31 @@ export default defineContentScript({
 			container.style.zIndex = String(Number(DRAFT_OVERLAY_Z_INDEX) + 1);
 			container.style.pointerEvents = "none";
 			container.style.opacity = "1";
-			container.style.transition = "opacity 0.4s ease";
+			// motionTransition honors prefers-reduced-motion (collapses to 0ms); the
+			// host element is light-DOM so the shadow reduced-motion guard can't reach it.
+			container.style.transition = motionTransition("opacity", "slow");
 
 			const shadow = container.attachShadow({ mode: "open" });
 			const style = document.createElement("style");
-			style.textContent = `
+			style.textContent = `${shadowBaseCss("dark")}
 :host { all: initial; pointer-events: none; }
 [data-unsupported-toast] {
 	all: initial;
 	display: block;
 	box-sizing: border-box;
-	border-radius: 10px;
+	border-radius: var(--pc-radius-lg);
 	border: 1px solid rgba(148, 163, 184, 0.32);
 	background: rgba(15, 23, 42, 0.97);
-	color: rgb(226, 232, 240);
-	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.32);
+	color: var(--pc-neutral-8);
+	box-shadow: var(--pc-shadow-popover);
 	padding: 10px 14px;
-	font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-family: var(--pc-font-family);
 	font-size: 13px;
 	line-height: 1.5;
 	pointer-events: none;
 	user-select: none;
 	white-space: nowrap;
+	animation: ${motionPreset.floatIn};
 }
 `;
 			const toast = document.createElement("div");
