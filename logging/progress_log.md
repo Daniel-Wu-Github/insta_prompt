@@ -635,3 +635,26 @@
 - Task alignment:
 	- Fulfillment: The requested agent was saved in the repo configuration surfaces and the selection commands were documented for all three CLIs.
 	- Deviation: None.
+
+## Entry 031 - 2026-06-15 - V2 Track A3: Centralized per-element cleanup registry (AUD-10 / G-3)
+
+- Task: Implement Track A3 of the V2 mega-plan — centralized teardown for per-element listeners/observers so no DOM state outlives a removed input or an invalidated content script.
+- Context / resume note: Re-derived current step per plan §7A.6 against live code (not the stale handoff.md). Verified Track A1 (WeakSet idempotency, BUG-REACT) and A2 (clip-rect geometry, BUG-GEOM) were ALREADY implemented at HEAD (commit b6a6be0) and correct — marked complete, no re-edit. handoff.md predates those fixes and is stale.
+- What the agent did:
+	- Added `_instrumentCleanups: Map<Element, Array<() => void>>` registry alongside the existing `_instrumentedElements` WeakSet.
+	- Rewrote `markInstrumented` so every `addEventListener` (input/search/mousemove/mouseleave/blur/keydown) and the contenteditable `clearObserver` MutationObserver registers a paired disposer. The clear-observer was previously orphaned (never disconnected) — the core AUD-10 leak that pinned detached inputs in memory.
+	- Added `teardownInstrument(element)`: best-effort runs all disposers, deletes both registry entries (Rule 3/7).
+	- Added an `isConnected` sweep at the end of the input-discovery MutationObserver callback (Rule 6): instrumented inputs that left the DOM are torn down; checked post-batch so a React detach→reattach move is not falsely torn down.
+	- Wired `main(ctx)` + `ctx.onInvalidated()` (Rule 8): on content-script invalidation, disconnect the discovery + modal observers and tear down every instrumented input.
+- Files edited:
+	- extension/src/content/index.ts
+	- logging/progress_log.md
+- Verification:
+	- `cd extension && npx tsc --noEmit --skipLibCheck` → exit 0.
+	- `cd backend && npx tsc --noEmit --skipLibCheck` → exit 0 (unchanged).
+	- Extension `vitest run`: 13 failed / 4 passed BOTH before and after the change (stashed-baseline compared) → zero regression. The 13 failures are pre-existing stale tests (assert the removed confidence concept and the old attribute-marker model); they belong to Track C3 (real extension test harness), not A3.
+	- Backend `bun test`: 76 pass / 3 fail (the known external Supabase email-rate-limit integration tests, per plan §7A.2) — unchanged.
+- Task alignment:
+	- Fulfillment: Centralized teardown registry implemented; clear-observer + modal-observer + discovery-observer now have deterministic teardown on removal and invalidation.
+	- Deviation: A1/A2 found already-done; no re-implementation. Full heap-snapshot G-3 verification requires a live browser (escalated to Track A5 manual guide).
+	- Residual: Stale extension test suite (13 failures) deferred to C3. Window scroll/resize singleton listeners and focusin/storage listeners are page-lifetime and left in place (GC'd with the script context); not part of the AUD-10 named surface.

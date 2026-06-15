@@ -3,7 +3,7 @@ import { GOAL_TYPE_VALUES, MODE_VALUES, type GoalType, type Mode, type SegmentRe
 export default defineContentScript({
 	matches: ["<all_urls>"],
 	runAt: "document_idle",
-	main() {
+	main(ctx) {
 		const BRIDGE_PORT_NAME = "insta_prompt_bridge";
 		const SETTINGS_STORAGE_KEY = "promptcompiler.settings";
 		const PAUSE_STORAGE_KEY = "promptcompiler.paused";
@@ -17,6 +17,11 @@ export default defineContentScript({
 		// inputs. A WeakSet keyed on the element survives reconciliation and is
 		// GC-safe. The attribute is still written, but only for DevTools visibility.
 		const _instrumentedElements = new WeakSet<Element>();
+		// Per-element teardown registry (dom-memory-management Rule 3). Every listener and
+		// observer attached in markInstrumented registers its disposer here so element
+		// removal (SPA churn) or content-script invalidation can fully tear down — no
+		// orphaned MutationObserver pinning a detached input in memory (AUD-10 / G-3).
+		const _instrumentCleanups = new Map<Element, Array<() => void>>();
 		const DEBOUNCE_DELAY_MS = 400;
 		const DEFAULT_BRIDGE_MODE: Mode = "balanced";
 		const BRIDGE_FALLBACK_JWT = "promptcompiler-dev-jwt";
@@ -2869,12 +2874,17 @@ export default defineContentScript({
 			}
 
 			_instrumentedElements.add(element);
+			// Collect a disposer for every listener/observer attached below so the element
+			// can be fully torn down on removal or unload (dom-memory-management Rule 1-3).
+			const cleanups: Array<() => void> = [];
 
 			element.addEventListener("input", handleInputEvent);
+			cleanups.push(() => element.removeEventListener("input", handleInputEvent));
 
 			// Search inputs: browser fires "search" when the X clear button is clicked
 			if (element instanceof HTMLInputElement && element.type === "search") {
 				element.addEventListener("search", handleInputEvent);
+				cleanups.push(() => element.removeEventListener("search", handleInputEvent));
 			}
 
 			// Contenteditable: detect programmatic content changes (e.g. ChatGPT post-submit clear).
@@ -2884,17 +2894,43 @@ export default defineContentScript({
 					scheduleDebouncedExtraction(element);
 				});
 				clearObserver.observe(element, { childList: true, subtree: true, characterData: true });
+				// AUD-10: previously orphaned — this observer pinned a detached input in memory.
+				cleanups.push(() => clearObserver.disconnect());
 			}
 
 			element.addEventListener("mousemove", handleSourceMouseMoveEvent);
+			cleanups.push(() => element.removeEventListener("mousemove", handleSourceMouseMoveEvent));
 			element.addEventListener("mouseleave", handleSourceMouseLeaveEvent);
+			cleanups.push(() => element.removeEventListener("mouseleave", handleSourceMouseLeaveEvent));
 			element.addEventListener("blur", handleSourceBlurEvent);
+			cleanups.push(() => element.removeEventListener("blur", handleSourceBlurEvent));
 			element.addEventListener("keydown", handleSourceKeyDownEvent);
+			cleanups.push(() => element.removeEventListener("keydown", handleSourceKeyDownEvent));
+
+			_instrumentCleanups.set(element, cleanups);
 			// DevTools visibility only — NOT the idempotency source of truth (React strips it).
 			element.setAttribute(INSTRUMENTED_ATTRIBUTE, INSTRUMENTED_VALUE);
 			if (import.meta.env.DEV) {
 				console.log("Found valid input:", element);
 			}
+		};
+
+		// Run and clear every disposer registered for an instrumented element, then drop
+		// it from both registries so a re-added node (React move) re-instruments cleanly.
+		// Best-effort: one failing disposer never blocks the rest (dom-memory-management Rule 3/7).
+		const teardownInstrument = (element: Element): void => {
+			const cleanups = _instrumentCleanups.get(element);
+			if (cleanups) {
+				for (const dispose of cleanups) {
+					try {
+						dispose();
+					} catch {
+						// swallow — teardown must be total even if one disposer throws
+					}
+				}
+				_instrumentCleanups.delete(element);
+			}
+			_instrumentedElements.delete(element);
 		};
 
 		const scanNodeForInputs = (node: Node): void => {
@@ -2966,6 +3002,18 @@ export default defineContentScript({
 					for (const addedNode of mutation.addedNodes) {
 						if (addedNode.nodeType === Node.ELEMENT_NODE || addedNode.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
 							scanNodeForInputs(addedNode);
+						}
+					}
+				}
+
+				// dom-memory-management Rule 6: tear down any instrumented input that left the
+				// DOM (SPA churn) so its listeners + clear-observer don't leak. isConnected is
+				// checked after the whole batch, so a same-batch detach→reattach (React move)
+				// stays connected and is NOT torn down.
+				if (_instrumentCleanups.size > 0) {
+					for (const instrumented of [..._instrumentCleanups.keys()]) {
+						if (!instrumented.isConnected) {
+							teardownInstrument(instrumented);
 						}
 					}
 				}
@@ -3117,7 +3165,7 @@ export default defineContentScript({
 		};
 
 		scanDocumentForInputs();
-		observeForInputDiscovery();
+		const discoveryObserver = observeForInputDiscovery();
 		void refreshClauseOrderingPreference();
 
 		// BUG-ZINDEX: our overlay hosts use the maximum CSS z-index so underlines sit
@@ -3192,5 +3240,17 @@ export default defineContentScript({
 		});
 
 		getBridgePort(); // establish initial connection eagerly
+
+		// dom-memory-management Rule 8: on content-script invalidation (extension reload,
+		// update, or disable) the host page may persist. Disconnect the page-lifetime
+		// observers and tear down every instrumented input so no observer or listener
+		// outlives this script context (AUD-10 / G-3).
+		ctx.onInvalidated(() => {
+			discoveryObserver?.disconnect();
+			modalObserver.disconnect();
+			for (const instrumented of [..._instrumentCleanups.keys()]) {
+				teardownInstrument(instrumented);
+			}
+		});
 	},
 });
