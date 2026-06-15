@@ -723,3 +723,16 @@
 	- Fulfillment: Draft-render-path constants (z-index, state opacities, underline + clause colors) are now token-sourced; "zero hardcoded visual constants" met for the underline/overlay render path.
 	- Deviation: The popover/ghost-panel/toast CSS template-literal chrome (surface/border/shadow colors around lines 460-547, 1644+, 1760+) is intentionally DEFERRED to Track D1, which rewrites those blocks into a single shadow root — tokenizing them now would be discarded work. 3 clause colors intentionally aligned to canon (documented).
 	- Residual: CSS-chrome tokenization folded into Track D1.
+
+## Entry 036 - 2026-06-15 - V2 Track B4: Redundant non-color clause encoding (S-VIS-3)
+
+- Task: Make each clause type legible WITHOUT color (color-blind redundancy), per S-VIS-3, replacing the signal lost when confidence dashing was removed.
+- What the agent did (all in content/index.ts using the `clauseEncoding` tokens from B1):
+	- Popover header: the type label now leads with the clause glyph (e.g. "▶ Action", "⬡ Tech stack"), so the type reads in grayscale.
+	- Underlines: each clause type renders a distinct texture + weight — context solid-2px, tech_stack double, constraint wavy, action solid-3px, output_format dotted, edge_case dashed — applied at both the base render and applyAcceptanceVisualsToSpan. The stale-accepted STATE keeps its dashed signal (distinguished from edge_case by gray color + 0.3 opacity).
+- Files edited: extension/src/content/index.ts, logging/progress_log.md.
+- Verification: extension tsc exit 0; full vitest 13 failed / 14 passed — fail count identical to the known-13 baseline (zero new regressions).
+- Task alignment:
+	- Fulfillment: Clause type is now carried by glyph (header) + underline texture/weight (overlay) in addition to color — the S-VIS-3 redundancy.
+	- Deviation: None. Live visual confirmation of the textures rendering correctly on host sites is part of the Track A5 manual guide (needs a browser).
+	- Residual: None for B4. Track B (design-system-as-code, milestone M1 with Track A) complete.

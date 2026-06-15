@@ -1,5 +1,5 @@
 import { GOAL_TYPE_VALUES, MODE_VALUES, type GoalType, type Mode, type SegmentRequest } from "../../../shared/contracts";
-import { brand, clauseAccent, rgba, sectionState, zIndex } from "../../../shared/design";
+import { brand, clauseAccent, clauseEncoding, rgba, sectionState, zIndex } from "../../../shared/design";
 
 export default defineContentScript({
 	matches: ["<all_urls>"],
@@ -601,7 +601,8 @@ export default defineContentScript({
 
 			const typeLabel = document.createElement("span");
 			typeLabel.dataset.draftHoverMetaType = "true";
-			typeLabel.textContent = GOAL_TYPE_LEGEND_LABEL[segment.goalType];
+			// S-VIS-3: lead the type with its glyph so the clause type reads without color.
+			typeLabel.textContent = `${clauseEncoding[segment.goalType].glyph} ${GOAL_TYPE_LEGEND_LABEL[segment.goalType]}`;
 			typeLabel.style.color = GOAL_TYPE_PALETTE[segment.goalType].color;
 
 			metaElement.append(clauseLabel, sep, typeLabel);
@@ -1293,6 +1294,9 @@ export default defineContentScript({
 			isStaleAccepted: boolean,
 		): void => {
 			const paletteEntry = GOAL_TYPE_PALETTE[segment.goalType];
+			// S-VIS-3: each clause type also gets a distinct underline texture + weight so
+			// the type is legible without relying on color alone (color-blind redundancy).
+			const enc = clauseEncoding[segment.goalType];
 
 			segmentSpan.dataset.accepted = isAccepted ? "true" : "false";
 			segmentSpan.dataset.focused = isFocused ? "true" : "false";
@@ -1304,14 +1308,15 @@ export default defineContentScript({
 				// Legacy stale-accepted treatment (amber === clauseAccent.context); tokenized
 				// for AUD-2 with identical value. Revisited as a true stale state in B4/Track D.
 				segmentSpan.style.textDecorationColor = isStaleAccepted ? rgba(clauseAccent.context) : `var(${paletteEntry.cssVariable})`;
-				segmentSpan.style.textDecorationStyle = isStaleAccepted ? "dashed" : "solid";
-				segmentSpan.style.textDecorationThickness = "2px";
+				// Stale-accepted keeps the dashed STATE signal; otherwise the per-type texture.
+				segmentSpan.style.textDecorationStyle = isStaleAccepted ? "dashed" : enc.underlineStyle;
+				segmentSpan.style.textDecorationThickness = `${enc.underlineThickness}px`;
 				segmentSpan.style.outline = "none";
 			} else {
 				segmentSpan.style.opacity = "1";
 				segmentSpan.style.textDecorationColor = `var(${paletteEntry.cssVariable})`;
-				segmentSpan.style.textDecorationStyle = "solid";
-				segmentSpan.style.textDecorationThickness = "2px";
+				segmentSpan.style.textDecorationStyle = enc.underlineStyle;
+				segmentSpan.style.textDecorationThickness = `${enc.underlineThickness}px`;
 				segmentSpan.style.outline = isFocused ? `1px solid var(${paletteEntry.cssVariable})` : "none";
 				segmentSpan.style.outlineOffset = isFocused ? "1px" : "0";
 			}
@@ -1397,8 +1402,10 @@ export default defineContentScript({
 				segmentSpan.style.setProperty("-webkit-text-fill-color", "transparent");
 				segmentSpan.style.textDecorationLine = "underline";
 				segmentSpan.style.textDecorationColor = `var(${paletteEntry.cssVariable})`;
-				segmentSpan.style.textDecorationStyle = "solid";
-				segmentSpan.style.textDecorationThickness = "2px";
+				// Per-type texture + weight (S-VIS-3); applyAcceptanceVisualsToSpan below
+				// may override style for the stale state but keeps the per-type thickness.
+				segmentSpan.style.textDecorationStyle = clauseEncoding[segment.goalType].underlineStyle;
+				segmentSpan.style.textDecorationThickness = `${clauseEncoding[segment.goalType].underlineThickness}px`;
 				segmentSpan.style.textUnderlineOffset = "2px";
 				segmentSpan.style.textDecorationSkipInk = "none";
 				applyAcceptanceVisualsToSpan(segmentSpan, segment, isAccepted, isFocused, isStaleAccepted);
