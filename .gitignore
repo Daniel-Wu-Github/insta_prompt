@@ -17,3 +17,6 @@ Thumbs.db
 
 docs-pass.diff
 portable-skills-logging-response-and-self-improvement/
+
+.claude/skills/
+.gemini/skills/

@@ -10,6 +10,13 @@ export default defineContentScript({
 		const CLAUSE_ORDERING_STORAGE_KEY = "promptcompiler.clauseOrdering";
 		const INSTRUMENTED_ATTRIBUTE = "data-insta-instrumented";
 		const INSTRUMENTED_VALUE = "true";
+		// Idempotency marker source of truth. React (ChatGPT, Claude.ai, etc.) strips
+		// unknown HTML attributes during reconciliation, so an attribute-based check
+		// (BUG-REACT) gives false negatives — re-instrumenting live inputs, stacking
+		// duplicate listeners, and firing the unsupported-input toast on supported
+		// inputs. A WeakSet keyed on the element survives reconciliation and is
+		// GC-safe. The attribute is still written, but only for DevTools visibility.
+		const _instrumentedElements = new WeakSet<Element>();
 		const DEBOUNCE_DELAY_MS = 400;
 		const DEFAULT_BRIDGE_MODE: Mode = "balanced";
 		const BRIDGE_FALLBACK_JWT = "promptcompiler-dev-jwt";
@@ -21,6 +28,9 @@ export default defineContentScript({
 		const DRAFT_ACCEPTED_OPACITY = "0.4";
 		const DRAFT_ACCEPTED_STALE_OPACITY = "0.3";
 		const DRAFT_UNDERLINE_COLOR = "rgb(37 99 235 / 0.95)";
+		// BIND-UX-1: Tab now *reviews* (cycles focus) instead of accepting. Acceptance is
+		// the explicit Enter act, and Esc leaves review mode so Enter sends normally again.
+		const REVIEW_HINT = "Tab to review · Enter to accept · ⌘/Ctrl+Enter to bind · Esc to exit";
 		const CANONICAL_ORDER_BY_GOAL_TYPE: Record<GoalType, number> = {
 			// 1-indexed: matches backend canonical_order schema
 			context: 1,
@@ -963,6 +973,14 @@ export default defineContentScript({
 			target.style.whiteSpace = computedStyle.whiteSpace;
 			target.style.wordBreak = computedStyle.wordBreak;
 			target.style.overflowWrap = computedStyle.overflowWrap;
+			// BUG-ALIGN: these are inherited, text-metric/wrap-affecting properties that the
+			// `font` shorthand does NOT carry. Without them the mirror's glyph widths (and
+			// therefore wrap points) drift from the host editor — e.g. ChatGPT enables
+			// text-rendering: optimizeLegibility, which turns on kerning/ligatures. Set them
+			// on the host so they inherit down to the content and segment-root layers.
+			target.style.setProperty("tab-size", computedStyle.getPropertyValue("tab-size"));
+			target.style.setProperty("text-rendering", computedStyle.getPropertyValue("text-rendering"));
+			target.style.setProperty("font-optical-sizing", computedStyle.getPropertyValue("font-optical-sizing"));
 			target.style.background = "transparent";
 			target.style.color = "transparent";
 			target.style.caretColor = "transparent";
@@ -1157,19 +1175,64 @@ export default defineContentScript({
 			target.style.setProperty("-webkit-text-fill-color", "transparent");
 		};
 
+		// BUG-GEOM: For a contenteditable that grows without a CSS max-height (e.g. the
+		// ChatGPT/Lexical input), getBoundingClientRect() and clientHeight both return the
+		// element's INTRINSIC content height — not the visible clip height. The visible
+		// region is bounded by an ancestor with overflow clipping. Walk up to find every
+		// clipping ancestor and intersect, so the overlay host can be clamped to what the
+		// user actually sees. Self-clipping elements (textarea) have no smaller clip
+		// ancestor, so this returns their own border-box rect and the path is unchanged.
+		const getClippedVisibleRect = (
+			element: HTMLElement,
+		): { left: number; top: number; right: number; bottom: number } => {
+			const rect = element.getBoundingClientRect();
+			let left = rect.left;
+			let top = rect.top;
+			let right = rect.right;
+			let bottom = rect.bottom;
+
+			let ancestor = element.parentElement;
+			while (ancestor && ancestor !== document.documentElement) {
+				const style = window.getComputedStyle(ancestor);
+				const isClipValue = (value: string): boolean =>
+					value === "hidden" || value === "scroll" || value === "auto" || value === "clip";
+				const clipY = isClipValue(style.overflowY);
+				const clipX = isClipValue(style.overflowX);
+				if (clipY || clipX) {
+					const ancestorRect = ancestor.getBoundingClientRect();
+					if (clipY) {
+						top = Math.max(top, ancestorRect.top);
+						bottom = Math.min(bottom, ancestorRect.bottom);
+					}
+					if (clipX) {
+						left = Math.max(left, ancestorRect.left);
+						right = Math.min(right, ancestorRect.right);
+					}
+				}
+				ancestor = ancestor.parentElement;
+			}
+
+			return { left, top, right, bottom };
+		};
+
 		const updateDraftOverlayGeometry = (
 			sourceElement: HTMLTextAreaElement | HTMLElement,
 			hostElement: HTMLDivElement,
 			contentElement: HTMLDivElement,
 			segmentRootElement: HTMLDivElement | undefined,
 		): void => {
-			const rect = sourceElement.getBoundingClientRect();
-			hostElement.style.left = `${rect.left}px`;
-			hostElement.style.top = `${rect.top}px`;
-			hostElement.style.width = `${sourceElement.clientWidth}px`;
-			hostElement.style.height = `${sourceElement.clientHeight}px`;
+			const clip = getClippedVisibleRect(sourceElement);
+			// Width/height baseline is the self-clip content box (correct for textarea).
+			// Clamp to the ancestor clip so a grown contenteditable cannot bleed past its
+			// visible container; the host's overflow:hidden then trims underlines outside it.
+			const width = Math.min(sourceElement.clientWidth, Math.max(0, clip.right - clip.left));
+			const height = Math.min(sourceElement.clientHeight, Math.max(0, clip.bottom - clip.top));
+			hostElement.style.left = `${clip.left}px`;
+			hostElement.style.top = `${clip.top}px`;
+			hostElement.style.width = `${width}px`;
+			hostElement.style.height = `${height}px`;
 			if (segmentRootElement) {
-				segmentRootElement.style.width = `${sourceElement.clientWidth}px`;
+				segmentRootElement.style.width = `${width}px`;
 			}
 			syncDraftOverlayScrollPosition(sourceElement, contentElement);
 		};
@@ -1178,7 +1241,17 @@ export default defineContentScript({
 			sourceElement: HTMLTextAreaElement | HTMLElement,
 			layer2Element: HTMLDivElement,
 		): void => {
-			layer2Element.style.transform = `translate(-${sourceElement.scrollLeft}px, -${sourceElement.scrollTop}px)`;
+			// The host is clamped to the visible clip region (BUG-GEOM), so its top-left
+			// can sit below/right of the source element's true top-left when an ancestor
+			// clips it. Offset the content layer by (rect - clip) so the mirrored text
+			// still aligns 1:1 with the real text, then apply the element's own scroll.
+			// For self-clipping elements (textarea) rect === clip, so this reduces to the
+			// original translate(-scrollLeft, -scrollTop) and the path is unchanged.
+			const rect = sourceElement.getBoundingClientRect();
+			const clip = getClippedVisibleRect(sourceElement);
+			const offsetX = rect.left - clip.left - sourceElement.scrollLeft;
+			const offsetY = rect.top - clip.top - sourceElement.scrollTop;
+			layer2Element.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
 		};
 
 		const installDraftOverlayResizeObserver = (state: ActiveInputState): void => {
@@ -2063,19 +2136,20 @@ export default defineContentScript({
 			clearDraftHoverPreview();
 		};
 
-		const acceptNextSegment = (state: ActiveInputState): boolean => {
-			if (state.draftSegments.length === 0) {
+		// BIND-UX-1: accept the clause currently under review focus. Acceptance is now an
+		// explicit, separate act from browsing — Tab moves focus, Enter accepts. After
+		// accepting, advance focus to the next unaccepted clause for fast sequential accept.
+		const acceptFocusedSegment = (state: ActiveInputState): boolean => {
+			if (state.draftSegments.length === 0 || state.focusedSegmentIndex === undefined) {
 				return false;
 			}
 
-			const nextIndex = findNextUnacceptedIndex(state, state.focusedSegmentIndex);
-			if (nextIndex === undefined) {
-				return false;
+			const index = state.focusedSegmentIndex;
+			if (!state.acceptedSegmentIndices.has(index)) {
+				state.acceptedSegmentIndices.add(index);
+				state.acceptanceOrder.push(index);
 			}
-
-			state.acceptedSegmentIndices.add(nextIndex);
-			state.acceptanceOrder.push(nextIndex);
-			state.focusedSegmentIndex = findNextUnacceptedIndex(state, nextIndex + 1) ?? nextIndex;
+			state.focusedSegmentIndex = findNextUnacceptedIndex(state, index + 1) ?? index;
 			restampAcceptedSegmentVisuals(state);
 			return true;
 		};
@@ -2095,19 +2169,20 @@ export default defineContentScript({
 			return undefined;
 		};
 
-		const skipFocusedSegment = (state: ActiveInputState): boolean => {
-			if (state.draftSegments.length === 0 || state.focusedSegmentIndex === undefined) {
+		// BIND-UX-1: move review focus WITHOUT accepting. Cycles through every clause —
+		// accepted or not — so the user can inspect any clause's hover preview before
+		// committing to it. The first Tab enters review mode from no-focus; Esc exits it
+		// (clears focus) so plain Enter sends/newlines normally again.
+		const focusSegment = (state: ActiveInputState, direction: 1 | -1): boolean => {
+			const count = state.draftSegments.length;
+			if (count === 0) {
 				return false;
 			}
-			// Find the next unaccepted segment after the current focus, wrapping around.
-			// findNextUnacceptedIndex wraps back through indices < start, which would re-hit
-			// focusedSegmentIndex itself if it is the only unaccepted segment — treat that
-			// as a no-op so focus does not appear to move.
-			const next = findNextUnacceptedIndex(state, state.focusedSegmentIndex + 1);
-			if (next === undefined || next === state.focusedSegmentIndex) {
-				return false;
+			if (state.focusedSegmentIndex === undefined) {
+				state.focusedSegmentIndex = direction === 1 ? 0 : count - 1;
+			} else {
+				state.focusedSegmentIndex = (state.focusedSegmentIndex + direction + count) % count;
 			}
-			state.focusedSegmentIndex = next;
 			restampAcceptedSegmentVisuals(state);
 			return true;
 		};
@@ -2130,7 +2205,7 @@ export default defineContentScript({
 				return "Compilation already in progress…";
 			}
 			if (state.acceptedSegmentIndices.size === 0) {
-				return "Accept at least one clause first — hover a clause and press Tab.";
+				return "Accept at least one clause first — press Tab to review, Enter to accept.";
 			}
 			if (state.hasStaleAccepted) {
 				return "Your accepted clauses are stale — re-accept them after the recent edit.";
@@ -2147,7 +2222,7 @@ export default defineContentScript({
 			});
 
 			ensureGhostPanel(state);
-			updateGhostPanelStatus(state, "Tab to accept · ⌘/Ctrl+Enter to bind");
+			updateGhostPanelStatus(state, REVIEW_HINT);
 			if (state.ghostPanelBodyElement) {
 				state.ghostPanelBodyElement.textContent = describeBindGateBlock(state);
 			}
@@ -2468,7 +2543,17 @@ export default defineContentScript({
 						state.bindPhase = "IDLE";
 						state.pendingGhostText = "";
 						state.ghostStreamComplete = false;
-						updateGhostPanelStatus(state, "Tab to accept · ⌘/Ctrl+Enter to bind");
+						updateGhostPanelStatus(state, REVIEW_HINT);
+						return;
+					}
+					// BIND-UX-1: Esc leaves review mode (clears focus) so plain Enter sends
+					// or inserts a newline normally again instead of accepting a clause.
+					if (state.focusedSegmentIndex !== undefined) {
+						event.preventDefault();
+						event.stopPropagation();
+						state.focusedSegmentIndex = undefined;
+						restampAcceptedSegmentVisuals(state);
+						clearDraftHoverPreview();
 						return;
 					}
 				}
@@ -2481,13 +2566,19 @@ export default defineContentScript({
 			}
 
 			if (event.key === "Tab") {
+				// Nothing to review yet → let Tab behave normally (focus traversal, etc.).
+				if (state.draftSegments.length === 0) {
+					return;
+				}
 				event.preventDefault();
 				event.stopPropagation();
 
-				if (event.shiftKey) {
-					skipFocusedSegment(state);
-				} else {
-					acceptNextSegment(state);
+				const enteringReview = state.focusedSegmentIndex === undefined;
+				focusSegment(state, event.shiftKey ? -1 : 1);
+				// Surface the keymap the first time the user enters review mode.
+				if (enteringReview) {
+					ensureGhostPanel(state);
+					updateGhostPanelStatus(state, REVIEW_HINT);
 				}
 				return;
 			}
@@ -2499,10 +2590,21 @@ export default defineContentScript({
 				return;
 			}
 
+			// Commit takes priority over accept once the bound prompt is ready.
 			if (event.key === "Enter" && state.ghostStreamComplete && state.pendingGhostText.length > 0) {
 				event.preventDefault();
 				event.stopPropagation();
 				commitGhostTextToInput(state);
+				return;
+			}
+
+			// BIND-UX-1: plain Enter accepts the focused clause, but ONLY in review mode
+			// (a clause is focused). With no focus, Enter falls through so the host's
+			// normal send/newline behavior is preserved.
+			if (event.key === "Enter" && !event.shiftKey && state.focusedSegmentIndex !== undefined) {
+				event.preventDefault();
+				event.stopPropagation();
+				acceptFocusedSegment(state);
 				return;
 			}
 		};
@@ -2676,20 +2778,10 @@ export default defineContentScript({
 						}
 					}
 
-					// Focus: advance to the first unaccepted segment after re-segmentation
-					let nextFocused: number | undefined;
-					if (draftSegments.length > 0) {
-						for (let i = 0; i < draftSegments.length; i++) {
-							if (!newAcceptedIndices.has(i)) {
-								nextFocused = i;
-								break;
-							}
-						}
-						if (nextFocused === undefined) {
-							nextFocused = 0;
-						}
-					}
-					nextState.focusedSegmentIndex = nextFocused;
+					// BIND-UX-1: do NOT auto-focus a clause on (re)segmentation. Underlines
+					// render passively; the user enters review mode explicitly with Tab. This
+					// keeps plain Enter wired to the host's send/newline until the user opts in.
+					nextState.focusedSegmentIndex = undefined;
 					nextState.activeSegmentRequestId = bridgeMessage.requestId;
 
 					activeInputState = nextState;
@@ -2767,13 +2859,16 @@ export default defineContentScript({
 		};
 
 		const isInstrumented = (element: Element): boolean => {
-			return element.getAttribute(INSTRUMENTED_ATTRIBUTE) === INSTRUMENTED_VALUE;
+			// WeakSet is the source of truth (see BUG-REACT note at declaration).
+			return _instrumentedElements.has(element);
 		};
 
 		const markInstrumented = (element: HTMLTextAreaElement | HTMLElement): void => {
 			if (isInstrumented(element)) {
 				return;
 			}
+
+			_instrumentedElements.add(element);
 
 			element.addEventListener("input", handleInputEvent);
 
@@ -2782,12 +2877,11 @@ export default defineContentScript({
 				element.addEventListener("search", handleInputEvent);
 			}
 
-			// Contenteditable: detect programmatic content removal (e.g. ChatGPT post-submit clear)
+			// Contenteditable: detect programmatic content changes (e.g. ChatGPT post-submit clear).
+			// No empty-text guard — same as handleInputEvent; the debounce callback handles clearing.
 			if (isValidContenteditable(element)) {
 				const clearObserver = new MutationObserver(() => {
-					if (extractInputText(element).length === 0) {
-						scheduleDebouncedExtraction(element);
-					}
+					scheduleDebouncedExtraction(element);
 				});
 				clearObserver.observe(element, { childList: true, subtree: true, characterData: true });
 			}
@@ -2796,6 +2890,7 @@ export default defineContentScript({
 			element.addEventListener("mouseleave", handleSourceMouseLeaveEvent);
 			element.addEventListener("blur", handleSourceBlurEvent);
 			element.addEventListener("keydown", handleSourceKeyDownEvent);
+			// DevTools visibility only — NOT the idempotency source of truth (React strips it).
 			element.setAttribute(INSTRUMENTED_ATTRIBUTE, INSTRUMENTED_VALUE);
 			if (import.meta.env.DEV) {
 				console.log("Found valid input:", element);
@@ -3024,6 +3119,32 @@ export default defineContentScript({
 		scanDocumentForInputs();
 		observeForInputDiscovery();
 		void refreshClauseOrderingPreference();
+
+		// BUG-ZINDEX: our overlay hosts use the maximum CSS z-index so underlines sit
+		// above the host input. The side effect is that they also render above the
+		// site's own modal dialogs (e.g. ChatGPT Settings), bleeding through the panel.
+		// Rather than guess a "safe" z-index, suppress every extension overlay while a
+		// semantic modal dialog is open and restore it when the dialog closes. We key on
+		// aria-modal / role=alertdialog (true modals) so non-modal popups — dropdowns,
+		// tooltips, date pickers — do NOT hide the underlines.
+		const MODAL_SELECTOR = '[role="dialog"][aria-modal="true"], [role="alertdialog"], [aria-modal="true"]';
+		const EXTENSION_OVERLAY_SELECTOR =
+			"[data-insta-draft-overlay], [data-insta-draft-hover-popover], [data-insta-ghost-panel]";
+		const syncOverlaySuppressionForModals = (): void => {
+			const hasModal = document.querySelector(MODAL_SELECTOR) !== null;
+			for (const node of document.querySelectorAll<HTMLElement>(EXTENSION_OVERLAY_SELECTOR)) {
+				node.style.visibility = hasModal ? "hidden" : "";
+			}
+		};
+		const modalObserver = new MutationObserver(syncOverlaySuppressionForModals);
+		if (document.body) {
+			modalObserver.observe(document.body, {
+				childList: true,
+				subtree: true,
+				attributes: true,
+				attributeFilter: ["role", "aria-modal"],
+			});
+		}
 
 		// Toast on focus of writing-surface inputs we can't instrument
 		document.addEventListener("focusin", (event) => {
