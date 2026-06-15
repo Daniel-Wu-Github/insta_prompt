@@ -1290,3 +1290,34 @@ Entries are grouped by branch and extend commit messages with file-level change 
       - A docs/agent_plans/v1/v1_deep_debug.md
       - M extension/src/content/index.ts
       - M logging/commit_log.md
+
+### 2026-06-15 04:46:13Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/main
+- Range: 9ee776d7954ed653ab36a7cdc45b05ed6d04ada3..1bb6907bc5455c67d65f1e7523f7ba3f627ce034
+- Commits:
+  - 2c9407b Document ChatGPT overlay failures: BUG-REACT, BUG-GEOM, BUG-ZINDEX
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-09T21:11:04-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    - Files:
+      - M .claude/debugging_log.md
+      - A handoff.md
+  - b6a6be0 Fix P0/P1 overlay+segmentation bugs; add V2 UI/UX mega-plan
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:45:08-05:00
+    - Purpose: P0/P1 fixes (from handoff.md + round2 testing notes):
+    - Files:
+      - M .gitignore
+      - M backend/src/services/segment.ts
+      - A docs/agent_plans/v2/v2_uiux_megaplan.md
+      - M extension/src/content/index.ts
+  - 1bb6907 chore: sweep session bookkeeping (hook logs, tsc/skill state)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:45:27-05:00
+    - Purpose: Transient files updated by the session hooks (debugging_log, notification_log,
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/session_errors.tmp
+      - M .claude/skill_memory_cursor.tmp
