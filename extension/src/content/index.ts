@@ -1,4 +1,5 @@
 import { GOAL_TYPE_VALUES, MODE_VALUES, type GoalType, type Mode, type SegmentRequest } from "../../../shared/contracts";
+import { brand, clauseAccent, rgba, sectionState, zIndex } from "../../../shared/design";
 
 export default defineContentScript({
 	matches: ["<all_urls>"],
@@ -28,11 +29,14 @@ export default defineContentScript({
 		const SESSION_EXPIRED_NOTICE = "Session expired — please reopen the extension";
 		const DRAFT_HIGHLIGHT_NAME = "insta-prompt-draft-highlight";
 		const DRAFT_HIGHLIGHT_STYLE_ID = "insta-prompt-draft-highlight-style";
-		const DRAFT_OVERLAY_Z_INDEX = "2147483647";
-		const DRAFT_STALE_OPACITY = "0.45";
-		const DRAFT_ACCEPTED_OPACITY = "0.4";
-		const DRAFT_ACCEPTED_STALE_OPACITY = "0.3";
-		const DRAFT_UNDERLINE_COLOR = "rgb(37 99 235 / 0.95)";
+		// AUD-2: these are now derived from the portable design tokens (shared/design)
+		// instead of inline magic values. Values are unchanged — the token set was
+		// authored to match exactly — so this is behavior-preserving.
+		const DRAFT_OVERLAY_Z_INDEX = String(zIndex.overlayCeiling);
+		const DRAFT_STALE_OPACITY = String(sectionState.stale.opacity);
+		const DRAFT_ACCEPTED_OPACITY = String(sectionState.accepted.opacity);
+		const DRAFT_ACCEPTED_STALE_OPACITY = String(sectionState.acceptedStale.opacity);
+		const DRAFT_UNDERLINE_COLOR = rgba(brand.accent, 0.95);
 		// BIND-UX-1: Tab now *reviews* (cycles focus) instead of accepting. Acceptance is
 		// the explicit Enter act, and Esc leaves review mode so Enter sends normally again.
 		const REVIEW_HINT = "Tab to review · Enter to accept · ⌘/Ctrl+Enter to bind · Esc to exit";
@@ -46,37 +50,18 @@ export default defineContentScript({
 			edge_case: 6,
 		};
 
+		// AUD-2: clause colors now come from the LOCKED design tokens (shared/design
+		// `clauseAccent`) rather than inline literals. This reconciles three colors that
+		// had drifted from the canonical palette (tech_stack, constraint, output_format)
+		// to their documented values — an intentional design-system alignment, not a
+		// regression. action/context/edge_case were already canonical.
 		const GOAL_TYPE_PALETTE = {
-			// Purple
-			action: {
-				cssVariable: "--insta-goal-type-action-color",
-				color: "rgb(124 58 237)",
-			},
-			// Teal
-			tech_stack: {
-				cssVariable: "--insta-goal-type-tech-stack-color",
-				color: "rgb(15 118 110)",
-			},
-			// Coral
-			constraint: {
-				cssVariable: "--insta-goal-type-constraint-color",
-				color: "rgb(244 63 94)",
-			},
-			// Blue
-			output_format: {
-				cssVariable: "--insta-goal-type-output-format-color",
-				color: "rgb(29 78 216)",
-			},
-			// Amber
-			context: {
-				cssVariable: "--insta-goal-type-context-color",
-				color: "rgb(217 119 6)",
-			},
-			// Gray
-			edge_case: {
-				cssVariable: "--insta-goal-type-edge-case-color",
-				color: "rgb(107 114 128)",
-			},
+			action: { cssVariable: "--insta-goal-type-action-color", color: clauseAccent.action },
+			tech_stack: { cssVariable: "--insta-goal-type-tech-stack-color", color: clauseAccent.tech_stack },
+			constraint: { cssVariable: "--insta-goal-type-constraint-color", color: clauseAccent.constraint },
+			output_format: { cssVariable: "--insta-goal-type-output-format-color", color: clauseAccent.output_format },
+			context: { cssVariable: "--insta-goal-type-context-color", color: clauseAccent.context },
+			edge_case: { cssVariable: "--insta-goal-type-edge-case-color", color: clauseAccent.edge_case },
 		} as const satisfies Record<GoalType, { cssVariable: string; color: string }>;
 
 
@@ -1316,7 +1301,9 @@ export default defineContentScript({
 			if (isAccepted) {
 				segmentSpan.style.opacity = isStaleAccepted ? DRAFT_ACCEPTED_STALE_OPACITY : DRAFT_ACCEPTED_OPACITY;
 				segmentSpan.style.textDecorationLine = "underline";
-				segmentSpan.style.textDecorationColor = isStaleAccepted ? "rgb(217 119 6)" : `var(${paletteEntry.cssVariable})`;
+				// Legacy stale-accepted treatment (amber === clauseAccent.context); tokenized
+				// for AUD-2 with identical value. Revisited as a true stale state in B4/Track D.
+				segmentSpan.style.textDecorationColor = isStaleAccepted ? rgba(clauseAccent.context) : `var(${paletteEntry.cssVariable})`;
 				segmentSpan.style.textDecorationStyle = isStaleAccepted ? "dashed" : "solid";
 				segmentSpan.style.textDecorationThickness = "2px";
 				segmentSpan.style.outline = "none";

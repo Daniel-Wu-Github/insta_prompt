@@ -707,3 +707,19 @@
 	- Fulfillment: B1 (tokens + runtime) and B2 (motion + reduced-motion) delivered as one cohesive, tested, portable module.
 	- Deviation: Authored under `shared/design/` (existing cross-cutting pure-TS home, sibling to shared/contracts) rather than a not-yet-existing packages/core; it relocates into core during Track C. Noted that 3 clause hexes in the live GOAL_TYPE_PALETTE drifted from this locked set — reconciled in B3, not here.
 	- Residual: None; consumed by B3/B4 next.
+
+## Entry 035 - 2026-06-15 - V2 Track B3: Tokenize content-script render constants (AUD-2)
+
+- Task: Replace inline visual magic values in the draft-render path of content/index.ts with references to the portable design tokens.
+- What the agent did:
+	- Imported `{ brand, clauseAccent, rgba, sectionState, zIndex }` from `shared/design`.
+	- Top-level constants now derive from tokens (value-identical, behavior-preserving): DRAFT_OVERLAY_Z_INDEX ← zIndex.overlayCeiling; DRAFT_STALE/ACCEPTED/ACCEPTED_STALE_OPACITY ← sectionState.*.opacity; DRAFT_UNDERLINE_COLOR ← rgba(brand.accent, 0.95) = "rgb(37 99 235 / 0.95)".
+	- GOAL_TYPE_PALETTE colors now come from `clauseAccent` (the locked palette). This reconciles three clause colors that had drifted (tech_stack #0f766e→#0d9488, constraint #f43f5e→#e11d48, output_format #1d4ed8→#2563eb) to their canonical documented values — intentional design alignment. action/context/edge_case were already canonical.
+	- Stale-accepted decoration literal `rgb(217 119 6)` → `rgba(clauseAccent.context)` (exact same value; amber === clauseAccent.context). Annotated to revisit as a true stale state in B4/Track D.
+	- Added `rgba(hex, alpha)` to the token runtime (+3 test assertions proving value-identity with the old literals).
+- Files edited: extension/src/content/index.ts, shared/design/tokens.ts, extension/src/content/__tests__/design-tokens.test.ts, logging/progress_log.md.
+- Verification: extension tsc exit 0; full vitest 13 failed / 14 passed — fail count identical to the known-13 stale baseline (zero new regressions; the +10 passing are the token tests). The shared/design import resolves at both tsc and vite/vitest bundler level (the test imports the same path and runs).
+- Task alignment:
+	- Fulfillment: Draft-render-path constants (z-index, state opacities, underline + clause colors) are now token-sourced; "zero hardcoded visual constants" met for the underline/overlay render path.
+	- Deviation: The popover/ghost-panel/toast CSS template-literal chrome (surface/border/shadow colors around lines 460-547, 1644+, 1760+) is intentionally DEFERRED to Track D1, which rewrites those blocks into a single shadow root — tokenizing them now would be discarded work. 3 clause colors intentionally aligned to canon (documented).
+	- Residual: CSS-chrome tokenization folded into Track D1.

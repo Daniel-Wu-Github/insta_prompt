@@ -58,6 +58,19 @@ export const clauseEncoding: Record<
 	edge_case: { glyph: "◈", label: "Edge case", underlineStyle: "dashed", underlineThickness: 2 },
 };
 
+/**
+ * Convert a `#rrggbb` hex to a space-separated `rgb()` string (modern CSS color
+ * syntax, matching the codebase's existing `rgb(r g b / a)` form).  Lets render
+ * paths derive colors from the hex tokens above instead of hardcoding rgb strings.
+ */
+export function rgba(hex: string, alpha = 1): string {
+	const h = hex.replace("#", "");
+	const r = parseInt(h.slice(0, 2), 16);
+	const g = parseInt(h.slice(2, 4), 16);
+	const b = parseInt(h.slice(4, 6), 16);
+	return alpha >= 1 ? `rgb(${r} ${g} ${b})` : `rgb(${r} ${g} ${b} / ${alpha})`;
+}
+
 /** Single brand accent for primary actions (plan S-VIS-2). Matches output_format blue. */
 export const brand = {
 	accent: "#2563eb",

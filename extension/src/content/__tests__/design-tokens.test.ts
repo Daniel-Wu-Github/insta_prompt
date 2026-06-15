@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	GOAL_TYPES,
 	clauseAccent,
+	rgba,
 	clauseEncoding,
 	colorsByTheme,
 	tokensToCssVars,
@@ -34,6 +35,13 @@ describe("design tokens (Track B1)", () => {
 		// glyphs must be distinct so the type is legible without color
 		const glyphs = GOAL_TYPES.map((t) => clauseEncoding[t].glyph);
 		expect(new Set(glyphs).size).toBe(GOAL_TYPES.length);
+	});
+
+	it("rgba() derives the exact rgb strings the render path used to hardcode", () => {
+		// brand underline + legacy stale-accepted color must be value-identical post-tokenization
+		expect(rgba("#2563eb", 0.95)).toBe("rgb(37 99 235 / 0.95)");
+		expect(rgba(clauseAccent.context)).toBe("rgb(217 119 6)");
+		expect(rgba("#7c3aed")).toBe("rgb(124 58 237)");
 	});
 
 	it("emits a non-empty --pc-* CSS var block for both themes", () => {
