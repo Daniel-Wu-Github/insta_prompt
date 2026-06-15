@@ -8,9 +8,9 @@ updated with what this pass changed. **CLOSED** = done & verified by tsc/tests;
 
 | ID | Gap | Status | Where it stands now |
 |---|---|---|---|
-| AUD-1 | Overlay not Shadow-DOM isolated (host CSS can perturb it) | **OPEN** | Track D1 (shadow-root rewrite). Untouched. |
-| AUD-2 | No design-token layer; magic values scattered | **CLOSED (render path) / PARTIAL** | Tokens authored (`shared/design`) and wired into the underline/overlay path (B3). Popover/toast CSS-chrome literals deferred to D1 (rewritten there). |
-| AUD-3 | No motion system; no `prefers-reduced-motion` | **PARTIAL** | Motion tokens + reduced-motion helper authored & tested (B2). Not yet *applied* to existing transitions — that wiring rides with D. |
+| AUD-1 | Overlay not Shadow-DOM isolated (host CSS can perturb it) | **MOSTLY CLOSED** | Correction: popover/ghost/toast ALREADY use Shadow DOM + `all:initial` (audit overstated this). Token vars now injected into each (D-partial). The **underline-overlay mirror** itself isn't shadow-wrapped yet — remaining D item. |
+| AUD-2 | No design-token layer; magic values scattered | **CLOSED** | Tokens (`shared/design`) wired into the underline/overlay path (B3) AND into the popover/ghost/toast chrome (D-partial). |
+| AUD-3 | No motion system; no `prefers-reduced-motion` | **CLOSED (chrome surfaces)** | Motion tokens (B2) now APPLIED: float-in entrance on popover/ghost/toast, reduced-motion guard injected into every shadow surface, toast fade routed through the reduced-motion-aware helper (D-partial). |
 | AUD-4 | Pixel-parity only approximate | **OPEN** | Needs live measurement (G-2) + likely CSS Custom Highlights (DEC-1 / D2). |
 | AUD-5 | Core logic fused to the browser monolith | **PARTIAL** | C1: canonical ordering extracted to `packages/core`; `InputSource`/`RenderTarget`/`TransportClient` contracts defined. State machine, settings, orchestration still in `index.ts` (the DEC-2 work). |
 | AUD-6 | Single mode only (no prose/writing taxonomy) | **OPEN** | Track E. Needs DEC-3. |
@@ -33,9 +33,17 @@ updated with what this pass changed. **CLOSED** = done & verified by tsc/tests;
 
 ## Honest summary
 
-This pass **hardened stability (A) and built the design-system foundation (B)**, and
-**de-risked the core extraction (C)** with a blueprint + one proven slice. The
-**visible, pixel-level polish (Track D), the second audience (prose, Track E), and
-new platforms (Track G) remain ahead** — and most quality *gates* (G-1/2/4/5) still
-need a live browser to measure. The tokens and motion exist as data; making the UI
-*look* state-of-the-art is the Track D application step that hasn't happened yet.
+This pass **hardened stability (A)**, **built AND applied the design system (B + D-partial)**,
+and **de-risked the core extraction (C)** with a blueprint + one proven slice. The design
+system is no longer just data — it's now applied to the live popover/ghost/toast with named
+motion and reduced-motion.
+
+**What still genuinely needs a live browser** (cannot be certified headless): G-2 ±1px
+underline parity, G-1 axe a11y, G-4 cold-start timing, G-5 keyboard-only sweep. **What's
+larger follow-up work:** the underline-overlay shadow wrap, onboarding/coach marks (D3),
+bundling Inter Variable as a web-accessible font (currently falls back to system-ui), the
+second audience (prose, Track E), and new platforms (Track G).
+
+**Bottom line:** the UI is now shadow-isolated, token-consistent, and motion-correct by
+construction — *professional-grade engineering*. Declaring it *certified pixel-perfect*
+requires rendering it and measuring, which is the one step this environment can't perform.

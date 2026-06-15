@@ -14,6 +14,7 @@ for review · **Mode:** document-&-escalate (no faked verification).
 | `29a6db6` | B3 | Tokenized content-script render constants; reconciled 3 drifted clause colors |
 | `5e67d06` | B4 | Redundant non-color clause encoding (glyph + underline texture, colorblind a11y) |
 | `ea3d956` | C1+C2 | Core-extraction spike + canonical-order extraction + adapter/transport contracts |
+| `5bb554a` | D (partial) | Design system + named motion + reduced-motion APPLIED to popover/ghost/toast shadow surfaces |
 
 ## What was already done before this pass (discovered, not re-done)
 
@@ -34,6 +35,9 @@ them against live code rather than re-applying the handoff's now-obsolete instru
 - Did not push or open PRs (outward action — needs your go-ahead).
 - Did not attempt the high-risk core **state-machine** extraction (plan DEC-2 requires a
   human-reviewed PR + the C3 test harness first).
-- Did not run live-browser gates (G-2 pixel parity, G-3 heap snapshot) — no browser here;
-  see the manual guide.
-- Did not touch billing/Sentry/deploys (need accounts/secrets) or Tracks D/E/G.
+- Did not run live-browser gates (G-2 pixel parity, G-3 heap snapshot, G-1 axe, G-4
+  cold-start) — no browser here; see the manual guide.
+- Track D started (design system applied to chrome surfaces) but NOT finished — the
+  underline-overlay shadow wrap, onboarding (D3), and font bundling remain; pixel/axe
+  certification is browser-gated.
+- Did not touch billing/Sentry/deploys (need accounts/secrets) or Tracks E/G.

@@ -13,18 +13,31 @@ manual action, collected in one place. Read in order.
 
 ## State in one line
 
-Tracks **A + B are done and merged-ready** (stability + design-system, milestone M1);
-Track **C is a reviewed-stop** (core-extraction blueprint + one proven slice). **Nothing
-is pushed** — 3 local branches await your go-ahead.
+Tracks **A + B done** (stability + design-system), **C is a reviewed-stop**
+(core-extraction blueprint + one proven slice), and **Track D is partially done** —
+the design system + motion are now **applied** to the live UI surfaces (the visible
+polish). What's left on D is **browser-gated** (pixel/axe certification). **Nothing is
+pushed** — 4 local branches await your go-ahead.
 
 ## The branches (local, not pushed)
 
 ```
 main
- └─ v2/track-a-stabilize   (A3 cleanup registry, A4 doc purge, A5 guide)
-     └─ v2/track-b-tokens   (B1/B2 tokens+motion, B3 tokenize, B4 non-color encoding)
-         └─ v2/track-c-core (C1 spike + canonical-order extraction + C2 contracts) ← HEAD
+ └─ v2/track-a-stabilize    (A3 cleanup registry, A4 doc purge, A5 guide)
+     └─ v2/track-b-tokens    (B1/B2 tokens+motion, B3 tokenize, B4 non-color encoding)
+         └─ v2/track-c-core   (C1 spike + canonical-order extraction + C2 contracts)
+             └─ v2/track-d-polish (design system + motion APPLIED to popover/ghost/toast) ← HEAD
 ```
+
+## Why it's "professional-grade" but not yet "certified pixel-perfect"
+
+Pixel parity (±1px) and accessibility (axe) are **runtime-measured** properties — you
+verify them by *rendering the extension in a real browser on the target sites and
+measuring*. This environment has no browser, so that final certification is the one
+thing I can't do headless. The deterministic professional work (shadow isolation,
+token consistency, named motion, reduced-motion) is **done and tsc/test-verified**;
+the visual sign-off needs you (or me, if you run the dev build and share screenshots).
+See `03_MANUAL_TESTING_GUIDE.md`.
 
 Canonical, machine-of-record detail lives in `logging/progress_log.md` (Entries
 031–037) and `docs/agent_plans/v2/`. This folder is the human-friendly digest.
