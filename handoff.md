@@ -1,9 +1,61 @@
-# Handoff — ChatGPT Overlay Failures (Post Phase 1)
+# Handoff — v2/track-d-polish (In Progress)
 
-**Date:** 2026-06-09  
-**Branch:** `main` (HEAD: `9ee776d`)  
-**Author:** Claude Sonnet 4.6  
-**Status:** Three ChatGPT-specific overlay bugs remain unresolved. This document records what was attempted, what the actual root causes are, and what the next agent needs to do.
+**Date:** 2026-07-02
+**Branch:** `v2/track-d-polish`
+**Author:** Claude Sonnet 4.6
+**Status:** Tracks A–D partially complete. 10 commits landed since the Phase 1 ChatGPT bug session. Paused for macOS dev environment migration — resume exactly here.
+
+> **Migration note:** Development environment moving from WSL (MSI) to macOS. No code changes. Branch, state, and test baseline below are current.
+
+---
+
+## What Was Done Since Phase 1 (10 commits, Tracks A–D partial)
+
+| Commit | Track | What |
+|---|---|---|
+| `aa8c30d` | A3 | Centralized per-element cleanup registry — every DOM listener/observer has explicit teardown; fixes ghost-node memory leak (AUD-10) |
+| `4ed5e51` | A4 | Purged all stale "confidence underline" references from 5 skills + 3 source-of-truth docs (AUD-8) |
+| `1dfa22d` | A5 | Manual verification guide (`human/03_MANUAL_TESTING_GUIDE.md`) |
+| `dcab60c` | B1+B2 | Created `shared/design/` — portable design token set (colors, spacing, radii, elevation) + named motion system (snap/float/pulse) with `prefers-reduced-motion` |
+| `29a6db6` | B3 | Replaced all hardcoded magic values in `extension/src/content/index.ts` with tokens; reconciled 3 drifted clause accent colors (AUD-2) |
+| `5e67d06` | B4 | Redundant non-color clause encoding: leading glyph + underline texture variation per clause type (colorblind a11y, S-VIS-3) |
+| `ea3d956` | C1+C2 | Core extraction spike: canonical clause ordering extracted to `packages/core`; `InputSource`/`RenderTarget`/`TransportClient` contracts defined. State machine still in `index.ts` pending C3 test harness |
+| `5bb554a` | D partial | Tokens + named motion applied to popover, ghost panel, and toast shadow-DOM surfaces |
+| `7b60cb4` | docs | Human review hub updated |
+| `80075e0` | docs | Gap analysis updated — separates tsc/test-verified work from browser-gated certification |
+
+**Test baseline at HEAD (DO NOT regress these)**
+- `extension vitest`: 13 fail / 20 pass — the 13 are stale confidence-model tests, owned by Track C3, not regressions
+- `backend bun test`: 76 pass / 3 fail — the 3 are external Supabase email-rate-limit failures, not ours
+- Both `tsc`: 0 errors
+
+---
+
+## What Is NOT Done Yet — Resume Here
+
+### Track D remainder (highest priority)
+- Underline-overlay mirror not yet shadow-wrapped (the AUD-1 remainder)
+- Inter Variable font not bundled — falls back to system-ui
+- Onboarding / first-run coach marks (D3)
+
+### Browser-gated gates (cannot verify headless — do in Chrome)
+- G-1 axe accessibility scan
+- G-2 ±1px pixel parity check
+- G-4 cold-start timing
+- G-5 keyboard-only sweep
+Full guide: `human/03_MANUAL_TESTING_GUIDE.md`. Return briefing: `human/05_RETURN_BRIEFING.md`.
+
+### Track C3 (after Track D)
+- Test harness for core extraction — unlocks fixing the 13 stale vitest failures
+
+### ChatGPT overlay bugs from Phase 1 (deferred until Track D stable)
+See below for the full bug list. Fix order: BUG-REACT → BUG-GEOM → BUG-ZINDEX → BUG-ALIGN.
+
+---
+
+## ChatGPT Overlay Failures (Phase 1 — still open)
+
+**Original handoff date:** 2026-06-09
 
 ---
 

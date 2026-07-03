@@ -10,6 +10,7 @@ manual action, collected in one place. Read in order.
 | [02_OPEN_DECISIONS.md](02_OPEN_DECISIONS.md) | Every decision blocking further work (DEC-1…6, core-extraction calls, escalations) with my recommendation | **You must answer these to continue** |
 | [03_MANUAL_TESTING_GUIDE.md](03_MANUAL_TESTING_GUIDE.md) | Copy-pasteable guide to verify the Track A fixes on real sites (the gates I can't run headless) | Run this in a browser to sign off G-2/G-3 |
 | [04_REVIEW_CHECKLIST.md](04_REVIEW_CHECKLIST.md) | Concrete next actions in priority order | Your to-do list |
+| [05_RETURN_BRIEFING.md](05_RETURN_BRIEFING.md) | Full return-to-project guide: what was done, condensed Chrome test steps, and critical path to revenue | Start here after a break away from the project |
 
 ## State in one line
 

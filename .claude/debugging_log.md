@@ -11566,3 +11566,52 @@ src/services/supabase.ts(3,46): error TS2307: Cannot find module '../../shared/c
 
 **Verification Result:** ✅ No TypeScript errors
 
+
+---
+## Session End — 2026-06-15 04:47:06Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+---
+
+### Debug Entry — 2026-06-15
+
+**Task:** Track C — establish packages/core consumed via relative import like shared/.
+**File:** extension/src/content/index.ts:3 and clause-order.core.test.ts:7 (TS2307 cannot find module '../../../packages/core')
+**Symptom:** First tsc after wiring the new core package failed: "Cannot find module '../../../packages/core'". Cascaded into TS7006 implicit-any in the test (unresolved import collapsed generics to any).
+**Root cause:** I placed the package barrel at `packages/core/src/index.ts`, but the import targets the directory `packages/core`, which resolves to `packages/core/index.ts` (root), not `src/index.ts`. `shared/contracts` works because its barrel sits at the directory root. Directory-import resolution needs an index at the imported directory level.
+**Active skills:** scope-creep-guard, typescript-safety, canonical-clause-ordering.
+**Skill gap:** typescript-safety covers no-any/Zod boundaries but not module-resolution mechanics for new directory-imported packages. Minor/structural, not a correctness bug.
+**Resolution:** Added `packages/core/index.ts` re-exporting `./src/index`. tsc → 0; the implicit-any cascade cleared once the module resolved.
+**Lesson:** When adding a new directory-imported package consumed by relative path, place a barrel at the imported directory root (mirror `shared/contracts/index.ts`), or import the explicit `/src` path. Verify with tsc before writing the consuming test. (Also: capture the test-runner baseline BEFORE editing — I compared fail counts via `git stash` after the fact this run; doing it first is cleaner.)
+
+
+---
+## Session End — 2026-06-15 06:38:42Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-06-15 06:45:49Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-06-15 13:11:46Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-06-27 05:16:57Z
+
+**Verification Result:** ✅ No TypeScript errors
+
+
+---
+## Session End — 2026-06-30 02:12:43Z
+
+**Verification Result:** ✅ No TypeScript errors
+

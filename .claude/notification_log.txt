@@ -582,3 +582,107 @@
   Message: Claude Code is waiting for your approval or input
   Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
 
+[04:48:07Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[05:37:00Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[05:38:50Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[05:47:00Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[05:49:31Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[05:49:53Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[05:50:22Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[05:54:06Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[05:56:39Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:04:06Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:06:31Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:09:30Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:17:41Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:20:04Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:21:30Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:24:46Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:26:38Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:30:26Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:31:43Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:32:25Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:34:38Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:57:04Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[13:12:46Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[06:33:30Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[01:57:26Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[02:13:43Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
