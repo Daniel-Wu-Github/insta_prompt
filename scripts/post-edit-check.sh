@@ -6,7 +6,7 @@
 
 set -uo pipefail
 
-PROJECT_DIR="/home/seed/projects/insta_prompt"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ERRORS_TMP="$PROJECT_DIR/.claude/session_errors.tmp"
 LAST_CHECK_FILE="$PROJECT_DIR/.claude/last_tsc_check.tmp"
 CONFIG_FILE="$PROJECT_DIR/.claude/config"

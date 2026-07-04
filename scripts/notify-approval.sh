@@ -5,7 +5,7 @@
 
 set -uo pipefail
 
-PROJECT_DIR="/home/seed/projects/insta_prompt"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 NOTIFY="$PROJECT_DIR/scripts/notify.sh"
 LOG_FILE="$PROJECT_DIR/.claude/notification_log.txt"
 
