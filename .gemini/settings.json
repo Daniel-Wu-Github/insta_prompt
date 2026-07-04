@@ -1,0 +1,43 @@
+{
+  "env": {
+    "NTFY_CHANNEL_URL": "https://ntfy.sh/claude-termius-daniel",
+    "NTFY_PROJECT_TITLE": "insta_prompt"
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "name": "notify-approval",
+            "type": "command",
+            "command": "bash $GEMINI_PROJECT_DIR/scripts/gemini-hook-adapter.sh Notification"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "name": "session-summary",
+            "type": "command",
+            "command": "bash $GEMINI_PROJECT_DIR/scripts/gemini-hook-adapter.sh SessionEnd"
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": "(write_file|replace)",
+        "hooks": [
+          {
+            "name": "post-edit-check",
+            "type": "command",
+            "command": "bash $GEMINI_PROJECT_DIR/scripts/gemini-hook-adapter.sh AfterTool"
+          }
+        ]
+      }
+    ]
+  }
+}

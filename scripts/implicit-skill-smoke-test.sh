@@ -1,0 +1,1 @@
+../../ai-workflow/scripts/implicit-skill-smoke-test.sh
