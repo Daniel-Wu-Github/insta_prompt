@@ -14,14 +14,30 @@ import { duration, easing } from "./motion";
 /**
  * Token custom properties + the named motion keyframes + the global
  * reduced-motion guard, ready to prepend to any shadow root's <style>.
+ *
+ * `options.fontUrl` — extension-resolved URL of the bundled Inter Variable
+ * woff2 (Track D). Passed in by the caller because this module is a pure
+ * string builder with no chrome.* access; when absent (tests, non-extension
+ * surfaces) the `--pc-font-family` stack falls through to system-ui exactly
+ * as before.
  */
-export function shadowBaseCss(theme: Theme = "dark"): string {
+export function shadowBaseCss(theme: Theme = "dark", options?: { fontUrl?: string }): string {
 	const vars = tokensToCssVars(theme)
 		.split("\n")
 		.map((line) => `\t${line}`)
 		.join("\n");
+	const fontFace = options?.fontUrl
+		? `@font-face {
+	font-family: "Inter Variable";
+	font-style: normal;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url("${options.fontUrl}") format("woff2-variations");
+}
+`
+		: "";
 	return `
-:host {
+${fontFace}:host {
 ${vars}
 }
 @keyframes pc-float-in {

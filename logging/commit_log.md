@@ -1334,3 +1334,273 @@ Entries are grouped by branch and extend commit messages with file-level change 
     - Files:
       - M .claude/notification_log.txt
       - M logging/commit_log.md
+
+## Branch: v2/track-d-polish
+
+### 2026-07-03 04:02:13Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/v2/track-d-polish
+- Range: new branch up to 900dcb31d4160a09777c386e3009383816aa26d0
+- Commits:
+  - 85ea961 extension pop up ui rework
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T00:09:54-05:00
+    - Purpose: This commit adds 2, modifies 9 across extension.
+    - Files:
+      - M extension/bun.lock
+      - M extension/package.json
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - A extension/src/popup/components/LoadingSpinner.tsx
+      - M extension/src/popup/components/ModeToggle.tsx
+      - M extension/src/popup/components/ProjectSelector.tsx
+      - M extension/src/popup/components/UpgradeCTA.tsx
+      - M extension/src/popup/main.tsx
+      - A extension/src/popup/style.css
+      - M extension/wxt.config.ts
+  - 64119fa round 1 phase 1 bug patch, daily limits and account and reset timer
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T17:42:44-05:00
+    - Purpose: This commit adds 1, modifies 2 across backend.
+    - Files:
+      - A backend/shared
+      - M backend/src/routes/account.ts
+      - M backend/src/services/rateLimit.ts
+  - a6f33dc pre phase 2
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T17:46:47-05:00
+    - Purpose: This commit modifies 9 across .claude, docs, extension.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/session_errors.tmp
+      - M .claude/skill_memory_cursor.tmp
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - M extension/src/popup/hooks/useAccountStatus.ts
+  - 70b14a3 round 1 phase 2, login, pause toggle, and search bar
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T18:04:37-05:00
+    - Purpose: This commit adds 2, modifies 2 across extension.
+    - Files:
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/PauseToggle.tsx
+      - A extension/src/popup/hooks/usePause.ts
+  - 6033f00 Phase 2 complete: fix bridge wire contract, pause greying, hover legend
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T00:22:58-05:00
+    - Purpose: - Strip content-only `paused` field from SEGMENT bridge message before
+    - Files:
+      - M .claude/debugging_log.md
+      - A docs/VISUAL_LEGEND.md
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/content/index.ts
+  - ad7a8f4 Pre-Phase-3: document segment classification tuning investigation
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T19:56:02-05:00
+    - Purpose: - Add docs/testing-notes/segment-classification-tuning.md documenting the
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - A docs/testing-notes/segment-classification-tuning.md
+  - 3088bae Phase 3: cursor-relative popover, clause-aware header, legend HUD, bind feedback
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T20:04:45-05:00
+    - Purpose: BUG-2.2 — Hover popover now anchors to the cursor (clientX/Y, 18px below) instead
+    - Files:
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/ClauseOrderingToggle.tsx
+      - A extension/src/popup/hooks/useClauseOrdering.ts
+  - 8f07238 round 1 phase 3, debugging confidence = 0 issue
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-30T02:25:33-05:00
+    - Purpose: This commit adds 2, modifies 10 across .claude, backend, extension.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - M backend/Dockerfile
+      - M backend/src/services/routeHandlers.ts
+      - M backend/src/services/segment.ts
+      - M extension/src/background/index.ts
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/ModelOverrideToggle.tsx
+      - A extension/src/popup/hooks/useModelOverride.ts
+  - 89393be Round 2 testing: bug logging, self-improvement cleanup, BUG-3.2 fix
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-31T01:52:04-05:00
+    - Purpose: - Fix BUG-3.2: insert zero-width break span between adjacent underlined segments
+    - Files:
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - M CLAUDE.md
+      - A docs/testing-notes/round2_testing_notes.md
+      - M extension/src/content/index.ts
+      - D scripts/analyze-patterns.sh
+      - D scripts/implicit-skill-smoke-test.sh
+      - M scripts/session-end.sh
+      - D scripts/smoke-tests.sh
+  - 9ee776d Phase 1: remove confidence, Escape-COMPLETE fix, clear detection, overlay clip, unsupported toast
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-31T02:30:01-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    - Files:
+      - M backend/src/__tests__/segment.route.test.ts
+      - M backend/src/__tests__/segment.service.test.ts
+      - M backend/src/lib/schemas.ts
+      - M backend/src/services/routeHandlers.ts
+      - M backend/src/services/segment.ts
+      - M extension/src/content/index.ts
+      - M shared/contracts/domain.ts
+  - 2c9407b Document ChatGPT overlay failures: BUG-REACT, BUG-GEOM, BUG-ZINDEX
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-09T21:11:04-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    - Files:
+      - M .claude/debugging_log.md
+      - A handoff.md
+  - b6a6be0 Fix P0/P1 overlay+segmentation bugs; add V2 UI/UX mega-plan
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:45:08-05:00
+    - Purpose: P0/P1 fixes (from handoff.md + round2 testing notes):
+    - Files:
+      - M .gitignore
+      - M backend/src/services/segment.ts
+      - A docs/agent_plans/v2/v2_uiux_megaplan.md
+      - M extension/src/content/index.ts
+  - 1bb6907 chore: sweep session bookkeeping (hook logs, tsc/skill state)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:45:27-05:00
+    - Purpose: Transient files updated by the session hooks (debugging_log, notification_log,
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/session_errors.tmp
+      - M .claude/skill_memory_cursor.tmp
+  - be9900f chore: commit pre-push log for previous push
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:46:48-05:00
+    - Purpose: Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    - Files:
+      - M .claude/notification_log.txt
+      - M logging/commit_log.md
+  - aa8c30d track A3: centralized per-element cleanup registry (AUD-10 / G-3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T00:52:08-05:00
+    - Purpose: Exit criteria met:
+    - Files:
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+  - 4ed5e51 track A4: purge confidence doc/skill drift post-DECISION-1 (AUD-8)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:04:14-05:00
+    - Purpose: Confidence was removed from LLM/schemas/UI (DECISION-1) but lingered in skills and
+    - Files:
+      - M .github/skills/SKILL_MAP.md
+      - M .github/skills/content-script-instrumentation/SKILL.md
+      - M .github/skills/typescript-safety/SKILL.md
+      - M .github/skills/ui-design-system/SKILL.md
+      - M .github/skills/underline-preview-rendering/SKILL.md
+      - M docs/BACKEND_API.md
+      - M docs/CLAUSE_PIPELINE.md
+      - M docs/UX_FLOW.md
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+  - 1dfa22d track A5: manual verification guide + escalations (A1/A3/G-2/G-3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:05:40-05:00
+    - Purpose: Runnable guide for the Track A runtime gates that need a live browser (G-2 pixel
+    - Files:
+      - A docs/testing-notes/v2-track-a-manual-verification.md
+      - M logging/progress_log.md
+  - dcab60c track B1+B2: portable design tokens + motion system (AUD-2)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:17:45-05:00
+    - Purpose: Canonical design-system layer as pure TS (no DOM imports -> moves into
+    - Files:
+      - A extension/src/content/__tests__/design-tokens.test.ts
+      - M logging/progress_log.md
+      - A shared/design/index.ts
+      - A shared/design/motion.ts
+      - A shared/design/tokens.ts
+  - 29a6db6 track B3: tokenize content-script render constants (AUD-2)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:22:44-05:00
+    - Purpose: Draft-render path now sources visual constants from shared/design tokens:
+    - Files:
+      - M extension/src/content/__tests__/design-tokens.test.ts
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+      - M shared/design/tokens.ts
+  - 5e67d06 track B4: redundant non-color clause encoding (S-VIS-3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:27:02-05:00
+    - Purpose: Each clause type is now legible without color (color-blind redundancy):
+    - Files:
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+  - ea3d956 track C1+C2: core extraction boundary spike + canonical-order slice (DEC-2)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:36:39-05:00
+    - Purpose: ATTEMPT-ONLY, STOP FOR REVIEW — does not include the high-risk state-machine
+    - Files:
+      - A docs/agent_plans/v2/c1_core_boundary_spike.md
+      - A extension/src/content/__tests__/clause-order.core.test.ts
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+      - A packages/core/README.md
+      - A packages/core/index.ts
+      - A packages/core/src/adapter.ts
+      - A packages/core/src/clause-order.ts
+      - A packages/core/src/index.ts
+      - A packages/core/src/transport.ts
+  - 7b60cb4 docs(human): review hub for V2 mega-plan pass
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:45:25-05:00
+    - Purpose: Consolidated human-review materials: run summary, gap analysis (AUD-1..12 +
+    - Files:
+      - A human/00_RUN_SUMMARY.md
+      - A human/01_GAP_ANALYSIS.md
+      - A human/02_OPEN_DECISIONS.md
+      - A human/03_MANUAL_TESTING_GUIDE.md
+      - A human/04_REVIEW_CHECKLIST.md
+      - A human/README.md
+  - 5bb554a track D (partial): apply design system + motion to shadow surfaces (AUD-1/2/3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T08:10:16-05:00
+    - Purpose: Scope expanded per user direction (professional-grade UI). The popover, ghost
+    - Files:
+      - M extension/src/content/__tests__/design-tokens.test.ts
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+      - A shared/design/css.ts
+      - M shared/design/index.ts
+  - 80075e0 docs(human): reflect Track D progress + the browser-gated pixel/axe reality
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T08:11:23-05:00
+    - Purpose: Updates the review hub after the scope expansion: AUD-1/2/3 statuses, the
+    - Files:
+      - M human/00_RUN_SUMMARY.md
+      - M human/01_GAP_ANALYSIS.md
+      - M human/README.md
+  - 900dcb3 WIP: Tracks A-D partial — paused for macOS migration
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-07-02T22:55:44-05:00
+    - Purpose: 10 commits landed: cleanup registry (A3), stale-ref purge (A4), manual test guide (A5),
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/skill_memory_cursor.tmp
+      - M handoff.md
+      - A human/05_RETURN_BRIEFING.md
+      - M human/README.md
+      - M logging/commit_log.md

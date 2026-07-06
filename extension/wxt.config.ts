@@ -18,6 +18,14 @@ export default defineConfig({
 		// leaves the content script to third-party origins.
 		permissions: ["storage", "alarms"],
 		host_permissions: ["<all_urls>"],
+		// The bundled Inter Variable font is fetched from host-page context (shadow
+		// roots injected by the content script), which requires it to be web-accessible.
+		web_accessible_resources: [
+			{
+				resources: ["fonts/InterVariable.woff2"],
+				matches: ["<all_urls>"],
+			},
+		],
 	},
 	modules: ["@wxt-dev/module-react"],
 	vite: () => ({

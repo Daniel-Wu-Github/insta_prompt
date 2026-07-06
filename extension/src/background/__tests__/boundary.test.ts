@@ -129,7 +129,10 @@ describe("background boundary validation", () => {
 
 		expect(accepted).toBe(true);
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		expect(sendResponse).toHaveBeenCalledWith({ accessToken: null });
+		// The mocked refresh endpoint succeeds with token "new-access-token", and the
+		// handler responds { accessToken } on success ({ accessToken: null } is the
+		// CATCH path only). The previous assertion had these two cases inverted.
+		expect(sendResponse).toHaveBeenCalledWith({ accessToken: "new-access-token" });
 	});
 
 	it("rejects bridge ports that are not attached to a tab", async () => {

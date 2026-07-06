@@ -2,6 +2,22 @@ import { GOAL_TYPE_VALUES, MODE_VALUES, type GoalType, type Mode, type SegmentRe
 import { brand, clauseAccent, clauseEncoding, motionPreset, rgba, sectionState, shadowBaseCss, transition as motionTransition, zIndex } from "../../../shared/design";
 import { CANONICAL_ORDER_BY_GOAL_TYPE, GOAL_TYPES_IN_CANONICAL_ORDER } from "../../../packages/core";
 
+// Idempotency marker source of truth. React (ChatGPT, Claude.ai, etc.) strips
+// unknown HTML attributes during reconciliation, so an attribute-based check
+// (BUG-REACT) gives false negatives — re-instrumenting live inputs, stacking
+// duplicate listeners, and firing the unsupported-input toast on supported
+// inputs. A WeakSet keyed on the element survives reconciliation and is
+// GC-safe. The attribute is still written, but only for DevTools visibility.
+// MODULE scope (content-script-instrumentation rule 8), not main() scope, so
+// instrumentation stays idempotent even if main() runs more than once in a
+// single script context.
+const _instrumentedElements = new WeakSet<Element>();
+// Per-element teardown registry (dom-memory-management Rule 3). Every listener and
+// observer attached in markInstrumented registers its disposer here so element
+// removal (SPA churn) or content-script invalidation can fully tear down — no
+// orphaned MutationObserver pinning a detached input in memory (AUD-10 / G-3).
+const _instrumentCleanups = new Map<Element, Array<() => void>>();
+
 export default defineContentScript({
 	matches: ["<all_urls>"],
 	runAt: "document_idle",
@@ -12,18 +28,6 @@ export default defineContentScript({
 		const CLAUSE_ORDERING_STORAGE_KEY = "promptcompiler.clauseOrdering";
 		const INSTRUMENTED_ATTRIBUTE = "data-insta-instrumented";
 		const INSTRUMENTED_VALUE = "true";
-		// Idempotency marker source of truth. React (ChatGPT, Claude.ai, etc.) strips
-		// unknown HTML attributes during reconciliation, so an attribute-based check
-		// (BUG-REACT) gives false negatives — re-instrumenting live inputs, stacking
-		// duplicate listeners, and firing the unsupported-input toast on supported
-		// inputs. A WeakSet keyed on the element survives reconciliation and is
-		// GC-safe. The attribute is still written, but only for DevTools visibility.
-		const _instrumentedElements = new WeakSet<Element>();
-		// Per-element teardown registry (dom-memory-management Rule 3). Every listener and
-		// observer attached in markInstrumented registers its disposer here so element
-		// removal (SPA churn) or content-script invalidation can fully tear down — no
-		// orphaned MutationObserver pinning a detached input in memory (AUD-10 / G-3).
-		const _instrumentCleanups = new Map<Element, Array<() => void>>();
 		const DEBOUNCE_DELAY_MS = 400;
 		const DEFAULT_BRIDGE_MODE: Mode = "balanced";
 		const BRIDGE_FALLBACK_JWT = "promptcompiler-dev-jwt";
@@ -34,6 +38,13 @@ export default defineContentScript({
 		// instead of inline magic values. Values are unchanged — the token set was
 		// authored to match exactly — so this is behavior-preserving.
 		const DRAFT_OVERLAY_Z_INDEX = String(zIndex.overlayCeiling);
+		// Track D: bundled Inter Variable, served from the extension's own origin so
+		// every shadow surface renders the design-system font instead of system-ui.
+		// Guarded because the jsdom test harness stubs `chrome` without runtime.getURL.
+		const extensionFontUrl: string | undefined =
+			typeof chrome !== "undefined" && chrome.runtime?.getURL
+				? chrome.runtime.getURL("fonts/InterVariable.woff2")
+				: undefined;
 		const DRAFT_STALE_OPACITY = String(sectionState.stale.opacity);
 		const DRAFT_ACCEPTED_OPACITY = String(sectionState.accepted.opacity);
 		const DRAFT_ACCEPTED_STALE_OPACITY = String(sectionState.acceptedStale.opacity);
@@ -427,7 +438,7 @@ export default defineContentScript({
 
 			const shadowRoot = containerElement.attachShadow({ mode: "open" });
 			const styleElement = document.createElement("style");
-			styleElement.textContent = `${shadowBaseCss("dark")}
+			styleElement.textContent = `${shadowBaseCss("dark", { fontUrl: extensionFontUrl })}
 :host {
 	all: initial;
 	position: fixed;
@@ -1044,6 +1055,20 @@ export default defineContentScript({
 			applyDraftGoalTypePalette(hostElement);
 			applyDraftOverlayFreshness(hostElement, false);
 
+			// D1 (AUD-1): the mirror content lives in its own shadow root, like the
+			// popover/ghost/toast surfaces, so host-page stylesheets (e.g. a site rule
+			// like `div span { text-decoration: none !important }`) cannot reach the
+			// underline spans. The font/wrap mirror styles copied onto the host are
+			// INLINE, so they win over :host{all:initial} and still inherit into the
+			// shadow tree — the geometry contract with the source element is unchanged.
+			const shadowRoot = hostElement.attachShadow({ mode: "open" });
+			const overlayStyleElement = document.createElement("style");
+			overlayStyleElement.textContent = `${shadowBaseCss("dark", { fontUrl: extensionFontUrl })}
+:host {
+	all: initial;
+}
+`;
+
 			const contentElement = document.createElement("div");
 			contentElement.style.position = "absolute";
 			contentElement.style.inset = "0";
@@ -1060,7 +1085,7 @@ export default defineContentScript({
 			contentElement.style.whiteSpace = "inherit";
 			contentElement.style.transformOrigin = "top left";
 
-			hostElement.appendChild(contentElement);
+			shadowRoot.append(overlayStyleElement, contentElement);
 			getOverlayContainer().appendChild(hostElement);
 
 			return { hostElement, contentElement };
@@ -1620,7 +1645,7 @@ export default defineContentScript({
 
 			const shadow = containerElement.attachShadow({ mode: "open" });
 			const style = document.createElement("style");
-			style.textContent = `${shadowBaseCss("dark")}
+			style.textContent = `${shadowBaseCss("dark", { fontUrl: extensionFontUrl })}
 :host {
 	all: initial;
 	position: fixed;
@@ -1745,7 +1770,7 @@ export default defineContentScript({
 
 			const shadow = container.attachShadow({ mode: "open" });
 			const style = document.createElement("style");
-			style.textContent = `${shadowBaseCss("dark")}
+			style.textContent = `${shadowBaseCss("dark", { fontUrl: extensionFontUrl })}
 :host { all: initial; pointer-events: none; }
 [data-unsupported-toast] {
 	all: initial;

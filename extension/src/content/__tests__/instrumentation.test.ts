@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createContentChromeMock, createContentScriptCtx, DEFAULT_TEST_AUTH } from "../../test/chrome-mock";
 
 type ListenerRegistration = {
 	target: EventTarget;
@@ -23,7 +24,7 @@ type TrackedResizeObserver = {
 
 type ContentScriptModule = {
 	default: {
-		main: () => void;
+		main: (ctx: { onInvalidated: (callback: () => void) => void }) => void;
 	};
 };
 
@@ -34,11 +35,14 @@ let listenerRegistrations: ListenerRegistration[] = [];
 let trackedObservers: MutationObserver[] = [];
 let trackedResizeObservers: TrackedResizeObserver[] = [];
 let lastConnectMock: ReturnType<typeof vi.fn> | undefined;
-const DEFAULT_AUTH = {
-	access_token: "test-jwt",
-	refresh_token: "test-refresh-token",
-	expires_at: Date.now() + 3_600_000,
-};
+const DEFAULT_AUTH = DEFAULT_TEST_AUTH;
+
+// D1: the overlay mirror content now lives inside the host's shadow root
+// ([style, contentElement]), so tests pierce it instead of walking light-DOM
+// children. The host element itself still carries the geometry inline styles.
+function getOverlayContent(overlay: HTMLElement): HTMLDivElement | null {
+	return overlay.shadowRoot?.querySelector("div") ?? null;
+}
 
 function defineContentEditable(element: HTMLElement): void {
 	Object.defineProperty(element, "isContentEditable", {
@@ -131,7 +135,31 @@ function createMockComputedStyle(overrides: Partial<Record<string, string>> = {}
 		pointerEvents: "auto",
 		userSelect: "auto",
 		...overrides,
+		// BUG-ALIGN copies tab-size / text-rendering / font-optical-sizing via
+		// getPropertyValue (they are not camelCase style fields).
+		getPropertyValue: (property: string): string => {
+			const hyphenless: Record<string, string> = {
+				"tab-size": "8",
+				"text-rendering": "auto",
+				"font-optical-sizing": "auto",
+			};
+			return hyphenless[property] ?? "";
+		},
 	} as unknown as CSSStyleDeclaration;
+}
+
+// Post-BUG-GEOM, overlay geometry derives from clientWidth/clientHeight (the
+// self-clip content box), which jsdom always reports as 0. Mirror the mocked
+// bounding rect so the overlay sizes the way a real browser would.
+function mockClientBox(element: HTMLElement, rectRef: () => { width: number; height: number }): void {
+	Object.defineProperty(element, "clientWidth", {
+		configurable: true,
+		get: () => rectRef().width,
+	});
+	Object.defineProperty(element, "clientHeight", {
+		configurable: true,
+		get: () => rectRef().height,
+	});
 }
 
 function installTestGlobals(): { connectMock: ReturnType<typeof vi.fn> } {
@@ -179,17 +207,12 @@ function installTestGlobals(): { connectMock: ReturnType<typeof vi.fn> } {
 	}
 
 	vi.stubGlobal("defineContentScript", (config: unknown) => config);
-	const storageLocalGetMock = vi.fn(async () => ({ ["promptcompiler.auth"]: DEFAULT_AUTH }));
-	const storageSessionGetMock = vi.fn(async () => ({ ["promptcompiler.auth"]: DEFAULT_AUTH }));
-	const storageSyncGetMock = vi.fn(async () => ({}));
-	vi.stubGlobal("chrome", {
-		runtime: { connect: connectMock, id: "test-extension-id" },
-		storage: {
-			local: { get: storageLocalGetMock },
-			session: { get: storageSessionGetMock },
-			sync: { get: storageSyncGetMock },
-		},
-	});
+	// C3: chrome surface comes from the shared fixture (includes storage.onChanged,
+	// whose absence crashed main() and produced 7 of the 13 stale failures here).
+	const chromeMock = createContentChromeMock({ auth: DEFAULT_AUTH });
+	// Keep this file's bridge-port tracker pointed at the shared connect mock.
+	(chromeMock.chromeStub.runtime as { connect: typeof connectMock }).connect = connectMock;
+	vi.stubGlobal("chrome", chromeMock.chromeStub);
 	vi.stubGlobal("CSS", { highlights: undefined });
 	vi.stubGlobal("ResizeObserver", TrackingResizeObserver as unknown as typeof ResizeObserver);
 	vi.stubGlobal("MutationObserver", TrackingMutationObserver as unknown as typeof MutationObserver);
@@ -261,7 +284,7 @@ describe("content script instrumentation", () => {
 		const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
 		const contentScript = await loadContentScript();
-		contentScript.main();
+		contentScript.main(createContentScriptCtx());
 
 		const textarea = document.getElementById("notes") as HTMLTextAreaElement;
 
@@ -271,7 +294,7 @@ describe("content script instrumentation", () => {
 		expect(countListenerRegistrations(editor, "input")).toBe(1);
 		expect(consoleLogSpy.mock.calls.filter((call) => call[0] === "Found valid input:")).toHaveLength(2);
 
-		contentScript.main();
+		contentScript.main(createContentScriptCtx());
 
 		expect(countListenerRegistrations(textarea, "input")).toBe(1);
 		expect(countListenerRegistrations(editor, "input")).toBe(1);
@@ -295,7 +318,7 @@ describe("content script instrumentation", () => {
 		const abortSpy = vi.spyOn(AbortController.prototype, "abort");
 
 		const contentScript = await loadContentScript();
-		contentScript.main();
+		contentScript.main(createContentScriptCtx());
 		consoleLogSpy.mockClear();
 		const bridgePort = getLastBridgePort();
 
@@ -340,7 +363,7 @@ describe("content script instrumentation", () => {
 		const textarea = document.getElementById("notes") as HTMLTextAreaElement;
 
 		const contentScript = await loadContentScript();
-		contentScript.main();
+		contentScript.main(createContentScriptCtx());
 
 		getChromeStorageGetMock("local").mockResolvedValue({
 			["promptcompiler.settings"]: {
@@ -378,7 +401,7 @@ describe("content script instrumentation", () => {
 		const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
 		const contentScript = await loadContentScript();
-		contentScript.main();
+		contentScript.main(createContentScriptCtx());
 		consoleLogSpy.mockClear();
 
 		const host = document.getElementById("host") as HTMLElement;
@@ -444,9 +467,10 @@ describe("content script instrumentation", () => {
 			configurable: true,
 			value: () => rect,
 		});
+		mockClientBox(textarea, () => rect);
 
 		const contentScript = await loadContentScript();
-		contentScript.main();
+		contentScript.main(createContentScriptCtx());
 
 		textarea.dispatchEvent(new Event("input", { bubbles: true }));
 		await vi.advanceTimersByTimeAsync(400);
@@ -479,7 +503,7 @@ describe("content script instrumentation", () => {
 		textarea.scrollLeft = 17;
 		textarea.dispatchEvent(new Event("scroll", { bubbles: true }));
 
-		const overlayContent = overlay.firstElementChild as HTMLDivElement | null;
+		const overlayContent = getOverlayContent(overlay);
 		expect(overlayContent).not.toBeNull();
 		if (!overlayContent) {
 			throw new Error("Expected mirror overlay content to render");
@@ -528,9 +552,10 @@ describe("content script instrumentation", () => {
 			configurable: true,
 			value: () => rect,
 		});
+		mockClientBox(textarea, () => rect);
 
 		const contentScript = await loadContentScript();
-		contentScript.main();
+		contentScript.main(createContentScriptCtx());
 
 		textarea.dispatchEvent(new Event("input", { bubbles: true }));
 		await vi.advanceTimersByTimeAsync(400);
@@ -544,7 +569,7 @@ describe("content script instrumentation", () => {
 			throw new Error("Expected mirror overlay to render");
 		}
 
-		const overlayContent = overlay.firstElementChild as HTMLDivElement | null;
+		const overlayContent = getOverlayContent(overlay);
 		expect(overlayContent).not.toBeNull();
 		if (!overlayContent) {
 			throw new Error("Expected mirror overlay content to render");
@@ -574,12 +599,14 @@ describe("content script instrumentation", () => {
 		expect(overlay.style.letterSpacing).toBe("1.25px");
 		expect(overlay.style.paddingTop).toBe("0px");
 		expect(overlay.style.whiteSpace).toBe("pre-wrap");
-		expect(overlay.style.getPropertyValue("--insta-goal-type-action-color")).toBe("rgb(124 58 237)");
-		expect(overlay.style.getPropertyValue("--insta-goal-type-tech-stack-color")).toBe("rgb(15 118 110)");
-		expect(overlay.style.getPropertyValue("--insta-goal-type-context-color")).toBe("rgb(217 119 6)");
-		expect(overlay.style.getPropertyValue("--insta-goal-type-constraint-color")).toBe("rgb(244 63 94)");
-		expect(overlay.style.getPropertyValue("--insta-goal-type-edge-case-color")).toBe("rgb(107 114 128)");
-		expect(overlay.style.getPropertyValue("--insta-goal-type-output-format-color")).toBe("rgb(29 78 216)");
+		// AUD-2: palette values come from the locked design tokens (clauseAccent),
+		// stored as hex. The old rgb() literals predate the tokenization.
+		expect(overlay.style.getPropertyValue("--insta-goal-type-action-color")).toBe("#7c3aed");
+		expect(overlay.style.getPropertyValue("--insta-goal-type-tech-stack-color")).toBe("#0d9488");
+		expect(overlay.style.getPropertyValue("--insta-goal-type-context-color")).toBe("#d97706");
+		expect(overlay.style.getPropertyValue("--insta-goal-type-constraint-color")).toBe("#e11d48");
+		expect(overlay.style.getPropertyValue("--insta-goal-type-edge-case-color")).toBe("#6b7280");
+		expect(overlay.style.getPropertyValue("--insta-goal-type-output-format-color")).toBe("#2563eb");
 		expect(overlay.style.opacity).toBe("1");
 
 		for (const segment of segmentSpans) {
@@ -609,7 +636,7 @@ describe("content script instrumentation", () => {
 
 		expect(refreshedOverlay.style.opacity).toBe("1");
 
-		const refreshedContent = refreshedOverlay.firstElementChild as HTMLDivElement | null;
+		const refreshedContent = getOverlayContent(refreshedOverlay);
 		expect(refreshedContent).not.toBeNull();
 		if (!refreshedContent) {
 			throw new Error("Expected refreshed mirror overlay content to render");
@@ -666,23 +693,25 @@ describe("content script instrumentation", () => {
 		textarea.style.padding = "8px 12px";
 		textarea.style.whiteSpace = "pre-wrap";
 
+		const hoverRect = {
+			x: 40,
+			y: 60,
+			left: 40,
+			top: 60,
+			width: 320,
+			height: 160,
+			right: 360,
+			bottom: 220,
+			toJSON: () => undefined,
+		} as DOMRect;
 		Object.defineProperty(textarea, "getBoundingClientRect", {
 			configurable: true,
-			value: () => ({
-				x: 40,
-				y: 60,
-				left: 40,
-				top: 60,
-				width: 320,
-				height: 160,
-				right: 360,
-				bottom: 220,
-				toJSON: () => undefined,
-			} as DOMRect),
+			value: () => hoverRect,
 		});
+		mockClientBox(textarea, () => hoverRect);
 
 		const contentScript = await loadContentScript();
-		contentScript.main();
+		contentScript.main(createContentScriptCtx());
 
 		textarea.dispatchEvent(new Event("input", { bubbles: true }));
 		await vi.advanceTimersByTimeAsync(400);
@@ -693,7 +722,7 @@ describe("content script instrumentation", () => {
 			throw new Error("Expected overlay to render before hovering");
 		}
 
-		const firstSpan = overlay.querySelector('span[data-goal-type][data-segment-index="0"]') as HTMLSpanElement | null;
+		const firstSpan = overlay.shadowRoot?.querySelector('span[data-goal-type][data-segment-index="0"]') as HTMLSpanElement | null;
 		expect(firstSpan).not.toBeNull();
 		if (!firstSpan) {
 			throw new Error("Expected first semantic underline span to render");
@@ -724,8 +753,10 @@ describe("content script instrumentation", () => {
 
 		expect(hoverPopover.style.position).toBe("fixed");
 		expect(hoverPopover.style.zIndex).toBe("2147483647");
-		expect(hoverPopover.style.left).toBe("120px");
-		expect(hoverPopover.style.top).toBe("120px");
+		// BUG-2.2: the popover anchors to the CURSOR (clientX/Y = 140,100), offset
+		// 18px below it — not to the clause span rect the old assertions assumed.
+		expect(hoverPopover.style.left).toBe("140px");
+		expect(hoverPopover.style.top).toBe("118px");
 		expect(hoverPopover.shadowRoot).not.toBeNull();
 		expect(hoverPopover.shadowRoot?.querySelector("style")).not.toBeNull();
 		expect(hoverPopover.shadowRoot?.querySelector('[data-draft-hover-panel="true"]')).not.toBeNull();
