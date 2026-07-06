@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Linear-shaped issue editor</title>
+<style>
+	body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #101012; color: #e8e8e8; }
+	#app main { max-width: 640px; margin: 80px auto; }
+	.editor-root { outline: none; min-height: 100px; font: 15px/1.6 ui-sans-serif, system-ui, sans-serif; white-space: pre-wrap; border: 1px solid #2c2c31; border-radius: 8px; padding: 10px 12px; background: #17171a; }
+	.editor-root p { margin: 0; }
+</style>
+<script>
+	// SPA route-change simulation: tears down <main> and mounts a fresh copy
+	// (the A1/A3 detach-reattach drill from the manual guide).
+	window.__spaNavigate = () => {
+		const app = document.getElementById("app");
+		const main = app.querySelector("main");
+		const html = main.outerHTML.replace(/ data-insta-instrumented="[^"]*"/g, "");
+		main.remove();
+		requestAnimationFrame(() => {
+			app.insertAdjacentHTML("beforeend", html);
+		});
+	};
+</script>
+</head>
+<body>
+<div id="app">
+	<main>
+		<h1>New issue</h1>
+		<div class="editor-root" contenteditable="true" role="textbox" aria-label="Issue description"><p><br></p></div>
+	</main>
+</div>
+</body>
+</html>

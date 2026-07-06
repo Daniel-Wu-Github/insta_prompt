@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gmail-shaped compose</title>
+<style>
+	body { margin: 0; font-family: Roboto, Arial, sans-serif; }
+	.compose { position: fixed; right: 40px; bottom: 0; width: 540px; border: 1px solid #dadce0; border-radius: 8px 8px 0 0; box-shadow: 0 8px 10px rgba(0,0,0,.2); background: #fff; }
+	.compose-header { background: #f2f6fc; padding: 10px 16px; font-size: 14px; }
+	[aria-label="Message Body"] { min-height: 220px; max-height: 320px; overflow-y: auto; outline: none; font: 13px/1.5 Arial, sans-serif; padding: 12px 16px; white-space: pre-wrap; word-break: break-word; }
+</style>
+</head>
+<body>
+<div class="compose">
+	<div class="compose-header">New Message</div>
+	<div aria-label="Message Body" role="textbox" contenteditable="true" aria-multiline="true"></div>
+</div>
+</body>
+</html>

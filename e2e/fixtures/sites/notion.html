@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Notion-shaped block editor</title>
+<style>
+	body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; color: #37352f; }
+	.page { max-width: 700px; margin: 60px auto; }
+	.notion-page-content [data-block-id] { padding: 3px 2px; }
+	[data-content-editable-leaf] { outline: none; font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; white-space: pre-wrap; word-break: break-word; min-height: 1.5em; }
+</style>
+</head>
+<body>
+<div class="page notion-page-content">
+	<div data-block-id="b-1">
+		<div data-content-editable-leaf="true" contenteditable="true" role="textbox" aria-label="Empty block"></div>
+	</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ChatGPT-shaped composer</title>
+<style>
+	body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #212121; color: #ececec; }
+	.thread { min-height: 60vh; }
+	/* The load-bearing shape: an intrinsically-growing contenteditable inside an
+	   overflow-clipping ancestor with a max-height (BUG-GEOM / A2 clip case). */
+	.composer-clip {
+		position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: center;
+		padding: 16px; background: #212121;
+	}
+	.composer-scroll {
+		width: 680px; max-height: 180px; overflow-y: auto;
+		border: 1px solid #4b4b4b; border-radius: 24px; background: #2f2f2f; padding: 12px 18px;
+	}
+	#prompt-textarea {
+		outline: none; font: 16px/1.55 ui-sans-serif, system-ui, sans-serif;
+		white-space: pre-wrap; word-break: break-word; text-rendering: optimizeLegibility;
+	}
+	#prompt-textarea p { margin: 0; }
+	button[aria-label="Send prompt"] { position: absolute; right: 26px; bottom: 26px; }
+</style>
+</head>
+<body>
+<div class="thread" role="log" aria-label="Conversation"></div>
+<div class="composer-clip">
+	<div class="composer-scroll">
+		<div id="prompt-textarea" class="ProseMirror" contenteditable="true" translate="no"
+			data-virtualkeyboard="true" role="textbox" aria-label="Message ChatGPT"><p><br></p></div>
+	</div>
+	<button aria-label="Send prompt">Send</button>
+</div>
+</body>
+</html>

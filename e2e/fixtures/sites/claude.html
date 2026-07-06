@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Claude-shaped composer</title>
+<style>
+	body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #262624; color: #f5f4ef; }
+	.composer { max-width: 720px; margin: 30vh auto 0; border: 1px solid #57564f; border-radius: 16px; padding: 14px 16px; background: #30302e; }
+	.ProseMirror { outline: none; min-height: 44px; font: 15px/1.6 ui-sans-serif, system-ui, sans-serif; white-space: pre-wrap; overflow-wrap: break-word; }
+	.ProseMirror p { margin: 0 0 4px; }
+</style>
+</head>
+<body>
+<div class="composer">
+	<div class="ProseMirror" contenteditable="true" translate="no" role="textbox" aria-label="Write your prompt to Claude"><p><br></p></div>
+</div>
+</body>
+</html>

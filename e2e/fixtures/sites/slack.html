@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Slack-shaped message box</title>
+<style>
+	body { margin: 0; font-family: Lato, "Helvetica Neue", sans-serif; background: #1a1d21; color: #d1d2d3; }
+	.workspace { display: flex; flex-direction: column; height: 100vh; }
+	.messages { flex: 1; }
+	.composer-wrap { padding: 0 20px 24px; }
+	.composer { border: 1px solid #565856; border-radius: 8px; background: #222529; }
+	.ql-editor { outline: none; min-height: 42px; max-height: 200px; overflow-y: auto; font: 15px/1.46 Lato, "Helvetica Neue", sans-serif; padding: 8px 12px; white-space: pre-wrap; word-break: break-word; }
+	.ql-editor p { margin: 0; }
+</style>
+</head>
+<body>
+<div class="workspace">
+	<div class="messages" role="log"></div>
+	<div class="composer-wrap">
+		<div class="composer">
+			<div class="ql-editor" contenteditable="true" role="textbox" aria-label="Message to #general" data-gramm="false"><p><br></p></div>
+		</div>
+	</div>
+</div>
+</body>
+</html>

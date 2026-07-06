@@ -1,0 +1,14 @@
+{
+	"name": "promptcompiler-e2e",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"pretest": "cd ../extension && VITE_API_BASE_URL=http://127.0.0.1:4174 npm run build",
+		"test": "xvfb-run -a playwright test",
+		"test:headed": "playwright test"
+	},
+	"devDependencies": {
+		"@axe-core/playwright": "^4.10.2",
+		"@playwright/test": "^1.58.2"
+	}
+}
