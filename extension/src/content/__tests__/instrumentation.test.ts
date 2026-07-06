@@ -899,4 +899,103 @@ describe("content script instrumentation", () => {
 			}
 		}
 	});
+
+	it("D3: shows the keymap HUD with underlines, plays the coach mark once, and tears both down", async () => {
+		vi.useFakeTimers();
+
+		document.body.innerHTML = `<textarea id="notes"></textarea>`;
+		const textarea = document.getElementById("notes") as HTMLTextAreaElement;
+		textarea.value = "Build the toggle UI. Use React and TypeScript.";
+
+		const rect = {
+			x: 0,
+			y: 0,
+			left: 0,
+			top: 0,
+			width: 320,
+			height: 160,
+			right: 320,
+			bottom: 160,
+			toJSON: () => undefined,
+		} as DOMRect;
+		Object.defineProperty(textarea, "getBoundingClientRect", {
+			configurable: true,
+			value: () => rect,
+		});
+		mockClientBox(textarea, () => rect);
+
+		const contentScript = await loadContentScript();
+		const localGetMock = getChromeStorageGetMock("local");
+		const localSetMock = (chrome as unknown as { storage: { local: { set: ReturnType<typeof vi.fn> } } }).storage.local.set;
+		// First run: onboarding flag absent.
+		localGetMock.mockResolvedValue({});
+
+		contentScript.main(createContentScriptCtx());
+
+		textarea.dispatchEvent(new Event("input", { bubbles: true }));
+		await vi.advanceTimersByTimeAsync(400);
+		await flushMicrotasks();
+
+		// HUD is up, with all four keymap rows and the six-entry color legend.
+		const hud = document.querySelector('[data-insta-keymap-hud="true"]') as HTMLDivElement | null;
+		expect(hud).not.toBeNull();
+		expect(hud?.shadowRoot?.querySelectorAll("[data-hud-row]")).toHaveLength(4);
+		expect(hud?.shadowRoot?.querySelectorAll("[data-hud-legend-entry]")).toHaveLength(6);
+		expect(hud?.shadowRoot?.textContent ?? "").toContain("compile prompt");
+
+		// Coach mark appeared (first run) and the seen flag was persisted.
+		const coachMark = document.querySelector('[data-insta-coach-mark="true"]') as HTMLDivElement | null;
+		expect(coachMark).not.toBeNull();
+		expect(coachMark?.shadowRoot?.textContent ?? "").toContain("PromptCompiler found clauses");
+		expect(localSetMock).toHaveBeenCalledWith({ "promptcompiler.onboarding.seen": true });
+
+		// First Tab (entering review) dismisses the coach mark; the HUD stays.
+		textarea.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Tab" }));
+		expect(document.querySelector('[data-insta-coach-mark="true"]')).toBeNull();
+		expect(document.querySelector('[data-insta-keymap-hud="true"]')).not.toBeNull();
+
+		// Clearing the draft (empty input) removes the HUD with the underlines.
+		textarea.value = "";
+		textarea.dispatchEvent(new Event("input", { bubbles: true }));
+		await vi.advanceTimersByTimeAsync(400);
+		await flushMicrotasks();
+		expect(document.querySelector('[data-insta-keymap-hud="true"]')).toBeNull();
+	});
+
+	it("D3: coach mark does not reappear once the onboarding flag is set", async () => {
+		vi.useFakeTimers();
+
+		document.body.innerHTML = `<textarea id="notes"></textarea>`;
+		const textarea = document.getElementById("notes") as HTMLTextAreaElement;
+		textarea.value = "Build the toggle UI.";
+
+		const rect = {
+			x: 0,
+			y: 0,
+			left: 0,
+			top: 0,
+			width: 320,
+			height: 160,
+			right: 320,
+			bottom: 160,
+			toJSON: () => undefined,
+		} as DOMRect;
+		Object.defineProperty(textarea, "getBoundingClientRect", {
+			configurable: true,
+			value: () => rect,
+		});
+		mockClientBox(textarea, () => rect);
+
+		const contentScript = await loadContentScript();
+		getChromeStorageGetMock("local").mockResolvedValue({ "promptcompiler.onboarding.seen": true });
+
+		contentScript.main(createContentScriptCtx());
+
+		textarea.dispatchEvent(new Event("input", { bubbles: true }));
+		await vi.advanceTimersByTimeAsync(400);
+		await flushMicrotasks();
+
+		expect(document.querySelector('[data-insta-keymap-hud="true"]')).not.toBeNull();
+		expect(document.querySelector('[data-insta-coach-mark="true"]')).toBeNull();
+	});
 });

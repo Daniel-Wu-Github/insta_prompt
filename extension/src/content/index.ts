@@ -1049,8 +1049,13 @@ export default defineContentScript({
 			}
 			state.enhancedTextBySegmentId.clear();
 
-			if (renderedDraftOverlayState === state) {
+			// Compare by ELEMENT, not object identity: scheduleDebouncedExtraction
+			// rebuilds the state object for the same input on every keystroke burst,
+			// so the state being cleared may be a newer copy of the one that rendered.
+			if (renderedDraftOverlayState === state || renderedDraftOverlayState?.element === state.element) {
 				renderedDraftOverlayState = undefined;
+				// D3: the keymap HUD lives exactly as long as rendered underlines do.
+				removeKeymapHud();
 			}
 
 			if (activeDraftHoverPreviewState?.sourceElement === state.element) {
@@ -1691,6 +1696,7 @@ export default defineContentScript({
 			state.draftText = extractedText;
 			state.draftSegments = segments;
 			renderedDraftOverlayState = state;
+			ensureKeymapHud();
 			restoreDraftHoverPreviewFromLastPointer(state.element);
 		};
 
@@ -1969,6 +1975,251 @@ export default defineContentScript({
 				container.style.opacity = "0";
 				setTimeout(() => container.remove(), 400);
 			}, 3000);
+		};
+
+		// ── D3 (AUD-7): persistent keymap HUD + first-run coach mark ─────────────
+		// The HUD is a small always-on reference docked bottom-right while underlines
+		// exist: the full hotkey map plus the clause color legend (the "what do the
+		// colors mean" surface promised by BUG-2.3). One instance, shadow-isolated,
+		// pointer-events none, torn down with the overlay and on ctx invalidation.
+		const ONBOARDING_SEEN_STORAGE_KEY = "promptcompiler.onboarding.seen";
+		let keymapHudElement: HTMLDivElement | undefined;
+		let coachMarkElement: HTMLDivElement | undefined;
+		let coachMarkDismissTimerId: number | undefined;
+
+		const KEYMAP_HUD_ROWS: ReadonlyArray<readonly [key: string, action: string]> = [
+			["Tab", "review clauses"],
+			["Enter", "accept focused"],
+			["⌘/Ctrl+Enter", "compile prompt"],
+			["Esc", "exit review"],
+		];
+
+		const ensureKeymapHud = (): void => {
+			if (keymapHudElement?.isConnected) {
+				return;
+			}
+			keymapHudElement?.remove();
+
+			const container = document.createElement("div");
+			container.setAttribute("aria-hidden", "true");
+			container.dataset.instaKeymapHud = "true";
+			container.style.position = "fixed";
+			container.style.right = "16px";
+			container.style.bottom = "16px";
+			container.style.zIndex = DRAFT_OVERLAY_Z_INDEX;
+			container.style.pointerEvents = "none";
+
+			const shadow = container.attachShadow({ mode: "open" });
+			const style = document.createElement("style");
+			style.textContent = `${shadowBaseCss("dark", { fontUrl: extensionFontUrl })}
+:host { all: initial; pointer-events: none; }
+[data-keymap-hud] {
+	all: initial;
+	display: block;
+	box-sizing: border-box;
+	border-radius: var(--pc-radius-lg);
+	border: 1px solid rgba(148, 163, 184, 0.32);
+	background: rgba(15, 23, 42, 0.94);
+	color: var(--pc-neutral-8);
+	box-shadow: var(--pc-shadow-popover);
+	padding: 8px 10px;
+	font-family: var(--pc-font-family);
+	font-size: 11px;
+	line-height: 1.5;
+	pointer-events: none;
+	user-select: none;
+	animation: ${motionPreset.floatIn};
+}
+[data-hud-row] {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+}
+[data-hud-key] {
+	display: inline-block;
+	min-width: 0;
+	border: 1px solid rgba(148, 163, 184, 0.4);
+	border-radius: 4px;
+	padding: 0 5px;
+	font-size: 10px;
+	font-weight: 700;
+	color: rgb(199, 210, 254);
+	background: rgba(30, 41, 59, 0.9);
+}
+[data-hud-action] {
+	color: rgb(148, 163, 184);
+}
+[data-hud-legend] {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px 8px;
+	margin-top: 6px;
+	padding-top: 6px;
+	border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+[data-hud-legend-entry] {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 10px;
+	color: rgb(148, 163, 184);
+	white-space: nowrap;
+}
+[data-hud-legend-dot] {
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	flex: 0 0 auto;
+}
+`;
+
+			const hudPanel = document.createElement("div");
+			hudPanel.dataset.keymapHud = "true";
+
+			for (const [key, action] of KEYMAP_HUD_ROWS) {
+				const row = document.createElement("div");
+				row.dataset.hudRow = "true";
+				const keyElement = document.createElement("span");
+				keyElement.dataset.hudKey = "true";
+				keyElement.textContent = key;
+				const actionElement = document.createElement("span");
+				actionElement.dataset.hudAction = "true";
+				actionElement.textContent = action;
+				row.append(keyElement, actionElement);
+				hudPanel.appendChild(row);
+			}
+
+			// Clause color legend, in canonical bind order (BUG-2.3).
+			const legend = document.createElement("div");
+			legend.dataset.hudLegend = "true";
+			for (const goalType of GOAL_TYPES_IN_CANONICAL_ORDER) {
+				const entry = document.createElement("span");
+				entry.dataset.hudLegendEntry = "true";
+				const dot = document.createElement("span");
+				dot.dataset.hudLegendDot = "true";
+				dot.style.background = GOAL_TYPE_PALETTE[goalType].color;
+				const label = document.createElement("span");
+				label.textContent = GOAL_TYPE_LEGEND_LABEL[goalType];
+				entry.append(dot, label);
+				legend.appendChild(entry);
+			}
+			hudPanel.appendChild(legend);
+
+			shadow.append(style, hudPanel);
+			getOverlayContainer().appendChild(container);
+			keymapHudElement = container;
+
+			void maybeShowOnboardingCoachMark();
+		};
+
+		const removeKeymapHud = (): void => {
+			keymapHudElement?.remove();
+			keymapHudElement = undefined;
+			dismissOnboardingCoachMark();
+		};
+
+		// First-run coach mark: a one-time bubble above the HUD teaching the flow.
+		// Gated on chrome.storage.local so it never re-appears across sessions; the
+		// key is written when shown (not on dismiss) so a mid-session reload cannot
+		// re-trigger it. Dismissed by the first review keystroke or a 15s timeout.
+		const maybeShowOnboardingCoachMark = async (): Promise<void> => {
+			if (coachMarkElement) {
+				return;
+			}
+
+			try {
+				const stored = await chrome.storage.local.get(ONBOARDING_SEEN_STORAGE_KEY);
+				if (stored?.[ONBOARDING_SEEN_STORAGE_KEY] === true) {
+					return;
+				}
+				void chrome.storage.local.set({ [ONBOARDING_SEEN_STORAGE_KEY]: true });
+			} catch {
+				// Storage unavailable (rare embedded contexts): skip onboarding rather
+				// than risk showing it on every page load.
+				return;
+			}
+
+			// The HUD may have been torn down while storage resolved.
+			if (!keymapHudElement?.isConnected || coachMarkElement) {
+				return;
+			}
+
+			const container = document.createElement("div");
+			container.setAttribute("aria-hidden", "true");
+			container.dataset.instaCoachMark = "true";
+			container.style.position = "fixed";
+			container.style.right = "16px";
+			container.style.bottom = "148px";
+			container.style.zIndex = String(Number(DRAFT_OVERLAY_Z_INDEX) - 0);
+			container.style.pointerEvents = "none";
+			container.style.transition = motionTransition("opacity", "slow");
+
+			const shadow = container.attachShadow({ mode: "open" });
+			const style = document.createElement("style");
+			style.textContent = `${shadowBaseCss("dark", { fontUrl: extensionFontUrl })}
+:host { all: initial; pointer-events: none; }
+[data-coach-mark] {
+	all: initial;
+	display: block;
+	box-sizing: border-box;
+	max-width: 280px;
+	border-radius: var(--pc-radius-lg);
+	border: 1px solid rgba(129, 140, 248, 0.5);
+	background: rgba(30, 27, 75, 0.97);
+	color: var(--pc-neutral-8);
+	box-shadow: var(--pc-shadow-popover);
+	padding: 12px 14px;
+	font-family: var(--pc-font-family);
+	font-size: 12px;
+	line-height: 1.55;
+	pointer-events: none;
+	user-select: none;
+	animation: ${motionPreset.floatIn};
+}
+[data-coach-title] {
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: rgb(165, 180, 252);
+	margin-bottom: 6px;
+}
+[data-coach-body] {
+	display: block;
+	color: rgb(203, 213, 225);
+}
+`;
+
+			const bubble = document.createElement("div");
+			bubble.dataset.coachMark = "true";
+			const title = document.createElement("span");
+			title.dataset.coachTitle = "true";
+			title.textContent = "PromptCompiler found clauses";
+			const body = document.createElement("span");
+			body.dataset.coachBody = "true";
+			body.textContent =
+				"Each underline is a clause of your prompt. Press Tab to review them one by one, Enter to accept, then ⌘/Ctrl+Enter to compile everything into a structured prompt. The key map below stays in the corner.";
+			bubble.append(title, body);
+			shadow.append(style, bubble);
+			getOverlayContainer().appendChild(container);
+			coachMarkElement = container;
+
+			coachMarkDismissTimerId = window.setTimeout(() => {
+				dismissOnboardingCoachMark();
+			}, 15_000);
+		};
+
+		const dismissOnboardingCoachMark = (): void => {
+			if (coachMarkDismissTimerId !== undefined) {
+				window.clearTimeout(coachMarkDismissTimerId);
+				coachMarkDismissTimerId = undefined;
+			}
+			coachMarkElement?.remove();
+			coachMarkElement = undefined;
 		};
 
 		const showSessionExpiredNotice = (state: ActiveInputState): void => {
@@ -2761,6 +3012,8 @@ export default defineContentScript({
 				event.stopPropagation();
 
 				const enteringReview = state.focusedSegmentIndex === undefined;
+				// D3: the user has found the flow — the coach mark's job is done.
+				dismissOnboardingCoachMark();
 				focusSegment(state, event.shiftKey ? -1 : 1);
 				// Surface the keymap the first time the user enters review mode.
 				if (enteringReview) {
@@ -3424,6 +3677,7 @@ export default defineContentScript({
 		ctx.onInvalidated(() => {
 			discoveryObserver?.disconnect();
 			modalObserver.disconnect();
+			removeKeymapHud();
 			for (const instrumented of [..._instrumentCleanups.keys()]) {
 				teardownInstrument(instrumented);
 			}
