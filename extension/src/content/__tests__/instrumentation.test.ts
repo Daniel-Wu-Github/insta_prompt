@@ -796,4 +796,107 @@ describe("content script instrumentation", () => {
 		textarea.dispatchEvent(new Event("blur", { bubbles: false }));
 		expect(document.querySelector('[data-insta-draft-hover-popover="true"]')).toBeNull();
 	});
+
+	it("D2 hybrid: paints real-text Custom Highlights on contenteditable and suppresses mirror span underlines", async () => {
+		vi.useFakeTimers();
+
+		document.body.innerHTML = `<div id="editor" contenteditable="true">Build the toggle UI. Use React and TypeScript. Maybe later.</div>`;
+		const editor = document.getElementById("editor") as HTMLElement;
+		defineContentEditable(editor);
+
+		const editorRect = {
+			x: 0,
+			y: 0,
+			left: 0,
+			top: 0,
+			width: 320,
+			height: 160,
+			right: 320,
+			bottom: 160,
+			toJSON: () => undefined,
+		} as DOMRect;
+		Object.defineProperty(editor, "getBoundingClientRect", {
+			configurable: true,
+			value: () => editorRect,
+		});
+		mockClientBox(editor, () => editorRect);
+
+		const contentScript = await loadContentScript();
+
+		// Swap the default "no highlights" stub for a working registry + constructor
+		// AFTER module load — the content script feature-detects at render time.
+		const highlightRegistry = new Map<string, unknown>();
+		class FakeHighlight {
+			public readonly ranges: Range[];
+			constructor(...ranges: Range[]) {
+				this.ranges = ranges;
+			}
+		}
+		vi.stubGlobal("CSS", { highlights: highlightRegistry });
+		vi.stubGlobal("Highlight", FakeHighlight);
+
+		contentScript.main(createContentScriptCtx());
+
+		editor.dispatchEvent(new Event("input", { bubbles: true }));
+		await vi.advanceTimersByTimeAsync(400);
+		await flushMicrotasks();
+
+		// Highlights registered per goal type, over the REAL text node.
+		expect(highlightRegistry.size).toBeGreaterThan(0);
+		for (const [name, highlight] of highlightRegistry) {
+			expect(name).toMatch(/^insta-prompt-draft-/);
+			const ranges = (highlight as InstanceType<typeof FakeHighlight>).ranges;
+			expect(ranges.length).toBeGreaterThan(0);
+			for (const range of ranges) {
+				expect(range.startContainer).toBe(editor.firstChild);
+				expect(range.collapsed).toBe(false);
+			}
+		}
+
+		// The per-type ::highlight() stylesheet exists in the DOCUMENT tree scope.
+		const highlightStyle = document.getElementById("insta-prompt-draft-highlight-style");
+		expect(highlightStyle).not.toBeNull();
+		expect(highlightStyle?.textContent ?? "").toContain("::highlight(insta-prompt-draft-context)");
+
+		// Mirror spans still exist (hit-testing + state visuals) but carry no base
+		// underline — the highlight layer owns it in this mode.
+		const overlay = document.querySelector('[data-insta-draft-overlay="true"]') as HTMLDivElement | null;
+		expect(overlay).not.toBeNull();
+		const spans = Array.from(overlay?.shadowRoot?.querySelectorAll<HTMLSpanElement>("span[data-segment-index]") ?? []);
+		expect(spans.length).toBeGreaterThanOrEqual(3);
+		for (const span of spans) {
+			expect(span.style.textDecorationLine).toBe("none");
+		}
+
+		// The host's own DOM is untouched (non-destructive guardrail).
+		expect(editor.querySelector("span")).toBeNull();
+		expect(editor.textContent).toBe("Build the toggle UI. Use React and TypeScript. Maybe later.");
+
+		// Accepting clause 0 (Tab → Enter) removes its range from the highlight layer
+		// and moves its underline onto the mirror span (accepted restyle).
+		editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Tab" }));
+		editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
+
+		const acceptedSpan = overlay?.shadowRoot?.querySelector<HTMLSpanElement>('span[data-segment-index="0"]');
+		expect(acceptedSpan?.dataset.accepted).toBe("true");
+		expect(acceptedSpan?.style.textDecorationLine).toBe("underline");
+		const allRangesAfterAccept = Array.from(highlightRegistry.values()).flatMap(
+			(highlight) => (highlight as InstanceType<typeof FakeHighlight>).ranges,
+		);
+		// Clause 0 starts at offset 0 — no remaining range may start there.
+		expect(allRangesAfterAccept.every((range) => range.startOffset > 0)).toBe(true);
+
+		// Retyping marks the draft stale: highlights are dropped and the dimmed
+		// mirror takes the underlines back.
+		editor.textContent = "Build the toggle UI. Use React and TypeScript. Maybe later with more.";
+		editor.dispatchEvent(new Event("input", { bubbles: true }));
+
+		expect(highlightRegistry.size).toBe(0);
+		const respannedSpans = Array.from(overlay?.shadowRoot?.querySelectorAll<HTMLSpanElement>("span[data-segment-index]") ?? []);
+		for (const span of respannedSpans) {
+			if (span.dataset.accepted !== "true") {
+				expect(span.style.textDecorationLine).toBe("underline");
+			}
+		}
+	});
 });

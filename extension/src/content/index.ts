@@ -32,8 +32,13 @@ export default defineContentScript({
 		const DEFAULT_BRIDGE_MODE: Mode = "balanced";
 		const BRIDGE_FALLBACK_JWT = "promptcompiler-dev-jwt";
 		const SESSION_EXPIRED_NOTICE = "Session expired — please reopen the extension";
-		const DRAFT_HIGHLIGHT_NAME = "insta-prompt-draft-highlight";
+		// D2 (OD-7/DEC-1): one registered Highlight per goal type, so ::highlight()
+		// rules can carry the per-type palette color + texture. Underscores are
+		// swapped for hyphens to keep the names conventional CSS idents.
+		const DRAFT_HIGHLIGHT_NAME_PREFIX = "insta-prompt-draft-";
 		const DRAFT_HIGHLIGHT_STYLE_ID = "insta-prompt-draft-highlight-style";
+		const draftHighlightNameForGoalType = (goalType: GoalType): string =>
+			`${DRAFT_HIGHLIGHT_NAME_PREFIX}${goalType.replace(/_/g, "-")}`;
 		// AUD-2: these are now derived from the portable design tokens (shared/design)
 		// instead of inline magic values. Values are unchanged — the token set was
 		// authored to match exactly — so this is behavior-preserving.
@@ -48,7 +53,6 @@ export default defineContentScript({
 		const DRAFT_STALE_OPACITY = String(sectionState.stale.opacity);
 		const DRAFT_ACCEPTED_OPACITY = String(sectionState.accepted.opacity);
 		const DRAFT_ACCEPTED_STALE_OPACITY = String(sectionState.acceptedStale.opacity);
-		const DRAFT_UNDERLINE_COLOR = rgba(brand.accent, 0.95);
 		// BIND-UX-1: Tab now *reviews* (cycles focus) instead of accepting. Acceptance is
 		// the explicit Enter act, and Esc leaves review mode so Enter sends normally again.
 		const REVIEW_HINT = "Tab to review · Enter to accept · ⌘/Ctrl+Enter to bind · Esc to exit";
@@ -810,36 +814,60 @@ export default defineContentScript({
 		};
 
 
-		const extractContenteditableText = (element: HTMLElement): string => {
-			const extractNodeText = (node: Node): string => {
+		// D2: extraction decomposed into "pieces" — real Text nodes plus synthetic
+		// separators (<br>, block joins). extractContenteditableText derives its string
+		// from the SAME walk, so extracted-text offsets can be mapped back to
+		// (Text node, local offset) pairs for Custom Highlight ranges with no risk of
+		// the two walks drifting apart.
+		type ContenteditableTextPiece = { text: string; node?: Text };
+
+		const collectContenteditableTextPieces = (element: HTMLElement): ContenteditableTextPiece[] => {
+			const collectNodePieces = (node: Node): ContenteditableTextPiece[] => {
 				if (node.nodeType === Node.TEXT_NODE) {
-					return node.textContent ?? "";
+					const text = node.textContent ?? "";
+					return text.length > 0 ? [{ text, node: node as Text }] : [];
 				}
 
 				if (node.nodeType !== Node.ELEMENT_NODE) {
-					return "";
+					return [];
 				}
 
 				const childElement = node as HTMLElement;
 
 				if (childElement.tagName === "BR") {
-					return "\n";
+					return [{ text: "\n" }];
 				}
 
 				const childSeparator = childElement === element || isBlockLevelElement(childElement) ? "\n" : "";
-				const childTexts: string[] = [];
+				const childPieceGroups: ContenteditableTextPiece[][] = [];
 
 				for (const childNode of childElement.childNodes) {
-					const childText = extractNodeText(childNode);
-					if (childText.length > 0) {
-						childTexts.push(childText);
+					const childPieces = collectNodePieces(childNode);
+					if (childPieces.length > 0) {
+						childPieceGroups.push(childPieces);
 					}
 				}
 
-				return childTexts.join(childSeparator);
+				const pieces: ContenteditableTextPiece[] = [];
+				for (const [groupIndex, group] of childPieceGroups.entries()) {
+					if (groupIndex > 0 && childSeparator.length > 0) {
+						pieces.push({ text: childSeparator });
+					}
+					pieces.push(...group);
+				}
+
+				return pieces;
 			};
 
-			return extractNodeText(element);
+			return collectNodePieces(element);
+		};
+
+		const extractContenteditableText = (element: HTMLElement): string => {
+			let text = "";
+			for (const piece of collectContenteditableTextPieces(element)) {
+				text += piece.text;
+			}
+			return text;
 		};
 
 		const splitTextIntoDraftSegments = (text: string): DraftSegment[] => {
@@ -911,23 +939,42 @@ export default defineContentScript({
 				return;
 			}
 
-			const styleElement = document.createElement("style");
-			styleElement.id = DRAFT_HIGHLIGHT_STYLE_ID;
-			styleElement.textContent = `
-::highlight(${DRAFT_HIGHLIGHT_NAME}) {
+			// ::highlight() rules live in the DOCUMENT tree scope because the highlighted
+			// ranges target the host page's real text nodes (that is the whole point of
+			// D2 — decorations on the actual glyphs, no mirrored copy to drift). Palette
+			// colors are inlined as literals: the --insta-* custom properties are scoped
+			// to the overlay host and do not reach the page root.
+			const rules = GOAL_TYPE_VALUES.map((goalType) => {
+				const encoding = clauseEncoding[goalType];
+				return `::highlight(${draftHighlightNameForGoalType(goalType)}) {
 	text-decoration-line: underline;
-	text-decoration-color: ${DRAFT_UNDERLINE_COLOR};
-	text-decoration-thickness: 2px;
+	text-decoration-color: ${GOAL_TYPE_PALETTE[goalType].color};
+	text-decoration-style: ${encoding.underlineStyle};
+	text-decoration-thickness: ${encoding.underlineThickness}px;
 	text-decoration-skip-ink: none;
 	text-underline-offset: 2px;
-}
-`;
+}`;
+			});
+
+			const styleElement = document.createElement("style");
+			styleElement.id = DRAFT_HIGHLIGHT_STYLE_ID;
+			styleElement.textContent = `\n${rules.join("\n")}\n`;
 
 			(document.head ?? document.documentElement).appendChild(styleElement);
 		};
 
 		const canUseCustomHighlights = (): boolean => {
 			return Boolean(getDraftHighlightRegistry() && getDraftHighlightConstructor());
+		};
+
+		const clearDraftTextHighlights = (): void => {
+			const highlightRegistry = getDraftHighlightRegistry();
+			if (!highlightRegistry) {
+				return;
+			}
+			for (const goalType of GOAL_TYPE_VALUES) {
+				highlightRegistry.delete(draftHighlightNameForGoalType(goalType));
+			}
 		};
 
 		const getOverlayContainer = (): HTMLElement => {
@@ -1010,8 +1057,7 @@ export default defineContentScript({
 				clearDraftHoverPreview({ preservePointer: true });
 			}
 
-			const highlightRegistry = getDraftHighlightRegistry();
-			highlightRegistry?.delete(DRAFT_HIGHLIGHT_NAME);
+			clearDraftTextHighlights();
 
 			if (state.draftOverlayElement) {
 				state.draftOverlayElement.remove();
@@ -1308,6 +1354,7 @@ export default defineContentScript({
 			isAccepted: boolean,
 			isFocused: boolean,
 			isStaleAccepted: boolean,
+			suppressBaseUnderline: boolean,
 		): void => {
 			const paletteEntry = GOAL_TYPE_PALETTE[segment.goalType];
 			// S-VIS-3: each clause type also gets a distinct underline texture + weight so
@@ -1320,6 +1367,9 @@ export default defineContentScript({
 
 			if (isAccepted) {
 				segmentSpan.style.opacity = isStaleAccepted ? DRAFT_ACCEPTED_STALE_OPACITY : DRAFT_ACCEPTED_OPACITY;
+				// Accepted underlines ALWAYS live on the mirror span, even in highlight
+				// mode — the accepted/stale-accepted restyle has no ::highlight() analog,
+				// and applyDraftTextHighlights excludes accepted ranges accordingly.
 				segmentSpan.style.textDecorationLine = "underline";
 				// Legacy stale-accepted treatment (amber === clauseAccent.context); tokenized
 				// for AUD-2 with identical value. Revisited as a true stale state in B4/Track D.
@@ -1330,6 +1380,9 @@ export default defineContentScript({
 				segmentSpan.style.outline = "none";
 			} else {
 				segmentSpan.style.opacity = "1";
+				// D2 hybrid: when Custom Highlights paint this clause's underline on the
+				// host's real text, the mirror span must not double-underline it.
+				segmentSpan.style.textDecorationLine = suppressBaseUnderline ? "none" : "underline";
 				segmentSpan.style.textDecorationColor = `var(${paletteEntry.cssVariable})`;
 				segmentSpan.style.textDecorationStyle = enc.underlineStyle;
 				segmentSpan.style.textDecorationThickness = `${enc.underlineThickness}px`;
@@ -1339,6 +1392,18 @@ export default defineContentScript({
 		};
 
 		const restampAcceptedSegmentVisuals = (state: ActiveInputState): void => {
+			// Acceptance membership just changed: in highlight mode the unaccepted
+			// range set changes with it, so the registered highlights must be rebuilt
+			// (falling back to span underlines if registration now fails).
+			if (state.draftRenderMode === "highlight") {
+				const stillApplied = applyDraftTextHighlights(state.element, state.draftSegments, state.acceptedSegmentIndices);
+				if (!stillApplied) {
+					clearDraftTextHighlights();
+					state.draftRenderMode = "overlay";
+				}
+			}
+			const suppressBaseUnderline = state.draftRenderMode === "highlight";
+
 			const root = state.draftOverlaySegmentRootElement;
 			if (!root) {
 				return;
@@ -1359,7 +1424,21 @@ export default defineContentScript({
 				const isAccepted = state.acceptedSegmentIndices.has(segmentIndex);
 				const isFocused = state.focusedSegmentIndex === segmentIndex;
 				const isStaleAccepted = isAccepted && state.hasStaleAccepted;
-				applyAcceptanceVisualsToSpan(span, segment, isAccepted, isFocused, isStaleAccepted);
+				applyAcceptanceVisualsToSpan(span, segment, isAccepted, isFocused, isStaleAccepted, suppressBaseUnderline);
+			}
+		};
+
+		// Stale transitions drop the real-text highlight layer: stale is signalled by
+		// dimming the mirror (DRAFT_STALE_OPACITY), which cannot reach decorations
+		// painted on the host's own text. Restamping restores the span underlines.
+		const markDraftOverlayStale = (state: ActiveInputState): void => {
+			if (state.draftOverlayElement) {
+				applyDraftOverlayFreshness(state.draftOverlayElement, true);
+			}
+			if (state.draftRenderMode === "highlight") {
+				clearDraftTextHighlights();
+				state.draftRenderMode = "overlay";
+				restampAcceptedSegmentVisuals(state);
 			}
 		};
 
@@ -1372,6 +1451,7 @@ export default defineContentScript({
 			acceptedSegmentIndices: Set<number>,
 			focusedSegmentIndex: number | undefined,
 			hasStaleAccepted: boolean,
+			suppressBaseUnderline: boolean,
 		): void => {
 			segmentRootElement.textContent = "";
 			segmentRootElement.dataset.instaDraftSegments = String(segments.length);
@@ -1424,7 +1504,7 @@ export default defineContentScript({
 				segmentSpan.style.textDecorationThickness = `${clauseEncoding[segment.goalType].underlineThickness}px`;
 				segmentSpan.style.textUnderlineOffset = "2px";
 				segmentSpan.style.textDecorationSkipInk = "none";
-				applyAcceptanceVisualsToSpan(segmentSpan, segment, isAccepted, isFocused, isStaleAccepted);
+				applyAcceptanceVisualsToSpan(segmentSpan, segment, isAccepted, isFocused, isStaleAccepted, suppressBaseUnderline);
 				const trailingSpaces = segment.text.match(/\s+$/)?.[0] ?? "";
 				segmentSpan.textContent = trailingSpaces.length > 0
 					? segment.text.slice(0, segment.text.length - trailingSpaces.length)
@@ -1443,10 +1523,18 @@ export default defineContentScript({
 			segmentRootElement.appendChild(fragment);
 		};
 
-		const renderHighlightedDraftOverlay = (
-			contentElement: HTMLDivElement,
-			extractedText: string,
+		// D2 (OD-7/DEC-1 resolution — hybrid): for contenteditable hosts with Custom
+		// Highlights support, the per-type UNDERLINE layer is painted on the host's
+		// REAL text nodes via CSS.highlights — the decoration sits on the actual
+		// glyphs, so pixel parity is exact by construction (retires BUG-ALIGN for
+		// these hosts). The shadow-wrapped span mirror stays for hover hit-testing
+		// and accepted/stale/focus visuals, which ::highlight() cannot express.
+		// Accepted segments are EXCLUDED here — their underline stays on the mirror
+		// span (which restyles it for the accepted/stale-accepted treatments).
+		const applyDraftTextHighlights = (
+			sourceElement: HTMLElement,
 			segments: DraftSegment[],
+			acceptedSegmentIndices: Set<number>,
 		): boolean => {
 			const highlightRegistry = getDraftHighlightRegistry();
 			const highlightConstructor = getDraftHighlightConstructor();
@@ -1455,36 +1543,100 @@ export default defineContentScript({
 				return false;
 			}
 
-			contentElement.replaceChildren(document.createTextNode(extractedText));
-			const textNode = contentElement.firstChild;
-
-			if (!(textNode instanceof Text)) {
+			const pieces = collectContenteditableTextPieces(sourceElement);
+			if (pieces.length === 0) {
 				return false;
 			}
 
-			const ranges: Range[] = [];
-			for (const segment of segments) {
-				const start = Math.max(0, Math.min(segment.start, textNode.length));
-				const end = Math.max(start, Math.min(segment.end, textNode.length));
+			// Segment offsets live in normalizeDraftText space (\r\n → \n). Raw \r in a
+			// text node would desynchronize the two offset spaces — bail to the overlay
+			// renderer rather than misplace an underline.
+			for (const piece of pieces) {
+				if (piece.text.includes("\r")) {
+					return false;
+				}
+			}
 
-				if (start >= end) {
+			// Map an extracted-text offset to the containing text node + local offset.
+			// `preferStartOfNext` picks the boundary side for offsets that land exactly
+			// between pieces (range starts snap forward, range ends snap backward).
+			const resolveOffset = (
+				offset: number,
+				preferStartOfNext: boolean,
+			): { node: Text; nodeOffset: number } | undefined => {
+				let cursor = 0;
+				let lastTextPieceEnd: { node: Text; nodeOffset: number } | undefined;
+
+				for (const piece of pieces) {
+					const pieceStart = cursor;
+					const pieceEnd = cursor + piece.text.length;
+
+					if (piece.node) {
+						if (offset < pieceEnd || (!preferStartOfNext && offset === pieceEnd)) {
+							if (offset >= pieceStart) {
+								return { node: piece.node, nodeOffset: offset - pieceStart };
+							}
+							// Offset fell inside a preceding separator: snap to this node's start
+							// when searching forward.
+							if (preferStartOfNext) {
+								return { node: piece.node, nodeOffset: 0 };
+							}
+							return lastTextPieceEnd;
+						}
+						lastTextPieceEnd = { node: piece.node, nodeOffset: piece.text.length };
+					} else if (!preferStartOfNext && offset <= pieceEnd && offset > pieceStart && lastTextPieceEnd) {
+						// Range end inside a separator: snap back to the previous text node end.
+						return lastTextPieceEnd;
+					}
+
+					cursor = pieceEnd;
+				}
+
+				return preferStartOfNext ? undefined : lastTextPieceEnd;
+			};
+
+			const rangesByGoalType = new Map<GoalType, Range[]>();
+			for (const [segmentIndex, segment] of segments.entries()) {
+				if (acceptedSegmentIndices.has(segmentIndex)) {
+					continue;
+				}
+
+				const startPosition = resolveOffset(segment.start, true);
+				const endPosition = resolveOffset(segment.end, false);
+				if (!startPosition || !endPosition) {
 					continue;
 				}
 
 				const range = document.createRange();
-				range.setStart(textNode, start);
-				range.setEnd(textNode, end);
-				ranges.push(range);
-			}
+				try {
+					range.setStart(startPosition.node, startPosition.nodeOffset);
+					range.setEnd(endPosition.node, endPosition.nodeOffset);
+				} catch {
+					continue;
+				}
 
-			if (ranges.length === 0) {
-				return false;
+				if (range.collapsed) {
+					continue;
+				}
+
+				const goalTypeRanges = rangesByGoalType.get(segment.goalType) ?? [];
+				goalTypeRanges.push(range);
+				rangesByGoalType.set(segment.goalType, goalTypeRanges);
 			}
 
 			ensureDraftHighlightStyle();
-			highlightRegistry.delete(DRAFT_HIGHLIGHT_NAME);
-			const highlight = new highlightConstructor(...ranges);
-			highlightRegistry.set(DRAFT_HIGHLIGHT_NAME, highlight);
+			clearDraftTextHighlights();
+
+			if (rangesByGoalType.size === 0) {
+				// Nothing to paint (e.g. everything accepted) — still a success: the
+				// accepted underlines are the mirror's responsibility in this mode.
+				return segments.length > 0 && segments.every((_, index) => acceptedSegmentIndices.has(index));
+			}
+
+			for (const [goalType, ranges] of rangesByGoalType) {
+				const highlight = new highlightConstructor(...ranges);
+				highlightRegistry.set(draftHighlightNameForGoalType(goalType), highlight);
+			}
 
 			return true;
 		};
@@ -1504,6 +1656,21 @@ export default defineContentScript({
 			const overlayShell = ensureDraftOverlayShell(state);
 			installDraftOverlayResizeObserver(state);
 			updateDraftOverlayGeometry(state.element, overlayShell.hostElement, overlayShell.contentElement, overlayShell.segmentRootElement);
+
+			// D2 hybrid: contenteditable + CSS.highlights → paint unaccepted underlines
+			// on the host's real text; the mirror keeps hit-testing + state visuals.
+			// Textareas/inputs have no reachable text nodes, and stale renders signal
+			// through mirror dimming, so both stay on the pure overlay path.
+			const wantTextHighlights =
+				!isStale &&
+				!(state.element instanceof HTMLTextAreaElement) &&
+				!(state.element instanceof HTMLInputElement) &&
+				canUseCustomHighlights();
+			const highlightsApplied = wantTextHighlights && applyDraftTextHighlights(state.element, segments, state.acceptedSegmentIndices);
+			if (!highlightsApplied) {
+				clearDraftTextHighlights();
+			}
+
 			renderDraftOverlaySegments(
 				state.element,
 				overlayShell.segmentRootElement,
@@ -1513,10 +1680,11 @@ export default defineContentScript({
 				state.acceptedSegmentIndices,
 				state.focusedSegmentIndex,
 				state.hasStaleAccepted,
+				highlightsApplied,
 			);
 			applyDraftOverlayFreshness(overlayShell.hostElement, isStale);
 			state.draftIsStale = isStale;
-			state.draftRenderMode = "overlay";
+			state.draftRenderMode = highlightsApplied ? "highlight" : "overlay";
 
 			state.draftOverlayElement = overlayShell.hostElement;
 			state.draftOverlayContentElement = overlayShell.contentElement;
@@ -2641,9 +2809,7 @@ export default defineContentScript({
 				}
 				clearActiveInputWork(previousState);
 				previousState.draftIsStale = true;
-				if (previousState.draftOverlayElement) {
-					applyDraftOverlayFreshness(previousState.draftOverlayElement, true);
-				}
+				markDraftOverlayStale(previousState);
 				if (previousState.acceptedSegmentIndices.size > 0) {
 					previousState.hasStaleAccepted = true;
 					restampAcceptedSegmentVisuals(previousState);
@@ -2815,9 +2981,7 @@ export default defineContentScript({
 							// underlines grey out (DRAFT_STALE_OPACITY + dashed stale color), signalling
 							// that enhancements are not live. Re-segmentation/dispatch stays suppressed.
 							nextState.draftIsStale = true;
-							if (nextState.draftOverlayElement) {
-								applyDraftOverlayFreshness(nextState.draftOverlayElement, true);
-							}
+							markDraftOverlayStale(nextState);
 							restampAcceptedSegmentVisuals(nextState);
 						}
 						return;
@@ -3099,9 +3263,7 @@ export default defineContentScript({
 				if (type === "error") {
 					state.activeSegmentRequestId = undefined;
 					// Mark the overlay stale so the user sees the degraded (stale) visual state.
-					if (state.draftOverlayElement) {
-						applyDraftOverlayFreshness(state.draftOverlayElement, true);
-					}
+					markDraftOverlayStale(state);
 					console.warn("[content] SEGMENT request failed:", record.message);
 					return;
 				}
