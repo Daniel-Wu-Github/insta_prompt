@@ -939,7 +939,7 @@ describe("content script instrumentation", () => {
 		// HUD is up, with all four keymap rows and the six-entry color legend.
 		const hud = document.querySelector('[data-insta-keymap-hud="true"]') as HTMLDivElement | null;
 		expect(hud).not.toBeNull();
-		expect(hud?.shadowRoot?.querySelectorAll("[data-hud-row]")).toHaveLength(4);
+		expect(hud?.shadowRoot?.querySelectorAll("[data-hud-row]")).toHaveLength(5);
 		expect(hud?.shadowRoot?.querySelectorAll("[data-hud-legend-entry]")).toHaveLength(6);
 		expect(hud?.shadowRoot?.textContent ?? "").toContain("compile prompt");
 

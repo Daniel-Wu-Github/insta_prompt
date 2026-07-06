@@ -49,6 +49,15 @@ test("G-5 plain-textarea: Tab→Enter→⌘Enter flow is fully keyboard-operable
 	states = await readSpanStates(page);
 	expect(states.filter((s) => s.accepted === "true")).toHaveLength(2);
 
+	// BIND-UX-2: Backspace on the focused accepted clause withdraws it; Enter
+	// re-accepts it (round trip, still keyboard-only).
+	await page.keyboard.press("Backspace");
+	states = await readSpanStates(page);
+	expect(states.filter((s) => s.accepted === "true")).toHaveLength(1);
+	await page.keyboard.press("Enter");
+	states = await readSpanStates(page);
+	expect(states.filter((s) => s.accepted === "true")).toHaveLength(2);
+
 	// Ctrl+Enter triggers bind: with accepted clauses the gate is open, so the
 	// ghost panel must show compile feedback (stream will fail later — no
 	// backend in this tier — which is out of scope for the keyboard gate).

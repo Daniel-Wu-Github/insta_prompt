@@ -55,7 +55,7 @@ export default defineContentScript({
 		const DRAFT_ACCEPTED_STALE_OPACITY = String(sectionState.acceptedStale.opacity);
 		// BIND-UX-1: Tab now *reviews* (cycles focus) instead of accepting. Acceptance is
 		// the explicit Enter act, and Esc leaves review mode so Enter sends normally again.
-		const REVIEW_HINT = "Tab to review · Enter to accept · ⌘/Ctrl+Enter to bind · Esc to exit";
+		const REVIEW_HINT = "Tab to review · Enter to accept · ⌫ to un-accept · ⌘/Ctrl+Enter to bind · Esc to exit";
 		// CANONICAL_ORDER_BY_GOAL_TYPE is now imported from packages/core (Track C1) —
 		// one slot-definition source shared across surfaces (canonical-clause-ordering).
 
@@ -1990,6 +1990,7 @@ export default defineContentScript({
 		const KEYMAP_HUD_ROWS: ReadonlyArray<readonly [key: string, action: string]> = [
 			["Tab", "review clauses"],
 			["Enter", "accept focused"],
+			["⌫", "un-accept focused"],
 			["⌘/Ctrl+Enter", "compile prompt"],
 			["Esc", "exit review"],
 		];
@@ -2592,6 +2593,26 @@ export default defineContentScript({
 			return true;
 		};
 
+		// BIND-UX-2: withdraw an acceptance without re-editing the whole prompt.
+		// The inverse of acceptFocusedSegment — the clause returns to its plain
+		// reviewable state (and back into the D2 highlight layer via restamp).
+		const unacceptSegment = (state: ActiveInputState, index: number): boolean => {
+			if (!state.acceptedSegmentIndices.delete(index)) {
+				return false;
+			}
+			const orderPosition = state.acceptanceOrder.indexOf(index);
+			if (orderPosition !== -1) {
+				state.acceptanceOrder.splice(orderPosition, 1);
+			}
+			// hasStaleAccepted qualifies the ACCEPTED set; with nothing accepted
+			// there is nothing left to be stale (and the bind gate is closed anyway).
+			if (state.acceptedSegmentIndices.size === 0) {
+				state.hasStaleAccepted = false;
+			}
+			restampAcceptedSegmentVisuals(state);
+			return true;
+		};
+
 		const findNextUnacceptedIndex = (state: ActiveInputState, fromIndex: number | undefined): number | undefined => {
 			const start = typeof fromIndex === "number" && fromIndex >= 0 ? fromIndex : 0;
 			for (let index = start; index < state.draftSegments.length; index += 1) {
@@ -3020,6 +3041,21 @@ export default defineContentScript({
 					ensureGhostPanel(state);
 					updateGhostPanelStatus(state, REVIEW_HINT);
 				}
+				return;
+			}
+
+			// BIND-UX-2: in review mode, Backspace/Delete on a focused ACCEPTED
+			// clause withdraws the acceptance instead of editing text. On an
+			// unaccepted clause the key falls through to normal text editing —
+			// Esc always exits review mode for uninterrupted editing.
+			if (
+				(event.key === "Backspace" || event.key === "Delete") &&
+				state.focusedSegmentIndex !== undefined &&
+				state.acceptedSegmentIndices.has(state.focusedSegmentIndex)
+			) {
+				event.preventDefault();
+				event.stopPropagation();
+				unacceptSegment(state, state.focusedSegmentIndex);
 				return;
 			}
 

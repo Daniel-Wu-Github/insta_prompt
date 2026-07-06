@@ -211,6 +211,48 @@ describe("Step 10 acceptance state machine", () => {
 		expect(spans.find((span) => span.dataset.focused === "true")?.dataset.segmentIndex).toBe("0");
 	});
 
+	it("BIND-UX-2: Backspace un-accepts the focused accepted clause", async () => {
+		const textarea = await primeTextareaWithSegments("Build the toggle UI. Use React and TypeScript. Maybe later.");
+
+		// Accept clauses 0 and 1.
+		acceptNextSegment(textarea);
+		textarea.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
+		expect(getOverlaySpans().filter((span) => span.dataset.accepted === "true").map((s) => s.dataset.segmentIndex)).toEqual(["0", "1"]);
+
+		// Focus back to clause 1 (focus auto-advanced to 2 after the second accept).
+		textarea.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Tab", shiftKey: true }));
+		expect(getOverlaySpans().find((s) => s.dataset.focused === "true")?.dataset.segmentIndex).toBe("1");
+
+		// Backspace withdraws clause 1's acceptance; clause 0 stays accepted.
+		const backspace = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Backspace" });
+		textarea.dispatchEvent(backspace);
+		expect(backspace.defaultPrevented).toBe(true);
+		expect(getOverlaySpans().filter((span) => span.dataset.accepted === "true").map((s) => s.dataset.segmentIndex)).toEqual(["0"]);
+
+		// On the now-unaccepted focused clause, Backspace falls through to
+		// normal text editing (not intercepted).
+		const secondBackspace = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Backspace" });
+		textarea.dispatchEvent(secondBackspace);
+		expect(secondBackspace.defaultPrevented).toBe(false);
+		expect(getOverlaySpans().filter((span) => span.dataset.accepted === "true").map((s) => s.dataset.segmentIndex)).toEqual(["0"]);
+	});
+
+	it("BIND-UX-2: un-accepting the last accepted clause closes the bind gate", async () => {
+		const textarea = await primeTextareaWithSegments("Build the toggle UI. Use React and TypeScript.");
+
+		acceptNextSegment(textarea);
+		// Focus back onto the accepted clause 0 and withdraw it.
+		textarea.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Tab", shiftKey: true }));
+		textarea.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Backspace" }));
+		expect(getOverlaySpans().filter((span) => span.dataset.accepted === "true")).toHaveLength(0);
+
+		const bridgePort = getLastBridgePort();
+		bridgePort.postMessage.mockClear();
+		textarea.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter", metaKey: true }));
+		await flushMicrotasks();
+		expect(bridgePort.postMessage).not.toHaveBeenCalled();
+	});
+
 	it("upstream edit marks accepted segments stale", async () => {
 		const textarea = await primeTextareaWithSegments("Build the toggle UI. Use React and TypeScript. Maybe later.");
 
