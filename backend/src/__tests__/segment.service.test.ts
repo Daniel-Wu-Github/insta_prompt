@@ -307,4 +307,38 @@ describe("segment service", () => {
 
 		expect(classified).toEqual(intermediatePayload);
 	});
+
+	// SEG-1 regression pin: the classifier call must stay deterministic —
+	// temperature 0 and a system prompt that carries the explicit goal-type
+	// definitions. Same prompt in, same clause classifications out.
+	it("SEG-1: classifier dispatches with temperature 0 and definition-bearing prompts", async () => {
+		const capturedRequests: Array<{ temperature?: number; systemPrompt?: string | null; userPrompt: string }> = [];
+		const capturingAdapter: ProviderStreamingAdapter = {
+			provider: "groq",
+			async *stream(request) {
+				capturedRequests.push({
+					temperature: request.temperature,
+					systemPrompt: request.systemPrompt,
+					userPrompt: request.userPrompt,
+				});
+				yield { type: "token", content: '{"sections":[{"text":"first","goal_type":"context","depends_on":[]}]}' } as ProviderStreamEvent;
+				yield { type: "done" } as ProviderStreamEvent;
+			},
+		};
+		__setSegmentProviderAdapterOverrideForTests("groq", capturingAdapter);
+
+		await classifySegmentsFromStreamingAdapter({
+			segments: ["first"],
+			model: SEGMENT_MODEL,
+		});
+
+		expect(capturedRequests).toHaveLength(1);
+		const request = capturedRequests[0]!;
+		expect(request.temperature).toBe(0);
+		for (const goalType of ["context", "tech_stack", "constraint", "action", "output_format", "edge_case"]) {
+			expect(request.systemPrompt ?? "").toContain(`"${goalType}"`);
+		}
+		expect(request.systemPrompt ?? "").toContain("Goal type definitions");
+		expect(request.userPrompt).toContain("be deterministic");
+	});
 });
