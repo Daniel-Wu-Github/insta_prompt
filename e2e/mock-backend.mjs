@@ -78,11 +78,14 @@ createServer(async (request, response) => {
 			"cache-control": "no-store",
 			connection: "keep-alive",
 		});
+		// Frame shape must match the SW's isStreamEvent contract exactly
+		// ({type:"token",data} … {type:"done"}), same as backend/src/routes —
+		// anything else is rejected as a malformed SSE frame.
 		const payload = url.pathname === "/bind" ? "Compiled prompt (e2e mock)." : "Enhanced clause (e2e mock).";
 		for (const word of payload.split(" ")) {
-			response.write(`data: ${JSON.stringify({ token: `${word} ` })}\n\n`);
+			response.write(`data: ${JSON.stringify({ type: "token", data: `${word} ` })}\n\n`);
 		}
-		response.write("data: [DONE]\n\n");
+		response.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
 		response.end();
 		return;
 	}

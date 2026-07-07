@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { AccountStatus } from "./components/AccountStatus";
 import { ClauseOrderingToggle } from "./components/ClauseOrderingToggle";
+import { HistoryPanel } from "./components/HistoryPanel";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { ModelOverrideToggle } from "./components/ModelOverrideToggle";
 import { ModeToggle } from "./components/ModeToggle";
@@ -12,6 +13,7 @@ import { useAccountStatus } from "./hooks/useAccountStatus";
 import { useClauseOrdering } from "./hooks/useClauseOrdering";
 import { useModelOverride } from "./hooks/useModelOverride";
 import { usePause } from "./hooks/usePause";
+import { usePromptHistory } from "./hooks/usePromptHistory";
 import { useSettings } from "./hooks/useSettings";
 
 const AUTH_STORAGE_KEY = "promptcompiler.auth";
@@ -60,6 +62,7 @@ export default function App() {
 	const { paused, toggle: togglePause } = usePause();
 	const { ordering: clauseOrdering, set: setClauseOrdering } = useClauseOrdering();
 	const { forceGroq, isLoading: modelOverrideLoading, toggle: toggleForceGroq } = useModelOverride();
+	const promptHistory = usePromptHistory();
 
 	// undefined = still loading from storage; null = not authenticated
 	const [auth, setAuth] = useState<StoredAuth | null | undefined>(undefined);
@@ -327,6 +330,12 @@ export default function App() {
 					</p>
 				)}
 				<ProjectSelector projectId={settings.projectId} onChange={setProjectId} />
+				<HistoryPanel
+					entries={promptHistory.entries}
+					notice={promptHistory.notice}
+					onPin={(id, pinned) => { void promptHistory.pin(id, pinned); }}
+					onDelete={(id) => { void promptHistory.remove(id); }}
+				/>
 				<UpgradeCTA visible={showUpgradeCTA} />
 			</div>
 

@@ -1,4 +1,5 @@
 import { GOAL_TYPE_VALUES, MODE_VALUES, type GoalType, type Mode, type SegmentRequest } from "../../../shared/contracts";
+import { savePromptToHistory } from "../lib/prompt-history";
 import { brand, clauseAccent, clauseEncoding, motionPreset, rgba, sectionState, shadowBaseCss, transition as motionTransition, zIndex } from "../../../shared/design";
 import { CANONICAL_ORDER_BY_GOAL_TYPE, GOAL_TYPES_IN_CANONICAL_ORDER } from "../../../packages/core";
 
@@ -2861,6 +2862,13 @@ export default defineContentScript({
 				element.textContent = text;
 				element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
 			}
+
+			// Prompt history: a successful commit is the moment a compiled prompt
+			// becomes real — snapshot it for the popup's history/template library.
+			// Fire-and-forget: a storage failure must never break the commit itself.
+			void resolveBridgeContext()
+				.then(({ mode }) => savePromptToHistory({ prompt: text, host: location.host, mode }))
+				.catch(() => undefined);
 
 			resetActiveInputAfterCommit(state);
 			return true;
