@@ -283,6 +283,44 @@ describe("Step 10 acceptance state machine", () => {
 		expect(bridgePort.postMessage).not.toHaveBeenCalled();
 	});
 
+	it("Option E: BIND payload carries every clause, tagging unaccepted ones with raw text", async () => {
+		const textarea = await primeTextareaWithSegments("Build the toggle UI. Use React and TypeScript. Maybe later.");
+
+		const spans = getOverlaySpans();
+		expect(spans.length).toBeGreaterThanOrEqual(3);
+
+		// Accept only the first clause; the rest stay unreviewed.
+		acceptNextSegment(textarea);
+
+		const bridgePort = getLastBridgePort();
+		bridgePort.postMessage.mockClear();
+		textarea.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter", metaKey: true }));
+		await flushMicrotasks();
+
+		type BindBridgeMessage = {
+			verb: string;
+			payload?: { sections?: Array<{ expansion: string; accepted: boolean; goal_type: string; canonical_order: number }> };
+		};
+		const bindCall = bridgePort.postMessage.mock.calls
+			.map((call) => call[0] as BindBridgeMessage)
+			.find((message) => message.verb === "BIND");
+		expect(bindCall).toBeDefined();
+
+		const sections = bindCall?.payload?.sections ?? [];
+		expect(sections.length).toBe(spans.length);
+		expect(sections.filter((section) => section.accepted).length).toBe(1);
+
+		// Unaccepted clauses ship their RAW text (never a cached enhancement),
+		// and every section arrives pre-sorted in canonical clause order.
+		for (const section of sections) {
+			if (!section.accepted) {
+				expect(textarea.value).toContain(section.expansion);
+			}
+		}
+		const orders = sections.map((section) => section.canonical_order);
+		expect(orders).toEqual([...orders].sort((a, b) => a - b));
+	});
+
 	it("Cmd+Enter is a no-op when accepted segments are stale", async () => {
 		const textarea = await primeTextareaWithSegments("Build the toggle UI. Use React and TypeScript. Maybe later.");
 

@@ -10,6 +10,8 @@ export type GoalPromptInput = {
 
 export type BindPromptSection = Pick<Section, "canonical_order" | "goal_type"> & {
 	expansion: string;
+	// Option E: omitted ⇒ accepted (backward-compatible with v1 payloads).
+	accepted?: boolean;
 };
 
 export type BindPromptInput = {

@@ -137,10 +137,41 @@ describe("prompt factories", () => {
 		);
 		expect(prompt).toContain("Remove duplicate or overlapping content while preserving intent.");
 
-		const contextIndex = prompt.indexOf("[slot 1 | context]");
-		const edgeCaseIndex = prompt.indexOf("[slot 6 | edge_case]");
+		const contextIndex = prompt.indexOf("[slot 1 | context | ACCEPTED]");
+		const edgeCaseIndex = prompt.indexOf("[slot 6 | edge_case | ACCEPTED]");
 		expect(contextIndex).toBeGreaterThan(-1);
 		expect(edgeCaseIndex).toBeGreaterThan(contextIndex);
+	});
+
+	it("bind prompt tags acceptance per section and instructs verbatim handling of unaccepted ones", () => {
+		const prompt = bindPrompt({
+			mode: "balanced",
+			sections: [
+				{
+					canonical_order: 4,
+					goal_type: "action",
+					expansion: "Implement server-side pagination for the ticket list.",
+					accepted: true,
+				},
+				{
+					canonical_order: 6,
+					goal_type: "edge_case",
+					expansion: "handle empty inputs somehow",
+					accepted: false,
+				},
+				{
+					// Omitted `accepted` must default to ACCEPTED (v1 payload compat).
+					canonical_order: 1,
+					goal_type: "context",
+					expansion: "This is a B2B admin console used by support teams.",
+				},
+			],
+		});
+
+		expect(prompt).toContain("[slot 1 | context | ACCEPTED]");
+		expect(prompt).toContain("[slot 4 | action | ACCEPTED]");
+		expect(prompt).toContain("[slot 6 | edge_case | UNACCEPTED] handle empty inputs somehow");
+		expect(prompt).toContain("UNACCEPTED sections were NOT reviewed by the user");
 	});
 
 	it("keeps canonical bind slot order stable", () => {

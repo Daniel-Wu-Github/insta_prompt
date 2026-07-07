@@ -109,6 +109,8 @@ export default defineBackground(() => {
 				canonical_order: z.number().int().min(1).max(6),
 				goal_type: z.string().trim().min(1),
 				expansion: z.string().trim().min(1),
+				// Option E: unaccepted clauses ride along for verbatim pass-through.
+				accepted: z.boolean().optional(),
 			}).strict()).min(1),
 			mode: z.string().trim().min(1),
 		}).strict(),

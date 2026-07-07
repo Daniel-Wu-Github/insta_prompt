@@ -2694,22 +2694,28 @@ export default defineContentScript({
 			}, 2000);
 		};
 
-		const collectAcceptedBindSections = (state: ActiveInputState): Array<{
+		// Option E (BIND-DESIGN-1): EVERY clause rides in the bind payload, tagged
+		// with its acceptance. Accepted clauses carry their enhanced expansion for
+		// full compilation; unaccepted ones carry their raw text so the backend
+		// passes them through near-verbatim in canonical position — committing no
+		// longer destroys what the user didn't review. Bind still requires ≥1
+		// accepted clause (isBindGateOpen), so a pure pass-through bind cannot fire.
+		const collectBindSections = (state: ActiveInputState): Array<{
 			canonical_order: number;
 			goal_type: GoalType;
 			expansion: string;
+			accepted: boolean;
 		}> => {
-			const sections: Array<{ canonical_order: number; goal_type: GoalType; expansion: string }> = [];
-			for (const index of state.acceptedSegmentIndices) {
-				const segment = state.draftSegments[index];
-				if (!segment) {
-					continue;
-				}
-
+			const sections: Array<{ canonical_order: number; goal_type: GoalType; expansion: string; accepted: boolean }> = [];
+			for (const [index, segment] of state.draftSegments.entries()) {
+				const accepted = state.acceptedSegmentIndices.has(index);
 				sections.push({
 					canonical_order: CANONICAL_ORDER_BY_GOAL_TYPE[segment.goalType],
 					goal_type: segment.goalType,
-					expansion: state.enhancedTextBySegmentId.get(segment.id) ?? segment.text,
+					// Unaccepted clauses deliberately send RAW text, not any cached
+					// enhancement — the user never approved the enhanced form.
+					expansion: accepted ? state.enhancedTextBySegmentId.get(segment.id) ?? segment.text : segment.text,
+					accepted,
 				});
 			}
 
@@ -2722,7 +2728,7 @@ export default defineContentScript({
 				return;
 			}
 
-			const sections = collectAcceptedBindSections(state);
+			const sections = collectBindSections(state);
 			if (sections.length === 0) {
 				return;
 			}

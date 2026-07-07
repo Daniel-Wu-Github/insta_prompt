@@ -209,8 +209,9 @@ describe("/bind route", () => {
 		}) as unknown as typeof globalThis.fetch;
 
 		const outOfOrderSections = [
-			{ canonical_order: 6, goal_type: "edge_case", expansion: "Handle empty states." },
-			{ canonical_order: 4, goal_type: "action", expansion: "Build the toggle interactions." },
+			// Option E: accepted:false travels the wire; omitted means accepted.
+			{ canonical_order: 6, goal_type: "edge_case", expansion: "Handle empty states.", accepted: false },
+			{ canonical_order: 4, goal_type: "action", expansion: "Build the toggle interactions.", accepted: true },
 			{ canonical_order: 1, goal_type: "context", expansion: "This is an internal dashboard." },
 			{ canonical_order: 2, goal_type: "tech_stack", expansion: "Use React and TypeScript." },
 		] as const;
@@ -234,15 +235,16 @@ describe("/bind route", () => {
 		expect(messages.length).toBe(1);
 
 		const prompt = messages[0]?.content ?? "";
-		const contextIndex = prompt.indexOf("[slot 1 | context]");
-		const techStackIndex = prompt.indexOf("[slot 2 | tech_stack]");
-		const actionIndex = prompt.indexOf("[slot 4 | action]");
-		const edgeCaseIndex = prompt.indexOf("[slot 6 | edge_case]");
+		const contextIndex = prompt.indexOf("[slot 1 | context | ACCEPTED]");
+		const techStackIndex = prompt.indexOf("[slot 2 | tech_stack | ACCEPTED]");
+		const actionIndex = prompt.indexOf("[slot 4 | action | ACCEPTED]");
+		const edgeCaseIndex = prompt.indexOf("[slot 6 | edge_case | UNACCEPTED]");
 
 		expect(contextIndex).toBeGreaterThan(-1);
 		expect(techStackIndex).toBeGreaterThan(contextIndex);
 		expect(actionIndex).toBeGreaterThan(techStackIndex);
 		expect(edgeCaseIndex).toBeGreaterThan(actionIndex);
+		expect(prompt).toContain("UNACCEPTED sections were NOT reviewed by the user");
 	});
 
 	it("streams ordered token events, persists history exactly once, and emits one done", async () => {

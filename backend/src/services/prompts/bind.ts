@@ -69,6 +69,9 @@ export function canonicalizeBindSections(sections: readonly BindPromptSection[])
 				canonical_order: canonicalSlotForGoalType(section.goal_type),
 				goal_type: section.goal_type,
 				expansion: normalizeText(section.expansion),
+				// Option E: omitted means accepted — v1 payloads only ever carried
+				// accepted sections, so absence and true are the same statement.
+				accepted: section.accepted !== false,
 			};
 		})
 		.filter((section) => section.expansion.length > 0)
@@ -84,7 +87,8 @@ export function serializeBindSections(sections: readonly BindPromptSection[]): s
 		.map((section) => {
 			const bounded = truncateText(section.expansion, MAX_SECTION_EXPANSION_CHARS);
 			const canonicalSlot = canonicalSlotForGoalType(section.goal_type);
-			return `- [slot ${canonicalSlot} | ${section.goal_type}] ${bounded}`;
+			const acceptance = section.accepted !== false ? "ACCEPTED" : "UNACCEPTED";
+			return `- [slot ${canonicalSlot} | ${section.goal_type} | ${acceptance}] ${bounded}`;
 		})
 		.filter((line) => line.length > 0);
 
@@ -108,6 +112,8 @@ export function bindPrompt({ mode, sections }: BindPromptInput): string {
 		"- Merge all sections into one coherent final prompt.",
 		"- Remove duplicate or overlapping content while preserving intent.",
 		"- Keep tone, terminology, and instruction hierarchy consistent.",
+		"- ACCEPTED sections are user-approved: rewrite, merge, and polish them freely.",
+		"- UNACCEPTED sections were NOT reviewed by the user: include each one in its canonical slot with its text preserved as close to verbatim as grammar allows. Do not expand, embellish, or merge them away.",
 		"",
 		"Mode-specific directives:",
 		modeInstructionBlock,

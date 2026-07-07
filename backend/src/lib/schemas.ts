@@ -63,6 +63,9 @@ export const bindRequestSchema = z
             canonical_order: z.number().int().min(1).max(6),
             goal_type: goalTypeSchema,
             expansion: z.string().min(1),
+            // Option E (v1.1, additive): omitted ⇒ accepted (v1 clients only
+            // ever sent accepted sections). false ⇒ pass through near-verbatim.
+            accepted: z.boolean().optional(),
           })
           .strict(),
       )

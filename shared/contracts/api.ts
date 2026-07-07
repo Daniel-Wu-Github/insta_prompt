@@ -17,7 +17,11 @@ export interface EnhanceRequest {
 }
 
 export interface BindRequest {
-  sections: Array<Pick<Section, "canonical_order" | "goal_type"> & { expansion: string }>;
+  // BIND-DESIGN-1 Option E (contract v1.1, additive): `accepted` marks whether
+  // the user explicitly accepted the clause. Unaccepted sections are passed
+  // through near-verbatim in canonical position instead of being destroyed by
+  // the commit. Omitted ⇒ true (v1 clients sent accepted sections only).
+  sections: Array<Pick<Section, "canonical_order" | "goal_type"> & { expansion: string; accepted?: boolean }>;
   mode: Mode;
 }
 

@@ -69,9 +69,9 @@ describe("llm service handoff helpers", () => {
 		]);
 		expect(assembled.canonicalSections.map((section) => section.canonical_order)).toEqual([1, 4, 6]);
 
-		const contextIndex = assembled.prompt.indexOf("[slot 1 | context]");
-		const actionIndex = assembled.prompt.indexOf("[slot 4 | action]");
-		const edgeCaseIndex = assembled.prompt.indexOf("[slot 6 | edge_case]");
+		const contextIndex = assembled.prompt.indexOf("[slot 1 | context | ACCEPTED]");
+		const actionIndex = assembled.prompt.indexOf("[slot 4 | action | ACCEPTED]");
+		const edgeCaseIndex = assembled.prompt.indexOf("[slot 6 | edge_case | ACCEPTED]");
 
 		expect(contextIndex).toBeGreaterThan(-1);
 		expect(actionIndex).toBeGreaterThan(contextIndex);
