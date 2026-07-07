@@ -2,8 +2,8 @@ import { buildGoalPrompt } from "./base";
 import type { GoalPromptInput } from "./types";
 
 const TECH_STACK_DIRECTIVES = [
-	"Name required languages, frameworks, runtimes, and key tools explicitly.",
-	"Clarify compatibility or version expectations when implied by the clause.",
+	"State exactly the languages, frameworks, runtimes, and tools the clause names — no more.",
+	"Never add technologies, package managers, or version requirements the clause does not mention.",
 	"Separate hard technical requirements from optional preferences.",
 ] as const;
 

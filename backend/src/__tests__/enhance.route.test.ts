@@ -188,7 +188,7 @@ describe("/enhance route", () => {
 		expect(messages.length).toBe(1);
 		expect(messages[0]?.role).toBe("user");
 		expect(messages[0]?.content).toContain("Goal type: action");
-		expect(messages[0]?.content).toContain("Use a structured response with 2-3 short sections.");
+		expect(messages[0]?.content).toContain("Rewrite the clause as one tight paragraph of imperative instructions (2-4 sentences).");
 		expect(providerBody.max_completion_tokens).toBe(500);
 	});
 

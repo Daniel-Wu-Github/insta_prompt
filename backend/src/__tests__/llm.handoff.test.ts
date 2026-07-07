@@ -37,7 +37,7 @@ describe("llm service handoff helpers", () => {
 
 		expect(first).toBe(second);
 		expect(first).toContain("Goal type: action");
-		expect(first).toContain("Use a structured response with 2-3 short sections.");
+		expect(first).toContain("Rewrite the clause as one tight paragraph of imperative instructions (2-4 sentences).");
 	});
 
 	it("enforces canonical bind ordering semantics during bind-template assembly", () => {

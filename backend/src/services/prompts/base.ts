@@ -22,7 +22,7 @@ export function buildGoalPrompt(template: GoalPromptTemplate, input: GoalPromptI
 
 	return [
 		"You are a prompt compiler.",
-		"Expand one clause into a clear prompt fragment while preserving user intent.",
+		"Rewrite one clause into a sharper prompt fragment while preserving user intent.",
 		`Goal type: ${template.goalType}`,
 		`Goal intent: ${template.goalIntent}`,
 		`Source clause: ${clauseText}`,
@@ -35,7 +35,9 @@ export function buildGoalPrompt(template: GoalPromptTemplate, input: GoalPromptI
 		siblingContextBlock,
 		"",
 		"Output requirements:",
-		"- Return only the expanded prompt fragment.",
+		"- Return only the rewritten prompt fragment, in imperative voice addressed to an AI assistant.",
+		"- Preserve every concrete fact in the source clause.",
+		"- Do not invent requirements, versions, tools, metrics, or scope the clause does not state or clearly imply.",
 		"- Keep the wording provider-agnostic and implementation-neutral.",
 		"- Do not include analysis, preamble, or markdown code fences.",
 	].join("\n");

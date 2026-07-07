@@ -102,6 +102,11 @@ export function createSegmentClassificationPrompt(segments: string[]): SegmentPr
 			'- "action": the core task or imperative request — what to actually produce or do. "Write a function that categorizes monthly expenses by type."',
 			'- "output_format": the shape, structure, or medium of the deliverable. "Return the results as a markdown table with columns for category and trend."',
 			'- "edge_case": exceptions, error handling, or boundary conditions to account for. "Handle the case where some months have no transactions for a category."',
+			"",
+			"Disambiguation rules (apply in order):",
+			'- A segment asking for a plan, list, table, JSON, steps, or any specific FORM of the answer is "output_format", even when phrased as an imperative. "Give me a step by step plan I can follow." -> output_format.',
+			'- A segment about what happens when something is missing, empty, failing, or unavailable is "edge_case", not "constraint". "Don\'t break if storage is empty or the API is down." -> edge_case.',
+			'- "constraint" is reserved for limits the solution itself must satisfy (performance, dependencies, compatibility, rules).',
 		].join("\n"),
 		userPrompt: [
 			"Classify each segment into one section record in the same order as input.",

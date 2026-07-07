@@ -24,9 +24,9 @@ const GOAL_TYPES: GoalType[] = [
 const MODES: Mode[] = ["efficiency", "balanced", "detailed"];
 
 const EXPECTED_MODE_SNIPPETS: Record<Mode, string> = {
-	efficiency: "Keep the output concise: one compact paragraph.",
-	balanced: "Use a structured response with 2-3 short sections.",
-	detailed: "Produce a comprehensive, highly specific prompt fragment.",
+	efficiency: "Rewrite the clause as one or two precise imperative sentences.",
+	balanced: "Rewrite the clause as one tight paragraph of imperative instructions (2-4 sentences).",
+	detailed: "Rewrite the clause as a specific, comprehensive instruction block.",
 };
 
 const EXPECTED_MODE_TOKEN_BUDGETS: Record<Mode, number> = {
@@ -172,6 +172,22 @@ describe("prompt factories", () => {
 		expect(prompt).toContain("[slot 4 | action | ACCEPTED]");
 		expect(prompt).toContain("[slot 6 | edge_case | UNACCEPTED] handle empty inputs somehow");
 		expect(prompt).toContain("UNACCEPTED sections were NOT reviewed by the user");
+	});
+
+	// BE-QUAL-1 regression pins: the bind pass compiles instead of concatenating
+	// (observed failure: one heading per slot, expansions pasted verbatim in
+	// third-person narrative), and enhance sharpens instead of padding
+	// (observed failure: invented versions/tools under boilerplate headers).
+	it("bind prompt pins the anti-stitching and anti-invention objectives", () => {
+		const prompt = bindPrompt({
+			mode: "balanced",
+			sections: [{ canonical_order: 4, goal_type: "action", expansion: "Build the toggle." }],
+		});
+
+		expect(prompt).toContain("Rewrite, do not stitch");
+		expect(prompt).toContain("Do not mirror the slot structure as output structure");
+		expect(prompt).toContain("imperative voice");
+		expect(prompt).toContain("Do not invent requirements, versions, tools, or scope that no section states.");
 	});
 
 	it("keeps canonical bind slot order stable", () => {

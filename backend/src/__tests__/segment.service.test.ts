@@ -340,5 +340,10 @@ describe("segment service", () => {
 		}
 		expect(request.systemPrompt ?? "").toContain("Goal type definitions");
 		expect(request.userPrompt).toContain("be deterministic");
+		// BE-QUAL-1: disambiguation rules for the two misclassifications observed
+		// against live Groq ("give me a plan" -> context, "don't break if" -> constraint).
+		expect(request.systemPrompt ?? "").toContain("Disambiguation rules");
+		expect(request.systemPrompt ?? "").toContain('FORM of the answer is "output_format"');
+		expect(request.systemPrompt ?? "").toContain('"edge_case", not "constraint"');
 	});
 });
