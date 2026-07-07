@@ -998,4 +998,40 @@ describe("content script instrumentation", () => {
 		expect(document.querySelector('[data-insta-keymap-hud="true"]')).not.toBeNull();
 		expect(document.querySelector('[data-insta-coach-mark="true"]')).toBeNull();
 	});
+
+	it("OD-11: reports extension-attributable errors with pipeline context, ignores host-page errors", async () => {
+		const contentScript = await loadContentScript();
+		contentScript.main(createContentScriptCtx());
+
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+		// Host-page error: stack points at the page's own script — must be ignored.
+		const hostError = new Error("host page exploded");
+		hostError.stack = "Error: host page exploded\n    at https://chat.example.com/app.js:1:1";
+		window.dispatchEvent(
+			new ErrorEvent("error", { message: hostError.message, error: hostError, filename: "https://chat.example.com/app.js" }),
+		);
+		expect(warnSpy.mock.calls.some(([tag]) => tag === "[insta-prompt][client-error]")).toBe(false);
+
+		// Extension error: stack points inside chrome-extension://<our id>/ — must be reported.
+		const extensionError = new Error("overlay render failed");
+		extensionError.stack =
+			"Error: overlay render failed\n    at chrome-extension://test-extension-id/content-scripts/content.js:10:5";
+		window.dispatchEvent(new ErrorEvent("error", { message: extensionError.message, error: extensionError }));
+
+		const reportCall = warnSpy.mock.calls.find(([tag]) => tag === "[insta-prompt][client-error]");
+		expect(reportCall).toBeDefined();
+		const report = reportCall?.[1] as {
+			source: string;
+			host: string;
+			message: string;
+			context: { overlayCount: number };
+		};
+		expect(report.source).toBe("insta-prompt-content");
+		expect(report.message).toBe("overlay render failed");
+		expect(report.context).toBeDefined();
+		expect(typeof report.context.overlayCount).toBe("number");
+
+		warnSpy.mockRestore();
+	});
 });

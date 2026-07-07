@@ -3710,6 +3710,86 @@ export default defineContentScript({
 			}
 		});
 
+		// OD-11 (decoupled from the DSN decision): minimal client-side error
+		// observability. Captures uncaught errors and unhandled rejections that are
+		// attributable to THIS extension — host pages throw constantly, and
+		// reporting those would be pure noise — snapshots the pipeline state that
+		// matters for triage, and hands the structured report to one delivery seam
+		// where a Sentry-style transport can plug in later without refactor.
+		interface ExtensionErrorReport {
+			source: "insta-prompt-content";
+			version: string;
+			host: string;
+			message: string;
+			stack: string | undefined;
+			timestamp: string;
+			context: {
+				status: InputLifecycleState | undefined;
+				bindPhase: ActiveInputState["bindPhase"] | undefined;
+				renderMode: DraftRenderMode | undefined;
+				overlayCount: number;
+				acceptedCount: number | undefined;
+			};
+		}
+
+		const EXTENSION_ORIGIN: string | undefined =
+			typeof chrome !== "undefined" && chrome.runtime?.getURL ? chrome.runtime.getURL("") : undefined;
+		const ERROR_REPORT_BUFFER_LIMIT = 20;
+		const recentErrorReports: ExtensionErrorReport[] = [];
+
+		const isExtensionError = (stack: string | undefined, fileName: string | undefined): boolean => {
+			// Without a resolvable extension origin, attribution is impossible —
+			// stay silent rather than hoover up the host page's errors.
+			if (!EXTENSION_ORIGIN) return false;
+			return Boolean(stack?.includes(EXTENSION_ORIGIN) || fileName?.includes(EXTENSION_ORIGIN));
+		};
+
+		const deliverErrorReport = (report: ExtensionErrorReport): void => {
+			recentErrorReports.push(report);
+			if (recentErrorReports.length > ERROR_REPORT_BUFFER_LIMIT) {
+				recentErrorReports.shift();
+			}
+			// Sentry seam (OD-11): when a DSN lands, forward `report` from here via
+			// the background worker — proxy-only rule means no third-party calls
+			// from the content script itself.
+			console.warn("[insta-prompt][client-error]", report);
+		};
+
+		const reportExtensionError = (message: string, stack: string | undefined): void => {
+			deliverErrorReport({
+				source: "insta-prompt-content",
+				version: chrome.runtime?.getManifest?.().version ?? "unknown",
+				// Host only — never the full URL, query string, or any page content.
+				host: location.host,
+				message,
+				stack,
+				timestamp: new Date().toISOString(),
+				context: {
+					status: activeInputState?.status,
+					bindPhase: activeInputState?.bindPhase,
+					renderMode: activeInputState?.draftRenderMode,
+					overlayCount: document.querySelectorAll('[data-insta-draft-overlay="true"]').length,
+					acceptedCount: activeInputState?.acceptedSegmentIndices.size,
+				},
+			});
+		};
+
+		const windowErrorListener = (event: ErrorEvent): void => {
+			const stack = event.error instanceof Error ? event.error.stack : undefined;
+			if (!isExtensionError(stack, event.filename)) return;
+			reportExtensionError(event.message, stack);
+		};
+
+		const unhandledRejectionListener = (event: PromiseRejectionEvent): void => {
+			const reason: unknown = event.reason;
+			const stack = reason instanceof Error ? reason.stack : undefined;
+			if (!isExtensionError(stack, undefined)) return;
+			reportExtensionError(reason instanceof Error ? reason.message : String(reason), stack);
+		};
+
+		window.addEventListener("error", windowErrorListener);
+		window.addEventListener("unhandledrejection", unhandledRejectionListener);
+
 		getBridgePort(); // establish initial connection eagerly
 
 		// dom-memory-management Rule 8: on content-script invalidation (extension reload,
@@ -3720,6 +3800,8 @@ export default defineContentScript({
 			discoveryObserver?.disconnect();
 			modalObserver.disconnect();
 			removeKeymapHud();
+			window.removeEventListener("error", windowErrorListener);
+			window.removeEventListener("unhandledrejection", unhandledRejectionListener);
 			for (const instrumented of [..._instrumentCleanups.keys()]) {
 				teardownInstrument(instrumented);
 			}
