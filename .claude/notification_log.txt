@@ -686,3 +686,43 @@
   Message: Claude Code is waiting for your approval or input
   Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
 
+[18:49:23Z] Notification event
+  Message: Claude Code is waiting for your approval or input
+  Env vars: CLAUDE_NOTIFICATION='' NOTIFICATION='' CLAUDE_MESSAGE=''
+
+[20:13:04Z] Push SENT  HTTP:200  title='PromptCompiler'  msg='Test: insta_prompt migration complete'
+[20:16:37Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — ToolSearch: WebSearch WebFetch
+  session: 8d9b200e-09a9-468b-bfd7-caebaf0b5375
+
+[20:16:37Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — ToolSearch: WebSearch WebF'
+[20:17:32Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — Bash: grep -rn "checks\]" fly.toml; echo "---"; flyctl config show -a promptcompiler-b
+  session: 8d9b200e-09a9-468b-bfd7-caebaf0b5375
+
+[20:17:33Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — Bash: grep -rn "checks\]" '
+[20:43:20Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — Bash: git add fly.toml && git log -3 --oneline
+  session: 8d9b200e-09a9-468b-bfd7-caebaf0b5375
+
+[20:43:20Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — Bash: git add fly.toml && '
+[20:43:40Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — Bash: git add fly.toml && git log -3 --oneline
+  session: 8d9b200e-09a9-468b-bfd7-caebaf0b5375
+
+[20:43:40Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — Bash: git add fly.toml && '
+[06:03:18Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'
+[06:04:18Z] Notification
+  type:    idle_prompt
+  message: Idle — waiting for your input
+  session: 8d9b200e-09a9-468b-bfd7-caebaf0b5375
+
+[06:04:19Z] Push SENT  HTTP:200  title='💬 Claude is Waiting'  msg='Idle — waiting for your input'
+[16:30:38Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'
+[18:34:39Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'
+[18:45:18Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'
+[18:45:36Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'

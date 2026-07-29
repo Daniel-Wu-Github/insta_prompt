@@ -1604,3 +1604,63 @@ Entries are grouped by branch and extend commit messages with file-level change 
       - A human/05_RETURN_BRIEFING.md
       - M human/README.md
       - M logging/commit_log.md
+### 2026-07-04 20:45:25Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/v2/track-d-polish
+- Range: f11b617d955fa0f8b431cdd674e4972450b7c7df..97138247d74d042885d46d5f9bab08e3bd484fb4
+- Commits:
+  - 9713824 Migrate to shared ai-workflow repo for skills/scripts/hooks
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-07-04T15:13:20-05:00
+    - Purpose: Replaces real copies of governance skills, notification/verification
+    - Files:
+      - T .claude/agents/beast-mode-3-1.md
+      - A .claude/ai-workflow.env
+      - T .claude/config
+      - M .claude/settings.json
+      - T .gemini/agents/beast-mode-3-1.md
+      - A .gemini/settings.json
+      - T .githooks/pre-commit
+      - T .githooks/pre-push
+      - A .github/skills/detailed-chat-output
+      - D .github/skills/detailed-chat-output/SKILL.md
+      - A .github/skills/documentation-cohesion
+      - D .github/skills/documentation-cohesion/SKILL.md
+      - A .github/skills/manual-testing-guides
+      - D .github/skills/manual-testing-guides/SKILL.md
+      - A .github/skills/remote-commit-logging
+      - D .github/skills/remote-commit-logging/SKILL.md
+      - A .github/skills/repo-workflow
+      - D .github/skills/repo-workflow/SKILL.md
+      - A .github/skills/scope-creep-guard
+      - D .github/skills/scope-creep-guard/SKILL.md
+      - A .github/skills/self-improvement-loop
+      - D .github/skills/self-improvement-loop/SKILL.md
+      - A .github/skills/skill-improvement-loop
+      - D .github/skills/skill-improvement-loop/SKILL.md
+      - D .github/skills/skill-improvement-loop/scripts/implicit-skill-smoke-test.sh
+      - A .github/skills/skill-map-governance
+      - D .github/skills/skill-map-governance/SKILL.md
+      - A .github/skills/verification-gate
+      - D .github/skills/verification-gate/SKILL.md
+      - A .github/skills/workflow-logging
+      - D .github/skills/workflow-logging/SKILL.md
+      - A scripts/analyze-patterns.sh
+      - A scripts/gemini-hook-adapter.sh
+      - A scripts/implicit-skill-smoke-test.sh
+      - T scripts/notify-approval.sh
+      - T scripts/notify.sh
+      - T scripts/post-edit-check.sh
+      - T scripts/update-skill-memory.sh
+
+### 2026-07-07 06:03:08Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/v2/track-d-polish
+- Range: 97138247d74d042885d46d5f9bab08e3bd484fb4..1d892c0009b23f1efc230c605d76a0b03b5c15ea
+- Commits:
+  - 1d892c0 fix(deploy): scale Fly.io machines to zero and shrink VM size
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-07-07T01:03:03-05:00
+    - Purpose: Two machines were running 24/7 at 1GB RAM, generating $14.24 in a
+    - Files:
+      - M fly.toml

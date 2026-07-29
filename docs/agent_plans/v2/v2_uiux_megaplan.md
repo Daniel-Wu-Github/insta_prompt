@@ -253,7 +253,7 @@ This section makes the plan executable by an autonomous agent across a long, pos
 
 Work **one step at a time**, in the Track order of §7 (A→B→C→D→E→G, F in parallel). For every step `X.n`:
 
-1. **Load gates.** Read `.github/skills/SKILL_MAP.md`, then load `scope-creep-guard` (mandatory) + the task-domain skills for that step (see `CLAUDE.md` task→skill table).
+1. **Load gates.** Read `.claude/skills/SKILL_MAP.md`, then invoke `Skill(scope-creep-guard)` (mandatory) + the task-domain skills for that step (see `CLAUDE.md` task→skill table).
 2. **Declare scope.** Write the step's allow-list (files you may touch) and deny-list (nearby out-of-scope behavior) into the task tracker before editing.
 3. **Implement** the minimum complete behavior for that step only.
 4. **Run the QC gate** (§7A.3). 

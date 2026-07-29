@@ -18,5 +18,6 @@ Thumbs.db
 docs-pass.diff
 portable-skills-logging-response-and-self-improvement/
 
-.claude/skills/
+# .claude/skills/ is tracked — skills must be committed for the Skill tool to
+# find them in a fresh clone.
 .gemini/skills/
