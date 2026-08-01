@@ -15,8 +15,8 @@ Do not use this skill for first-time issues that have no evidence of repetition.
 
 ## Files and Surfaces
 
-- .github/skills/SKILL_MAP.md
-- .github/skills/
+- .claude/skills/SKILL_MAP.md
+- .claude/skills/
 - .github/prompts/
 - docs/
 - /memories/

@@ -97,4 +97,4 @@ stale/paused treatment.
 | Popover status colors | shadow-root `<style>` in `createDraftHoverPopoverShell` |
 | Popover legend | `buildDraftHoverLegend`, `GOAL_TYPE_LEGEND_LABEL` |
 
-Related: `docs/UX_FLOW.md` (§ Clause Colors, § Section States), `.github/skills/ui-design-system/SKILL.md`.
+Related: `docs/UX_FLOW.md` (§ Clause Colors, § Section States), `Skill(ui-design-system)`.

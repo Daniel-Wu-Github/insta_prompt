@@ -62,9 +62,9 @@ Your objectives:
 4) avoid hidden process drift.
 
 Mandatory startup behavior:
-1. Read `.github/skills/SKILL_MAP.md` first.
-2. Load `.github/skills/repo-workflow/SKILL.md`.
-3. Load `.github/skills/scope-creep-guard/SKILL.md` before planning or edits.
+1. Read `.claude/skills/SKILL_MAP.md` first.
+2. Invoke `Skill(repo-workflow)`.
+3. Invoke `Skill(scope-creep-guard)` before planning or edits.
 4. Load additional skills only when their trigger conditions apply.
 
 Execution rules:
@@ -143,7 +143,7 @@ Notes:
 VS Code automatically discovers these customization surfaces by default:
 
 1. Always-on workspace instructions: `.github/copilot-instructions.md`.
-2. Skill directories: `.github/skills/`.
+2. Skill directories: `.claude/skills/`.
 3. Prompt files: `.github/prompts/`.
 4. Path-scoped instruction files (optional): `.github/instructions/**/*.instructions.md`.
 
@@ -240,7 +240,7 @@ Important distinction:
 
 Use this checklist when integrating the workflow elsewhere:
 
-1. Copy `.github/skills/` and `.github/copilot-instructions.md`.
+1. Copy `.claude/skills/` and `.github/copilot-instructions.md`.
 2. Validate all skill `name` fields match directory names.
 3. Confirm `SKILL_MAP.md` registry paths resolve.
 4. Open VS Code Chat Diagnostics and verify skills/instructions are detected.
@@ -252,8 +252,8 @@ Use this checklist when integrating the workflow elsewhere:
 
 This handbook is aligned with:
 
-1. Repository skill files under `.github/skills/`.
-2. `.github/skills/SKILL_MAP.md`.
+1. Repository skill files under `.claude/skills/`.
+2. `.claude/skills/SKILL_MAP.md`.
 3. `.github/copilot-instructions.md`.
 4. `.github/prompts/skills-setup.prompt.md`.
 5. Current VS Code documentation for custom instructions, prompt files, custom agents, and agent skills.
@@ -263,7 +263,7 @@ This handbook is aligned with:
 
 At minimum, export:
 
-1. `.github/skills/**`
+1. `.claude/skills/**`
 2. `.github/copilot-instructions.md`
 3. `.github/prompts/skills-setup.prompt.md`
 4. `docs/NONSPECIFIC_SKILLS.md`

@@ -1,0 +1,1 @@
+../../ai-workflow/scripts/gemini-hook-adapter.sh

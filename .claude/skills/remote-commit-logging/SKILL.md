@@ -17,8 +17,8 @@ Do not use this skill for ordinary change summaries that do not require push-tri
 
 - .githooks/pre-push
 - logging/commit_log.md
-- .github/skills/SKILL_MAP.md
-- .github/skills/workflow-logging/SKILL.md
+- .claude/skills/SKILL_MAP.md
+- .claude/skills/workflow-logging/SKILL.md
 
 ## Deliverables
 

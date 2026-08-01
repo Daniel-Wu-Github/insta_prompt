@@ -31,13 +31,6 @@ Prevent hidden expansion of scope by forcing explicit boundaries on:
 5. After edits, run a changed-file audit and map each change to the declared phase objective.
 6. If any change does not map to the objective, treat it as scope creep and remove or quarantine it before completion.
 
-## PromptCompiler-Specific Guardrails
-
-1. Respect step boundaries in docs/agent_plans and source-of-truth docs.
-2. Step 1 must not silently implement Step 2 enforcement or Step 3+ routing behavior.
-3. Public endpoint hardening reminders may be added as TODO annotations, but behavior changes for later steps must remain deferred.
-4. For planning-only phases, limit edits to planning/logging/instruction surfaces unless the user explicitly authorizes implementation files.
-
 ## Verification Gate
 
 Before completion, confirm all of the following:

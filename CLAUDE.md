@@ -38,45 +38,45 @@ When unsure, align changes to these docs or explicitly call out the mismatch.
 
 ## Skill System
 
-This project has a skill library at `.github/skills/`. Skills are focused guidance files that enforce architecture, safety, and quality rules for specific task domains.
+This project has a skill library at `.claude/skills/`. Skills are focused guidance files that enforce architecture, safety, and quality rules for specific task domains. The harness `Skill` tool discovers them directly — invoke a skill with `Skill(<name>)` rather than reading its `SKILL.md`. Every skill sits exactly one level deep so all of them are discoverable; never nest a skill inside a subdirectory.
 
 **Before starting any task:**
-1. Read `.github/skills/SKILL_MAP.md` — it is the central source of truth.
+1. Read `.claude/skills/SKILL_MAP.md` — it is the central source of truth.
 2. Determine the task domain (see table below).
-3. Read each applicable skill file before planning or editing anything.
+3. Invoke each applicable skill before planning or editing anything.
 
-### Mandatory Skills (load for every task)
+### Mandatory Skills (invoke for every task)
 
-| Skill | Path |
+| Skill | Invoke |
 |---|---|
-| scope-creep-guard | `.github/skills/scope-creep-guard/SKILL.md` |
+| scope-creep-guard | `Skill(scope-creep-guard)` |
 
-### Task-Triggered Skills (load when the task matches)
+### Task-Triggered Skills (invoke when the task matches)
 
-| Task Domain | Skills to Load |
+| Task Domain | Skills to Invoke |
 |---|---|
-| Any content script, overlay, mirror, scroll, underline, preview rendering, shadow DOM, or popover work | `underline-preview-rendering/SKILL.md`, `content-script-instrumentation/SKILL.md`, `mv3-extension-boundaries/SKILL.md`, `ui-design-system/SKILL.md`, `dom-memory-management/SKILL.md` |
-| Background service worker, port messaging, session recovery, or keepalive work | `background-port-state-recovery/SKILL.md`, `mv3-extension-boundaries/SKILL.md` |
-| SSE streaming, backend relay, or abort-safe stream bridge work | `sse-streaming-bridge/SKILL.md` |
-| Tab/Shift+Tab acceptance keybinding, dirty-state acceptance queue, or section focus work | `hotkey-bind-commit-ux/SKILL.md`, `clause-state-management/SKILL.md` |
-| Cmd+Enter bind trigger, ghost text streaming, Enter commit, or Esc cancel/reset work | `hotkey-bind-commit-ux/SKILL.md`, `clause-state-management/SKILL.md`, `target-site-compat/SKILL.md` |
-| LLM routing, model selection, or tier-based dispatch work | `llm-router-and-model-selection/SKILL.md` |
-| Prompt assembly, system prompt factories, or clause templates | `system-prompt-assembly/SKILL.md` |
-| Rate limiting, tier enforcement, or quota middleware | `rate-limiting-tier-enforcement/SKILL.md` |
-| Clause ordering, bind payload sorting, or section contract alignment | `canonical-clause-ordering/SKILL.md`, `clause-state-management/SKILL.md` |
-| Section acceptance, stale propagation, dirty-state graph, or bind gating | `clause-state-management/SKILL.md`, `hotkey-bind-commit-ux/SKILL.md` |
-| Popup mode toggle, account tier display, usage indicator, upgrade CTA, or chrome.storage.sync patterns | `extension-popup-ux/SKILL.md`, `mv3-extension-boundaries/SKILL.md` |
-| Shadow DOM CSS isolation, design tokens, color palette, underline styling, or textContent-only rendering | `ui-design-system/SKILL.md` |
-| EventListener cleanup, MutationObserver teardown, ResizeObserver disconnect, overlay node removal, or memory leak | `dom-memory-management/SKILL.md` |
-| TypeScript errors, Zod validation, message shape validation, no-any rules, or runtime type safety | `typescript-safety/SKILL.md` |
-| Commit behavior on ChatGPT, Claude.ai, Linear, Notion, or GitHub; SPA reattach; native value setter; ProseMirror | `target-site-compat/SKILL.md` |
-| Documentation authoring or planning doc updates | `documentation-cohesion/SKILL.md` |
-| Manual testing guides, runbooks, or validation checklists | `manual-testing-guides/SKILL.md` |
-| Workflow/instruction file changes, skill creation, or skill map updates | `repo-workflow/SKILL.md`, `skill-map-governance/SKILL.md` |
-| Any task that edits files, config, or process docs | `verification-gate/SKILL.md` |
-| Progress log, commit log, or logging surface updates | `workflow-logging/SKILL.md` |
-| Commits being pushed to remote | `remote-commit-logging/SKILL.md` |
-| Multi-step or high-risk tasks that need clear traceability | `detailed-chat-output/SKILL.md` |
+| Any content script, overlay, mirror, scroll, underline, preview rendering, shadow DOM, or popover work | `Skill(underline-preview-rendering)`, `Skill(content-script-instrumentation)`, `Skill(mv3-extension-boundaries)`, `Skill(ui-design-system)`, `Skill(dom-memory-management)` |
+| Background service worker, port messaging, session recovery, or keepalive work | `Skill(background-port-state-recovery)`, `Skill(mv3-extension-boundaries)` |
+| SSE streaming, backend relay, or abort-safe stream bridge work | `Skill(sse-streaming-bridge)` |
+| Tab/Shift+Tab acceptance keybinding, dirty-state acceptance queue, or section focus work | `Skill(hotkey-bind-commit-ux)`, `Skill(clause-state-management)` |
+| Cmd+Enter bind trigger, ghost text streaming, Enter commit, or Esc cancel/reset work | `Skill(hotkey-bind-commit-ux)`, `Skill(clause-state-management)`, `Skill(target-site-compat)` |
+| LLM routing, model selection, or tier-based dispatch work | `Skill(llm-router-and-model-selection)` |
+| Prompt assembly, system prompt factories, or clause templates | `Skill(system-prompt-assembly)` |
+| Rate limiting, tier enforcement, or quota middleware | `Skill(rate-limiting-tier-enforcement)` |
+| Clause ordering, bind payload sorting, or section contract alignment | `Skill(canonical-clause-ordering)`, `Skill(clause-state-management)` |
+| Section acceptance, stale propagation, dirty-state graph, or bind gating | `Skill(clause-state-management)`, `Skill(hotkey-bind-commit-ux)` |
+| Popup mode toggle, account tier display, usage indicator, upgrade CTA, or chrome.storage.sync patterns | `Skill(extension-popup-ux)`, `Skill(mv3-extension-boundaries)` |
+| Shadow DOM CSS isolation, design tokens, color palette, underline styling, or textContent-only rendering | `Skill(ui-design-system)` |
+| EventListener cleanup, MutationObserver teardown, ResizeObserver disconnect, overlay node removal, or memory leak | `Skill(dom-memory-management)` |
+| TypeScript errors, Zod validation, message shape validation, no-any rules, or runtime type safety | `Skill(typescript-safety)` |
+| Commit behavior on ChatGPT, Claude.ai, Linear, Notion, or GitHub; SPA reattach; native value setter; ProseMirror | `Skill(target-site-compat)` |
+| Documentation authoring or planning doc updates | `Skill(documentation-cohesion)` |
+| Manual testing guides, runbooks, or validation checklists | `Skill(manual-testing-guides)` |
+| Workflow/instruction file changes, skill creation, or skill map updates | `Skill(repo-workflow)`, `Skill(skill-map-governance)` |
+| Any task that edits files, config, or process docs | `Skill(verification-gate)` |
+| Progress log, commit log, or logging surface updates | `Skill(workflow-logging)` |
+| Commits being pushed to remote | `Skill(remote-commit-logging)` |
+| Multi-step or high-risk tasks that need clear traceability | `Skill(detailed-chat-output)` |
 
 ### How to Apply Skills
 

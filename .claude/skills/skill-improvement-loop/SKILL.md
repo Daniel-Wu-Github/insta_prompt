@@ -21,8 +21,8 @@ Do not use this skill for first-time one-off errors unless they indicate a broad
 
 ## Files and Surfaces
 
-- .github/skills/SKILL_MAP.md
-- .github/skills/*/SKILL.md
+- .claude/skills/SKILL_MAP.md
+- .claude/skills/*/SKILL.md
 - .github/prompts/
 - /memories/
 
@@ -68,7 +68,7 @@ Preferred method in VS Code:
 
 Fallback method when debug UI is unavailable:
 
-- run [scripts/implicit-skill-smoke-test.sh](./scripts/implicit-skill-smoke-test.sh) and confirm expected matches are plausible
+- run `scripts/implicit-skill-smoke-test.sh` (project-root-relative) and confirm expected matches are plausible
 
 ## Verification Checklist
 

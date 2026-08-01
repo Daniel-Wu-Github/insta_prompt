@@ -5,31 +5,35 @@ This file is the central source of truth for repository skills.
 All agents must do these steps before using or editing skills:
 
 1. Read this file first.
-2. Load only the smallest sufficient skill set for the task.
+2. Invoke the smallest sufficient skill set for the task via the `Skill` tool
+   (e.g. `Skill(scope-creep-guard)`) — do not substitute `Read`/`cat` on a
+   `SKILL.md` file for this; skills live under `.claude/skills/`, which the
+   `Skill` tool discovers directly, so invoking it is both correct and
+   cheaper than reading the file yourself.
 3. If any skill is added, removed, renamed, or scope-changed, update this file in the same change.
 
 ## Selection Order
 
 1. Classify the task (domain, risk, lifecycle stage).
-2. Load [repo-workflow](repo-workflow/SKILL.md).
-3. Load [scope-creep-guard](scope-creep-guard/SKILL.md) for every task before planning or edits.
-4. For documentation maintenance, load [documentation-cohesion](documentation-cohesion/SKILL.md).
-5. For manual testing guide authoring, load [manual-testing-guides](manual-testing-guides/SKILL.md).
-6. For Step 2 enforcement work, load [rate-limiting-tier-enforcement](rate-limiting-tier-enforcement/SKILL.md).
-7. For Step 3 routing and prompt orchestration, load [llm-router-and-model-selection](llm-router-and-model-selection/SKILL.md) and [system-prompt-assembly](system-prompt-assembly/SKILL.md).
-8. For clause pipeline and extension workflow work, load [canonical-clause-ordering](canonical-clause-ordering/SKILL.md), [clause-state-management](clause-state-management/SKILL.md), [mv3-extension-boundaries](mv3-extension-boundaries/SKILL.md), and [sse-streaming-bridge](sse-streaming-bridge/SKILL.md).
-9. For extension runtime workflow work (Steps 6-11), load [background-port-state-recovery](background-port-state-recovery/SKILL.md), [content-script-instrumentation](content-script-instrumentation/SKILL.md), [underline-preview-rendering](underline-preview-rendering/SKILL.md), [hotkey-bind-commit-ux](hotkey-bind-commit-ux/SKILL.md), [dom-memory-management](dom-memory-management/SKILL.md), and [ui-design-system](ui-design-system/SKILL.md) alongside boundary/state/stream skills as needed.
-10. For popup and account UX work (Step 12), load [extension-popup-ux](extension-popup-ux/SKILL.md) and [mv3-extension-boundaries](mv3-extension-boundaries/SKILL.md).
-11. For TypeScript errors, message validation, or runtime type safety, load [typescript-safety](typescript-safety/SKILL.md).
-12. For commit behavior on specific target sites (ChatGPT, Claude.ai, Linear, Notion, GitHub), load [target-site-compat](target-site-compat/SKILL.md).
-10. Add cross-cutting skills as needed in this order:
-  1. [skill-map-governance](skill-map-governance/SKILL.md)
-  2. [verification-gate](verification-gate/SKILL.md)
-  3. [workflow-logging](workflow-logging/SKILL.md)
-  4. [remote-commit-logging](remote-commit-logging/SKILL.md)
-  5. [detailed-chat-output](detailed-chat-output/SKILL.md)
-  6. [self-improvement-loop](self-improvement-loop/SKILL.md)
-  7. [skill-improvement-loop](skill-improvement-loop/SKILL.md)
+2. Invoke `Skill(repo-workflow)`.
+3. Invoke `Skill(scope-creep-guard)` for every task before planning or edits.
+4. For documentation maintenance, invoke `Skill(documentation-cohesion)`.
+5. For manual testing guide authoring, invoke `Skill(manual-testing-guides)`.
+6. For Step 2 enforcement work, invoke `Skill(rate-limiting-tier-enforcement)`.
+7. For Step 3 routing and prompt orchestration, invoke `Skill(llm-router-and-model-selection)` and `Skill(system-prompt-assembly)`.
+8. For clause pipeline and extension workflow work, invoke `Skill(canonical-clause-ordering)`, `Skill(clause-state-management)`, `Skill(mv3-extension-boundaries)`, and `Skill(sse-streaming-bridge)`.
+9. For extension runtime workflow work (Steps 6-11), invoke `Skill(background-port-state-recovery)`, `Skill(content-script-instrumentation)`, `Skill(underline-preview-rendering)`, `Skill(hotkey-bind-commit-ux)`, `Skill(dom-memory-management)`, and `Skill(ui-design-system)` alongside boundary/state/stream skills as needed.
+10. For popup and account UX work (Step 12), invoke `Skill(extension-popup-ux)` and `Skill(mv3-extension-boundaries)`.
+11. For TypeScript errors, message validation, or runtime type safety, invoke `Skill(typescript-safety)`.
+12. For commit behavior on specific target sites (ChatGPT, Claude.ai, Linear, Notion, GitHub), invoke `Skill(target-site-compat)`.
+13. Add cross-cutting skills as needed in this order:
+  1. `Skill(skill-map-governance)`
+  2. `Skill(verification-gate)`
+  3. `Skill(workflow-logging)`
+  4. `Skill(remote-commit-logging)`
+  5. `Skill(detailed-chat-output)`
+  6. `Skill(self-improvement-loop)`
+  7. `Skill(skill-improvement-loop)`
 
 ## Skill Registry
 
@@ -70,6 +74,7 @@ All agents must do these steps before using or editing skills:
 - Keep each skill narrow with explicit use and non-use guidance.
 - Prefer updating existing skills over creating near-duplicates.
 - Keep paths and links in this map valid.
+- Shared skills (repo-workflow, scope-creep-guard, documentation-cohesion, manual-testing-guides, skill-map-governance, verification-gate, workflow-logging, remote-commit-logging, detailed-chat-output, self-improvement-loop, skill-improvement-loop) are synced copies from `ai-workflow/skills/<name>` — edit them there, not here, and re-run `bash ../ai-workflow/setup.sh --apply` to pick the change up.
 
 ## Change Log Requirement
 
@@ -77,14 +82,14 @@ When this map changes, include a short note in the same PR or commit message tha
 
 - what changed in the registry
 - why the change was needed
-- what tasks now load the new or revised skill
+- what tasks now invoke the new or revised skill
 
 ## Machine-Readable Index
 
 ```yaml
 skillMap:
   version: 1
-  sourceOfTruth: .github/skills/SKILL_MAP.md
+  sourceOfTruth: .claude/skills/SKILL_MAP.md
   mandatoryReadFirst: true
   requiredOnChange: true
   selectionOrder:
@@ -117,84 +122,84 @@ skillMap:
     - skill-improvement-loop
   registry:
     - name: repo-workflow
-      path: .github/skills/repo-workflow/SKILL.md
+      path: .claude/skills/repo-workflow/SKILL.md
       type: meta-workflow
     - name: scope-creep-guard
-      path: .github/skills/scope-creep-guard/SKILL.md
+      path: .claude/skills/scope-creep-guard/SKILL.md
       type: safety-governance
     - name: documentation-cohesion
-      path: .github/skills/documentation-cohesion/SKILL.md
+      path: .claude/skills/documentation-cohesion/SKILL.md
       type: documentation-quality
     - name: manual-testing-guides
-      path: .github/skills/manual-testing-guides/SKILL.md
+      path: .claude/skills/manual-testing-guides/SKILL.md
       type: documentation-quality
     - name: rate-limiting-tier-enforcement
-      path: .github/skills/rate-limiting-tier-enforcement/SKILL.md
+      path: .claude/skills/rate-limiting-tier-enforcement/SKILL.md
       type: enforcement
     - name: llm-router-and-model-selection
-      path: .github/skills/llm-router-and-model-selection/SKILL.md
+      path: .claude/skills/llm-router-and-model-selection/SKILL.md
       type: routing
     - name: system-prompt-assembly
-      path: .github/skills/system-prompt-assembly/SKILL.md
+      path: .claude/skills/system-prompt-assembly/SKILL.md
       type: prompt-assembly
     - name: canonical-clause-ordering
-      path: .github/skills/canonical-clause-ordering/SKILL.md
+      path: .claude/skills/canonical-clause-ordering/SKILL.md
       type: pipeline-ordering
     - name: clause-state-management
-      path: .github/skills/clause-state-management/SKILL.md
+      path: .claude/skills/clause-state-management/SKILL.md
       type: pipeline-state
     - name: mv3-extension-boundaries
-      path: .github/skills/mv3-extension-boundaries/SKILL.md
+      path: .claude/skills/mv3-extension-boundaries/SKILL.md
       type: extension-architecture
     - name: sse-streaming-bridge
-      path: .github/skills/sse-streaming-bridge/SKILL.md
+      path: .claude/skills/sse-streaming-bridge/SKILL.md
       type: streaming
     - name: background-port-state-recovery
-      path: .github/skills/background-port-state-recovery/SKILL.md
+      path: .claude/skills/background-port-state-recovery/SKILL.md
       type: extension-runtime
     - name: content-script-instrumentation
-      path: .github/skills/content-script-instrumentation/SKILL.md
+      path: .claude/skills/content-script-instrumentation/SKILL.md
       type: extension-instrumentation
     - name: underline-preview-rendering
-      path: .github/skills/underline-preview-rendering/SKILL.md
+      path: .claude/skills/underline-preview-rendering/SKILL.md
       type: extension-rendering
     - name: hotkey-bind-commit-ux
-      path: .github/skills/hotkey-bind-commit-ux/SKILL.md
+      path: .claude/skills/hotkey-bind-commit-ux/SKILL.md
       type: extension-interaction
     - name: ui-design-system
-      path: .github/skills/ui-design-system/SKILL.md
+      path: .claude/skills/ui-design-system/SKILL.md
       type: extension-ui
     - name: dom-memory-management
-      path: .github/skills/dom-memory-management/SKILL.md
+      path: .claude/skills/dom-memory-management/SKILL.md
       type: extension-safety
     - name: typescript-safety
-      path: .github/skills/typescript-safety/SKILL.md
+      path: .claude/skills/typescript-safety/SKILL.md
       type: type-safety
     - name: extension-popup-ux
-      path: .github/skills/extension-popup-ux/SKILL.md
+      path: .claude/skills/extension-popup-ux/SKILL.md
       type: extension-popup
     - name: target-site-compat
-      path: .github/skills/target-site-compat/SKILL.md
+      path: .claude/skills/target-site-compat/SKILL.md
       type: extension-compat
     - name: skill-map-governance
-      path: .github/skills/skill-map-governance/SKILL.md
+      path: .claude/skills/skill-map-governance/SKILL.md
       type: governance
     - name: verification-gate
-      path: .github/skills/verification-gate/SKILL.md
+      path: .claude/skills/verification-gate/SKILL.md
       type: validation
     - name: workflow-logging
-      path: .github/skills/workflow-logging/SKILL.md
+      path: .claude/skills/workflow-logging/SKILL.md
       type: logging
     - name: remote-commit-logging
-      path: .github/skills/remote-commit-logging/SKILL.md
+      path: .claude/skills/remote-commit-logging/SKILL.md
       type: logging-automation
     - name: detailed-chat-output
-      path: .github/skills/detailed-chat-output/SKILL.md
+      path: .claude/skills/detailed-chat-output/SKILL.md
       type: communication
     - name: self-improvement-loop
-      path: .github/skills/self-improvement-loop/SKILL.md
+      path: .claude/skills/self-improvement-loop/SKILL.md
       type: maintenance
     - name: skill-improvement-loop
-      path: .github/skills/skill-improvement-loop/SKILL.md
+      path: .claude/skills/skill-improvement-loop/SKILL.md
       type: evaluation
 ```

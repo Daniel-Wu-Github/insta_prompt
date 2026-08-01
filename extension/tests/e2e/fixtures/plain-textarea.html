@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>PromptCompiler e2e fixture — plain textarea + contenteditable</title>
+<style>
+	body { font-family: system-ui, sans-serif; padding: 24px; max-width: 640px; }
+	textarea { width: 100%; height: 160px; font-size: 14px; }
+	[contenteditable] { width: 100%; min-height: 160px; border: 1px solid #999; padding: 8px; }
+</style>
+</head>
+<body>
+	<main>
+		<h1>Plain input fixture</h1>
+		<p>Mirrors the manual testing guide's "plain &lt;textarea&gt; site" row of the target-site matrix.</p>
+
+		<label for="composer">Textarea composer</label>
+		<textarea id="composer" placeholder="Type a prompt..."></textarea>
+
+		<label for="rich-composer">Contenteditable composer</label>
+		<div id="rich-composer" contenteditable="true" role="textbox" aria-label="Rich composer"></div>
+	</main>
+</body>
+</html>

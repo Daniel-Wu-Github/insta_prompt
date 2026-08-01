@@ -8,7 +8,7 @@ user-invocable: true
 
 ## When to Use
 
-Use this skill whenever any file under .github/skills/ is created, removed, renamed, or materially changed in purpose.
+Use this skill whenever any file under .claude/skills/ is created, removed, renamed, or materially changed in purpose.
 
 ## When Not to Use
 
@@ -16,8 +16,8 @@ Do not use this skill when editing unrelated feature code with no skill-catalog 
 
 ## Files and Surfaces
 
-- .github/skills/SKILL_MAP.md
-- .github/skills/*/SKILL.md
+- .claude/skills/SKILL_MAP.md
+- .claude/skills/*/SKILL.md
 
 ## Deliverables
 

@@ -72,6 +72,16 @@ project + DSN. **Decision:** provision, or accept silent breakage for now?
 Need a Stripe account + keys and deploy credentials. Out of reach for an autonomous run.
 **Decision:** when do we wire revenue + automated release?
 
+### OD-13 — Rotate secrets before shipping (2026-07-31)
+`backend/.env` was transferred from the old machine over Gmail (SCP over Tailscale wasn't
+available; email was the fallback). Treat `SUPABASE_SERVICE_KEY`, `GROQ_API_KEY`,
+`JWT_SECRET`, and `UPSTASH_REDIS_TOKEN` as potentially exposed. **Action required before any
+production/public deploy:** rotate all four from their dashboards (Supabase project
+settings, Groq console, Upstash console, regenerate `JWT_SECRET` locally), then update
+`backend/.env` and Fly.io secrets (`flyctl secrets set ...`) with the new values. Also still
+missing: a real `ANTHROPIC_API_KEY` (currently the `.env.example` placeholder) — pro-tier
+routing is broken until this is set.
+
 ---
 **Fastest path to "keep going":** answer **OD-1, OD-3, OD-4** and I can continue the core
 extraction (C3 harness → state machine) on the existing branch.

@@ -1,4 +1,23 @@
 {
+  "env": {
+    "NTFY_CHANNEL_URL": "https://ntfy.sh/claude-termius-daniel",
+    "NTFY_PROJECT_TITLE": "insta_prompt"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git rev-parse*)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -6,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /home/seed/projects/insta_prompt/scripts/post-edit-check.sh"
+            "command": "bash scripts/post-edit-check.sh"
           }
         ]
       }
@@ -16,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /home/seed/projects/insta_prompt/scripts/session-end.sh"
+            "command": "./scripts/notify.sh \"Claude finished\" \"$NTFY_PROJECT_TITLE\" \"default\" \"white_check_mark,claude\" 2>/dev/null || true"
           }
         ]
       }
@@ -26,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /home/seed/projects/insta_prompt/scripts/notify-approval.sh"
+            "command": "bash scripts/notify-approval.sh"
           }
         ]
       }

@@ -16,7 +16,7 @@ Do not use this skill for pure brainstorming where no file or process change is 
 ## Files and Surfaces
 
 - changed files in the working tree
-- .github/skills/SKILL_MAP.md
+- .claude/skills/SKILL_MAP.md
 - related instruction or prompt files touched in the task
 
 ## Deliverables

@@ -23,9 +23,9 @@ Do not use this skill for feature implementation, runtime debugging, or product 
 
 This skill influences:
 
-- `.github/skills/SKILL_MAP.md`
+- `.claude/skills/SKILL_MAP.md`
 - `.github/prompts/`
-- `.github/skills/`
+- `.claude/skills/`
 - `.github/instructions/`
 - `copilot-instructions.md`
 - `AGENTS.md`
@@ -43,15 +43,15 @@ When this skill is used, produce the smallest workable set of outputs:
 
 ## Operating Rules
 
-- Read `.github/skills/SKILL_MAP.md` first for skill selection and ordering.
-- Load `.github/skills/skill-map-governance/SKILL.md` whenever any skill file is added, removed, renamed, or scope-changed.
-- Load `.github/skills/skill-improvement-loop/SKILL.md` when effectiveness or auto-loading behavior is in question.
+- Read `.claude/skills/SKILL_MAP.md` first for skill selection and ordering.
+- Invoke `Skill(skill-map-governance)` whenever any skill file is added, removed, renamed, or scope-changed.
+- Invoke `Skill(skill-improvement-loop)` when effectiveness or auto-loading behavior is in question.
 - Inspect the repo’s current instruction surface before making changes.
 - Prefer existing workflow docs over inventing new conventions.
 - Keep new skill files narrow and specific.
 - Avoid feature assumptions that are not supported by the current repository.
 - Update stale workflow files before depending on them again.
-- Update `.github/skills/SKILL_MAP.md` in the same change when any skill is added, removed, renamed, or scope-changed.
+- Update `.claude/skills/SKILL_MAP.md` in the same change when any skill is added, removed, renamed, or scope-changed.
 - Use markdown links for file references.
 - Keep progress updates short, factual, and action-oriented.
 
@@ -60,7 +60,7 @@ When this skill is used, produce the smallest workable set of outputs:
 - The target files exist at the intended paths.
 - Frontmatter parses cleanly and the `description` is meaningful.
 - The file scope matches the task and does not pull in unrelated behavior.
-- `.github/skills/SKILL_MAP.md` is current if skills were modified.
+- `.claude/skills/SKILL_MAP.md` is current if skills were modified.
 - If skill behavior was tuned, effectiveness notes exist and changes are traceable.
 - No duplicate or conflicting instruction surfaces were introduced.
 - Any repo-specific workflow reference still points to the current canonical docs.

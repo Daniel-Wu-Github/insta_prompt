@@ -1604,3 +1604,1016 @@ Entries are grouped by branch and extend commit messages with file-level change 
       - A human/05_RETURN_BRIEFING.md
       - M human/README.md
       - M logging/commit_log.md
+### 2026-07-04 20:45:25Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/v2/track-d-polish
+- Range: f11b617d955fa0f8b431cdd674e4972450b7c7df..97138247d74d042885d46d5f9bab08e3bd484fb4
+- Commits:
+  - 9713824 Migrate to shared ai-workflow repo for skills/scripts/hooks
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-07-04T15:13:20-05:00
+    - Purpose: Replaces real copies of governance skills, notification/verification
+    - Files:
+      - T .claude/agents/beast-mode-3-1.md
+      - A .claude/ai-workflow.env
+      - T .claude/config
+      - M .claude/settings.json
+      - T .gemini/agents/beast-mode-3-1.md
+      - A .gemini/settings.json
+      - T .githooks/pre-commit
+      - T .githooks/pre-push
+      - A .github/skills/detailed-chat-output
+      - D .github/skills/detailed-chat-output/SKILL.md
+      - A .github/skills/documentation-cohesion
+      - D .github/skills/documentation-cohesion/SKILL.md
+      - A .github/skills/manual-testing-guides
+      - D .github/skills/manual-testing-guides/SKILL.md
+      - A .github/skills/remote-commit-logging
+      - D .github/skills/remote-commit-logging/SKILL.md
+      - A .github/skills/repo-workflow
+      - D .github/skills/repo-workflow/SKILL.md
+      - A .github/skills/scope-creep-guard
+      - D .github/skills/scope-creep-guard/SKILL.md
+      - A .github/skills/self-improvement-loop
+      - D .github/skills/self-improvement-loop/SKILL.md
+      - A .github/skills/skill-improvement-loop
+      - D .github/skills/skill-improvement-loop/SKILL.md
+      - D .github/skills/skill-improvement-loop/scripts/implicit-skill-smoke-test.sh
+      - A .github/skills/skill-map-governance
+      - D .github/skills/skill-map-governance/SKILL.md
+      - A .github/skills/verification-gate
+      - D .github/skills/verification-gate/SKILL.md
+      - A .github/skills/workflow-logging
+      - D .github/skills/workflow-logging/SKILL.md
+      - A scripts/analyze-patterns.sh
+      - A scripts/gemini-hook-adapter.sh
+      - A scripts/implicit-skill-smoke-test.sh
+      - T scripts/notify-approval.sh
+      - T scripts/notify.sh
+      - T scripts/post-edit-check.sh
+      - T scripts/update-skill-memory.sh
+
+### 2026-07-07 06:03:08Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/v2/track-d-polish
+- Range: 97138247d74d042885d46d5f9bab08e3bd484fb4..1d892c0009b23f1efc230c605d76a0b03b5c15ea
+- Commits:
+  - 1d892c0 fix(deploy): scale Fly.io machines to zero and shrink VM size
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-07-07T01:03:03-05:00
+    - Purpose: Two machines were running 24/7 at 1GB RAM, generating $14.24 in a
+    - Files:
+      - M fly.toml
+
+## Branch: pr/v2-track-ab-stabilize-design
+
+### 2026-08-01 05:50:55Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/pr/v2-track-ab-stabilize-design
+- Range: new branch up to 5e67d06a2a629cb3a646948351bf6f75a585d25f
+- Commits:
+  - cc9777d Merge remote-tracking branch 'origin/main'
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-26T17:58:12-05:00
+    - Purpose: This commit updates files.
+    - Files:
+      - none
+  - 9ce83fb Align Dockerfile PORT to 8080 to match fly.toml internal_port
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-26T17:58:20-05:00
+    - Purpose: Fly.io keeps setting internal_port=8080 via its GitHub integration.
+    - Files:
+      - M backend/Dockerfile
+  - e9f7647 move to backend
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-26T21:20:20-05:00
+    - Purpose: This commit adds 1, modifies 4, deletes 1 across .claude, backend, Dockerfile, fly.toml.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - A Dockerfile
+      - D backend/fly.toml
+      - M fly.toml
+  - fc16a55 Fix vector type schema qualification in migration 0002
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-26T23:36:06-05:00
+    - Purpose: Supabase installs pgvector in the extensions schema, not public.
+    - Files:
+      - M supabase/migrations/0002_step1_projects_and_context.sql
+  - 9d0dd17 round 1 testing bugs found
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-27T23:19:14-05:00
+    - Purpose: This commit adds 3, modifies 9, deletes 1 across .claude, .github, docs, extension.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - M .github/skills/SKILL_MAP.md
+      - M .github/skills/detailed-chat-output/SKILL.md
+      - A .github/skills/handoff-prompt/SKILL.md
+      - D docs/agent_plans/v1/v1_testing_notes.md
+      - A docs/testing-notes/v1_live_session_bugs.md
+      - A docs/testing-notes/v1_testing_notes.md
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - M extension/src/popup/components/ModeToggle.tsx
+      - M extension/src/popup/components/UpgradeCTA.tsx
+  - 85ea961 extension pop up ui rework
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T00:09:54-05:00
+    - Purpose: This commit adds 2, modifies 9 across extension.
+    - Files:
+      - M extension/bun.lock
+      - M extension/package.json
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - A extension/src/popup/components/LoadingSpinner.tsx
+      - M extension/src/popup/components/ModeToggle.tsx
+      - M extension/src/popup/components/ProjectSelector.tsx
+      - M extension/src/popup/components/UpgradeCTA.tsx
+      - M extension/src/popup/main.tsx
+      - A extension/src/popup/style.css
+      - M extension/wxt.config.ts
+  - 64119fa round 1 phase 1 bug patch, daily limits and account and reset timer
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T17:42:44-05:00
+    - Purpose: This commit adds 1, modifies 2 across backend.
+    - Files:
+      - A backend/shared
+      - M backend/src/routes/account.ts
+      - M backend/src/services/rateLimit.ts
+  - a6f33dc pre phase 2
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T17:46:47-05:00
+    - Purpose: This commit modifies 9 across .claude, docs, extension.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/session_errors.tmp
+      - M .claude/skill_memory_cursor.tmp
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - M extension/src/popup/hooks/useAccountStatus.ts
+  - 70b14a3 round 1 phase 2, login, pause toggle, and search bar
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T18:04:37-05:00
+    - Purpose: This commit adds 2, modifies 2 across extension.
+    - Files:
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/PauseToggle.tsx
+      - A extension/src/popup/hooks/usePause.ts
+  - 6033f00 Phase 2 complete: fix bridge wire contract, pause greying, hover legend
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T00:22:58-05:00
+    - Purpose: - Strip content-only `paused` field from SEGMENT bridge message before
+    - Files:
+      - M .claude/debugging_log.md
+      - A docs/VISUAL_LEGEND.md
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/content/index.ts
+  - ad7a8f4 Pre-Phase-3: document segment classification tuning investigation
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T19:56:02-05:00
+    - Purpose: - Add docs/testing-notes/segment-classification-tuning.md documenting the
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - A docs/testing-notes/segment-classification-tuning.md
+  - 3088bae Phase 3: cursor-relative popover, clause-aware header, legend HUD, bind feedback
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T20:04:45-05:00
+    - Purpose: BUG-2.2 — Hover popover now anchors to the cursor (clientX/Y, 18px below) instead
+    - Files:
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/ClauseOrderingToggle.tsx
+      - A extension/src/popup/hooks/useClauseOrdering.ts
+  - 8f07238 round 1 phase 3, debugging confidence = 0 issue
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-30T02:25:33-05:00
+    - Purpose: This commit adds 2, modifies 10 across .claude, backend, extension.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - M backend/Dockerfile
+      - M backend/src/services/routeHandlers.ts
+      - M backend/src/services/segment.ts
+      - M extension/src/background/index.ts
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/ModelOverrideToggle.tsx
+      - A extension/src/popup/hooks/useModelOverride.ts
+  - 89393be Round 2 testing: bug logging, self-improvement cleanup, BUG-3.2 fix
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-31T01:52:04-05:00
+    - Purpose: - Fix BUG-3.2: insert zero-width break span between adjacent underlined segments
+    - Files:
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - M CLAUDE.md
+      - A docs/testing-notes/round2_testing_notes.md
+      - M extension/src/content/index.ts
+      - D scripts/analyze-patterns.sh
+      - D scripts/implicit-skill-smoke-test.sh
+      - M scripts/session-end.sh
+      - D scripts/smoke-tests.sh
+  - 9ee776d Phase 1: remove confidence, Escape-COMPLETE fix, clear detection, overlay clip, unsupported toast
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-31T02:30:01-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    - Files:
+      - M backend/src/__tests__/segment.route.test.ts
+      - M backend/src/__tests__/segment.service.test.ts
+      - M backend/src/lib/schemas.ts
+      - M backend/src/services/routeHandlers.ts
+      - M backend/src/services/segment.ts
+      - M extension/src/content/index.ts
+      - M shared/contracts/domain.ts
+  - 2c9407b Document ChatGPT overlay failures: BUG-REACT, BUG-GEOM, BUG-ZINDEX
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-09T21:11:04-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    - Files:
+      - M .claude/debugging_log.md
+      - A handoff.md
+  - b6a6be0 Fix P0/P1 overlay+segmentation bugs; add V2 UI/UX mega-plan
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:45:08-05:00
+    - Purpose: P0/P1 fixes (from handoff.md + round2 testing notes):
+    - Files:
+      - M .gitignore
+      - M backend/src/services/segment.ts
+      - A docs/agent_plans/v2/v2_uiux_megaplan.md
+      - M extension/src/content/index.ts
+  - 1bb6907 chore: sweep session bookkeeping (hook logs, tsc/skill state)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:45:27-05:00
+    - Purpose: Transient files updated by the session hooks (debugging_log, notification_log,
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/session_errors.tmp
+      - M .claude/skill_memory_cursor.tmp
+  - be9900f chore: commit pre-push log for previous push
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:46:48-05:00
+    - Purpose: Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    - Files:
+      - M .claude/notification_log.txt
+      - M logging/commit_log.md
+  - aa8c30d track A3: centralized per-element cleanup registry (AUD-10 / G-3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T00:52:08-05:00
+    - Purpose: Exit criteria met:
+    - Files:
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+  - 4ed5e51 track A4: purge confidence doc/skill drift post-DECISION-1 (AUD-8)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:04:14-05:00
+    - Purpose: Confidence was removed from LLM/schemas/UI (DECISION-1) but lingered in skills and
+    - Files:
+      - M .github/skills/SKILL_MAP.md
+      - M .github/skills/content-script-instrumentation/SKILL.md
+      - M .github/skills/typescript-safety/SKILL.md
+      - M .github/skills/ui-design-system/SKILL.md
+      - M .github/skills/underline-preview-rendering/SKILL.md
+      - M docs/BACKEND_API.md
+      - M docs/CLAUSE_PIPELINE.md
+      - M docs/UX_FLOW.md
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+  - 1dfa22d track A5: manual verification guide + escalations (A1/A3/G-2/G-3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:05:40-05:00
+    - Purpose: Runnable guide for the Track A runtime gates that need a live browser (G-2 pixel
+    - Files:
+      - A docs/testing-notes/v2-track-a-manual-verification.md
+      - M logging/progress_log.md
+  - dcab60c track B1+B2: portable design tokens + motion system (AUD-2)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:17:45-05:00
+    - Purpose: Canonical design-system layer as pure TS (no DOM imports -> moves into
+    - Files:
+      - A extension/src/content/__tests__/design-tokens.test.ts
+      - M logging/progress_log.md
+      - A shared/design/index.ts
+      - A shared/design/motion.ts
+      - A shared/design/tokens.ts
+  - 29a6db6 track B3: tokenize content-script render constants (AUD-2)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:22:44-05:00
+    - Purpose: Draft-render path now sources visual constants from shared/design tokens:
+    - Files:
+      - M extension/src/content/__tests__/design-tokens.test.ts
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+      - M shared/design/tokens.ts
+  - 5e67d06 track B4: redundant non-color clause encoding (S-VIS-3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:27:02-05:00
+    - Purpose: Each clause type is now legible without color (color-blind redundancy):
+    - Files:
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+
+## Branch: pr/v2-track-c-core-extraction
+
+### 2026-08-01 05:50:55Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/pr/v2-track-c-core-extraction
+- Range: new branch up to deab14138f1ab060684206432dc7e896fc970b17
+- Commits:
+  - 85ea961 extension pop up ui rework
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T00:09:54-05:00
+    - Purpose: This commit adds 2, modifies 9 across extension.
+    - Files:
+      - M extension/bun.lock
+      - M extension/package.json
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - A extension/src/popup/components/LoadingSpinner.tsx
+      - M extension/src/popup/components/ModeToggle.tsx
+      - M extension/src/popup/components/ProjectSelector.tsx
+      - M extension/src/popup/components/UpgradeCTA.tsx
+      - M extension/src/popup/main.tsx
+      - A extension/src/popup/style.css
+      - M extension/wxt.config.ts
+  - 64119fa round 1 phase 1 bug patch, daily limits and account and reset timer
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T17:42:44-05:00
+    - Purpose: This commit adds 1, modifies 2 across backend.
+    - Files:
+      - A backend/shared
+      - M backend/src/routes/account.ts
+      - M backend/src/services/rateLimit.ts
+  - a6f33dc pre phase 2
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T17:46:47-05:00
+    - Purpose: This commit modifies 9 across .claude, docs, extension.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/session_errors.tmp
+      - M .claude/skill_memory_cursor.tmp
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - M extension/src/popup/hooks/useAccountStatus.ts
+  - 70b14a3 round 1 phase 2, login, pause toggle, and search bar
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T18:04:37-05:00
+    - Purpose: This commit adds 2, modifies 2 across extension.
+    - Files:
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/PauseToggle.tsx
+      - A extension/src/popup/hooks/usePause.ts
+  - 6033f00 Phase 2 complete: fix bridge wire contract, pause greying, hover legend
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T00:22:58-05:00
+    - Purpose: - Strip content-only `paused` field from SEGMENT bridge message before
+    - Files:
+      - M .claude/debugging_log.md
+      - A docs/VISUAL_LEGEND.md
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/content/index.ts
+  - ad7a8f4 Pre-Phase-3: document segment classification tuning investigation
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T19:56:02-05:00
+    - Purpose: - Add docs/testing-notes/segment-classification-tuning.md documenting the
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - A docs/testing-notes/segment-classification-tuning.md
+  - 3088bae Phase 3: cursor-relative popover, clause-aware header, legend HUD, bind feedback
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T20:04:45-05:00
+    - Purpose: BUG-2.2 — Hover popover now anchors to the cursor (clientX/Y, 18px below) instead
+    - Files:
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/ClauseOrderingToggle.tsx
+      - A extension/src/popup/hooks/useClauseOrdering.ts
+  - 8f07238 round 1 phase 3, debugging confidence = 0 issue
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-30T02:25:33-05:00
+    - Purpose: This commit adds 2, modifies 10 across .claude, backend, extension.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - M backend/Dockerfile
+      - M backend/src/services/routeHandlers.ts
+      - M backend/src/services/segment.ts
+      - M extension/src/background/index.ts
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/ModelOverrideToggle.tsx
+      - A extension/src/popup/hooks/useModelOverride.ts
+  - 89393be Round 2 testing: bug logging, self-improvement cleanup, BUG-3.2 fix
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-31T01:52:04-05:00
+    - Purpose: - Fix BUG-3.2: insert zero-width break span between adjacent underlined segments
+    - Files:
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - M CLAUDE.md
+      - A docs/testing-notes/round2_testing_notes.md
+      - M extension/src/content/index.ts
+      - D scripts/analyze-patterns.sh
+      - D scripts/implicit-skill-smoke-test.sh
+      - M scripts/session-end.sh
+      - D scripts/smoke-tests.sh
+  - 9ee776d Phase 1: remove confidence, Escape-COMPLETE fix, clear detection, overlay clip, unsupported toast
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-31T02:30:01-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    - Files:
+      - M backend/src/__tests__/segment.route.test.ts
+      - M backend/src/__tests__/segment.service.test.ts
+      - M backend/src/lib/schemas.ts
+      - M backend/src/services/routeHandlers.ts
+      - M backend/src/services/segment.ts
+      - M extension/src/content/index.ts
+      - M shared/contracts/domain.ts
+  - 2c9407b Document ChatGPT overlay failures: BUG-REACT, BUG-GEOM, BUG-ZINDEX
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-09T21:11:04-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    - Files:
+      - M .claude/debugging_log.md
+      - A handoff.md
+  - b6a6be0 Fix P0/P1 overlay+segmentation bugs; add V2 UI/UX mega-plan
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:45:08-05:00
+    - Purpose: P0/P1 fixes (from handoff.md + round2 testing notes):
+    - Files:
+      - M .gitignore
+      - M backend/src/services/segment.ts
+      - A docs/agent_plans/v2/v2_uiux_megaplan.md
+      - M extension/src/content/index.ts
+  - 1bb6907 chore: sweep session bookkeeping (hook logs, tsc/skill state)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:45:27-05:00
+    - Purpose: Transient files updated by the session hooks (debugging_log, notification_log,
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/session_errors.tmp
+      - M .claude/skill_memory_cursor.tmp
+  - be9900f chore: commit pre-push log for previous push
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:46:48-05:00
+    - Purpose: Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    - Files:
+      - M .claude/notification_log.txt
+      - M logging/commit_log.md
+  - aa8c30d track A3: centralized per-element cleanup registry (AUD-10 / G-3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T00:52:08-05:00
+    - Purpose: Exit criteria met:
+    - Files:
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+  - 4ed5e51 track A4: purge confidence doc/skill drift post-DECISION-1 (AUD-8)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:04:14-05:00
+    - Purpose: Confidence was removed from LLM/schemas/UI (DECISION-1) but lingered in skills and
+    - Files:
+      - M .github/skills/SKILL_MAP.md
+      - M .github/skills/content-script-instrumentation/SKILL.md
+      - M .github/skills/typescript-safety/SKILL.md
+      - M .github/skills/ui-design-system/SKILL.md
+      - M .github/skills/underline-preview-rendering/SKILL.md
+      - M docs/BACKEND_API.md
+      - M docs/CLAUSE_PIPELINE.md
+      - M docs/UX_FLOW.md
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+  - 1dfa22d track A5: manual verification guide + escalations (A1/A3/G-2/G-3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:05:40-05:00
+    - Purpose: Runnable guide for the Track A runtime gates that need a live browser (G-2 pixel
+    - Files:
+      - A docs/testing-notes/v2-track-a-manual-verification.md
+      - M logging/progress_log.md
+  - dcab60c track B1+B2: portable design tokens + motion system (AUD-2)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:17:45-05:00
+    - Purpose: Canonical design-system layer as pure TS (no DOM imports -> moves into
+    - Files:
+      - A extension/src/content/__tests__/design-tokens.test.ts
+      - M logging/progress_log.md
+      - A shared/design/index.ts
+      - A shared/design/motion.ts
+      - A shared/design/tokens.ts
+  - 29a6db6 track B3: tokenize content-script render constants (AUD-2)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:22:44-05:00
+    - Purpose: Draft-render path now sources visual constants from shared/design tokens:
+    - Files:
+      - M extension/src/content/__tests__/design-tokens.test.ts
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+      - M shared/design/tokens.ts
+  - 5e67d06 track B4: redundant non-color clause encoding (S-VIS-3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:27:02-05:00
+    - Purpose: Each clause type is now legible without color (color-blind redundancy):
+    - Files:
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+  - ea3d956 track C1+C2: core extraction boundary spike + canonical-order slice (DEC-2)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:36:39-05:00
+    - Purpose: ATTEMPT-ONLY, STOP FOR REVIEW — does not include the high-risk state-machine
+    - Files:
+      - A docs/agent_plans/v2/c1_core_boundary_spike.md
+      - A extension/src/content/__tests__/clause-order.core.test.ts
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+      - A packages/core/README.md
+      - A packages/core/index.ts
+      - A packages/core/src/adapter.ts
+      - A packages/core/src/clause-order.ts
+      - A packages/core/src/index.ts
+      - A packages/core/src/transport.ts
+  - 7b60cb4 docs(human): review hub for V2 mega-plan pass
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T01:45:25-05:00
+    - Purpose: Consolidated human-review materials: run summary, gap analysis (AUD-1..12 +
+    - Files:
+      - A human/00_RUN_SUMMARY.md
+      - A human/01_GAP_ANALYSIS.md
+      - A human/02_OPEN_DECISIONS.md
+      - A human/03_MANUAL_TESTING_GUIDE.md
+      - A human/04_REVIEW_CHECKLIST.md
+      - A human/README.md
+  - 5bb554a track D (partial): apply design system + motion to shadow surfaces (AUD-1/2/3)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T08:10:16-05:00
+    - Purpose: Scope expanded per user direction (professional-grade UI). The popover, ghost
+    - Files:
+      - M extension/src/content/__tests__/design-tokens.test.ts
+      - M extension/src/content/index.ts
+      - M logging/progress_log.md
+      - A shared/design/css.ts
+      - M shared/design/index.ts
+  - 80075e0 docs(human): reflect Track D progress + the browser-gated pixel/axe reality
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-15T08:11:23-05:00
+    - Purpose: Updates the review hub after the scope expansion: AUD-1/2/3 statuses, the
+    - Files:
+      - M human/00_RUN_SUMMARY.md
+      - M human/01_GAP_ANALYSIS.md
+      - M human/README.md
+  - deab141 docs(human): log OD-13 secret-rotation reminder
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-08-01T00:50:24-05:00
+    - Purpose: backend/.env was transferred over Gmail during the machine migration;
+    - Files:
+      - M human/02_OPEN_DECISIONS.md
+
+## Branch: pr/v2-tooling-infra
+
+### 2026-08-01 05:50:55Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/pr/v2-tooling-infra
+- Range: new branch up to 063431b1e7bfa0a0b59e47c6b2e9d17bcdf0205c
+- Commits:
+  - 28e9f18 Fix all shared import depths for container layout
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-26T17:53:03-05:00
+    - Purpose: In the container, /app/src and /app/shared are siblings.
+    - Files:
+      - M backend/Dockerfile
+      - M backend/src/lib/errors.ts
+      - M backend/src/lib/schemas.ts
+      - M backend/src/lib/sse.ts
+      - M backend/src/middleware/tier.ts
+      - M backend/src/routes/auth.ts
+      - M backend/src/services/llm.ts
+      - M backend/src/services/prompts/bind.ts
+      - M backend/src/services/prompts/index.ts
+      - M backend/src/services/prompts/mode.ts
+      - M backend/src/services/prompts/types.ts
+      - M backend/src/services/routeHandlers.ts
+      - M backend/src/services/segment.ts
+      - M backend/src/services/supabase.ts
+  - cc9777d Merge remote-tracking branch 'origin/main'
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-26T17:58:12-05:00
+    - Purpose: This commit updates files.
+    - Files:
+      - none
+  - 9ce83fb Align Dockerfile PORT to 8080 to match fly.toml internal_port
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-26T17:58:20-05:00
+    - Purpose: Fly.io keeps setting internal_port=8080 via its GitHub integration.
+    - Files:
+      - M backend/Dockerfile
+  - e9f7647 move to backend
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-26T21:20:20-05:00
+    - Purpose: This commit adds 1, modifies 4, deletes 1 across .claude, backend, Dockerfile, fly.toml.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - A Dockerfile
+      - D backend/fly.toml
+      - M fly.toml
+  - fc16a55 Fix vector type schema qualification in migration 0002
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-26T23:36:06-05:00
+    - Purpose: Supabase installs pgvector in the extensions schema, not public.
+    - Files:
+      - M supabase/migrations/0002_step1_projects_and_context.sql
+  - 9d0dd17 round 1 testing bugs found
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-27T23:19:14-05:00
+    - Purpose: This commit adds 3, modifies 9, deletes 1 across .claude, .github, docs, extension.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - M .github/skills/SKILL_MAP.md
+      - M .github/skills/detailed-chat-output/SKILL.md
+      - A .github/skills/handoff-prompt/SKILL.md
+      - D docs/agent_plans/v1/v1_testing_notes.md
+      - A docs/testing-notes/v1_live_session_bugs.md
+      - A docs/testing-notes/v1_testing_notes.md
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - M extension/src/popup/components/ModeToggle.tsx
+      - M extension/src/popup/components/UpgradeCTA.tsx
+  - 85ea961 extension pop up ui rework
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T00:09:54-05:00
+    - Purpose: This commit adds 2, modifies 9 across extension.
+    - Files:
+      - M extension/bun.lock
+      - M extension/package.json
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - A extension/src/popup/components/LoadingSpinner.tsx
+      - M extension/src/popup/components/ModeToggle.tsx
+      - M extension/src/popup/components/ProjectSelector.tsx
+      - M extension/src/popup/components/UpgradeCTA.tsx
+      - M extension/src/popup/main.tsx
+      - A extension/src/popup/style.css
+      - M extension/wxt.config.ts
+  - 64119fa round 1 phase 1 bug patch, daily limits and account and reset timer
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T17:42:44-05:00
+    - Purpose: This commit adds 1, modifies 2 across backend.
+    - Files:
+      - A backend/shared
+      - M backend/src/routes/account.ts
+      - M backend/src/services/rateLimit.ts
+  - a6f33dc pre phase 2
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T17:46:47-05:00
+    - Purpose: This commit modifies 9 across .claude, docs, extension.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/session_errors.tmp
+      - M .claude/skill_memory_cursor.tmp
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/popup/App.tsx
+      - M extension/src/popup/components/AccountStatus.tsx
+      - M extension/src/popup/hooks/useAccountStatus.ts
+  - 70b14a3 round 1 phase 2, login, pause toggle, and search bar
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-28T18:04:37-05:00
+    - Purpose: This commit adds 2, modifies 2 across extension.
+    - Files:
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/PauseToggle.tsx
+      - A extension/src/popup/hooks/usePause.ts
+  - 6033f00 Phase 2 complete: fix bridge wire contract, pause greying, hover legend
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T00:22:58-05:00
+    - Purpose: - Strip content-only `paused` field from SEGMENT bridge message before
+    - Files:
+      - M .claude/debugging_log.md
+      - A docs/VISUAL_LEGEND.md
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/content/index.ts
+  - ad7a8f4 Pre-Phase-3: document segment classification tuning investigation
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T19:56:02-05:00
+    - Purpose: - Add docs/testing-notes/segment-classification-tuning.md documenting the
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - A docs/testing-notes/segment-classification-tuning.md
+  - 3088bae Phase 3: cursor-relative popover, clause-aware header, legend HUD, bind feedback
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-29T20:04:45-05:00
+    - Purpose: BUG-2.2 — Hover popover now anchors to the cursor (clientX/Y, 18px below) instead
+    - Files:
+      - M docs/testing-notes/v1_live_session_bugs.md
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/ClauseOrderingToggle.tsx
+      - A extension/src/popup/hooks/useClauseOrdering.ts
+  - 8f07238 round 1 phase 3, debugging confidence = 0 issue
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-30T02:25:33-05:00
+    - Purpose: This commit adds 2, modifies 10 across .claude, backend, extension.
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - M backend/Dockerfile
+      - M backend/src/services/routeHandlers.ts
+      - M backend/src/services/segment.ts
+      - M extension/src/background/index.ts
+      - M extension/src/content/index.ts
+      - M extension/src/popup/App.tsx
+      - A extension/src/popup/components/ModelOverrideToggle.tsx
+      - A extension/src/popup/hooks/useModelOverride.ts
+  - 89393be Round 2 testing: bug logging, self-improvement cleanup, BUG-3.2 fix
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-31T01:52:04-05:00
+    - Purpose: - Fix BUG-3.2: insert zero-width break span between adjacent underlined segments
+    - Files:
+      - M .claude/pending-improvements.md
+      - M .claude/skill_memory_cursor.tmp
+      - M CLAUDE.md
+      - A docs/testing-notes/round2_testing_notes.md
+      - M extension/src/content/index.ts
+      - D scripts/analyze-patterns.sh
+      - D scripts/implicit-skill-smoke-test.sh
+      - M scripts/session-end.sh
+      - D scripts/smoke-tests.sh
+  - 9ee776d Phase 1: remove confidence, Escape-COMPLETE fix, clear detection, overlay clip, unsupported toast
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-05-31T02:30:01-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    - Files:
+      - M backend/src/__tests__/segment.route.test.ts
+      - M backend/src/__tests__/segment.service.test.ts
+      - M backend/src/lib/schemas.ts
+      - M backend/src/services/routeHandlers.ts
+      - M backend/src/services/segment.ts
+      - M extension/src/content/index.ts
+      - M shared/contracts/domain.ts
+  - 2c9407b Document ChatGPT overlay failures: BUG-REACT, BUG-GEOM, BUG-ZINDEX
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-09T21:11:04-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    - Files:
+      - M .claude/debugging_log.md
+      - A handoff.md
+  - b6a6be0 Fix P0/P1 overlay+segmentation bugs; add V2 UI/UX mega-plan
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:45:08-05:00
+    - Purpose: P0/P1 fixes (from handoff.md + round2 testing notes):
+    - Files:
+      - M .gitignore
+      - M backend/src/services/segment.ts
+      - A docs/agent_plans/v2/v2_uiux_megaplan.md
+      - M extension/src/content/index.ts
+  - 1bb6907 chore: sweep session bookkeeping (hook logs, tsc/skill state)
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:45:27-05:00
+    - Purpose: Transient files updated by the session hooks (debugging_log, notification_log,
+    - Files:
+      - M .claude/debugging_log.md
+      - M .claude/notification_log.txt
+      - M .claude/session_errors.tmp
+      - M .claude/skill_memory_cursor.tmp
+  - be9900f chore: commit pre-push log for previous push
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-06-14T23:46:48-05:00
+    - Purpose: Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    - Files:
+      - M .claude/notification_log.txt
+      - M logging/commit_log.md
+  - 1f957f2 Fix hardcoded /home/seed path in hook scripts, simplify Stop hook
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-08-01T00:48:46-05:00
+    - Purpose: notify-approval.sh and post-edit-check.sh had PROJECT_DIR hardcoded to
+    - Files:
+      - M .claude/settings.json
+      - M scripts/notify-approval.sh
+      - M scripts/post-edit-check.sh
+      - D scripts/session-end.sh
+  - a340f64 Migrate to shared ai-workflow repo for skills/scripts/hooks
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-08-01T00:48:46-05:00
+    - Purpose: Replaces real copies of governance skills, notification/verification
+    - Files:
+      - T .claude/agents/beast-mode-3-1.md
+      - A .claude/ai-workflow.env
+      - T .claude/config
+      - M .claude/settings.json
+      - T .gemini/agents/beast-mode-3-1.md
+      - A .gemini/settings.json
+      - T .githooks/pre-commit
+      - T .githooks/pre-push
+      - A .github/skills/detailed-chat-output
+      - D .github/skills/detailed-chat-output/SKILL.md
+      - A .github/skills/documentation-cohesion
+      - D .github/skills/documentation-cohesion/SKILL.md
+      - A .github/skills/manual-testing-guides
+      - D .github/skills/manual-testing-guides/SKILL.md
+      - A .github/skills/remote-commit-logging
+      - D .github/skills/remote-commit-logging/SKILL.md
+      - A .github/skills/repo-workflow
+      - D .github/skills/repo-workflow/SKILL.md
+      - A .github/skills/scope-creep-guard
+      - D .github/skills/scope-creep-guard/SKILL.md
+      - A .github/skills/self-improvement-loop
+      - D .github/skills/self-improvement-loop/SKILL.md
+      - A .github/skills/skill-improvement-loop
+      - D .github/skills/skill-improvement-loop/SKILL.md
+      - D .github/skills/skill-improvement-loop/scripts/implicit-skill-smoke-test.sh
+      - A .github/skills/skill-map-governance
+      - D .github/skills/skill-map-governance/SKILL.md
+      - A .github/skills/verification-gate
+      - D .github/skills/verification-gate/SKILL.md
+      - A .github/skills/workflow-logging
+      - D .github/skills/workflow-logging/SKILL.md
+      - A scripts/analyze-patterns.sh
+      - A scripts/gemini-hook-adapter.sh
+      - A scripts/implicit-skill-smoke-test.sh
+      - T scripts/notify-approval.sh
+      - T scripts/notify.sh
+      - T scripts/post-edit-check.sh
+      - T scripts/update-skill-memory.sh
+  - d7e7271 fix(deploy): scale Fly.io machines to zero and shrink VM size
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-08-01T00:48:46-05:00
+    - Purpose: Two machines were running 24/7 at 1GB RAM, generating $14.24 in a
+    - Files:
+      - M fly.toml
+  - 9850db2 feat: migrate skill system from .github/skills to .claude/skills
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-08-01T00:49:11-05:00
+    - Purpose: Claude Code's Skill tool only discovers skills under .claude/skills/, not
+    - Files:
+      - M .claude/notification_log.txt
+      - A .claude/skills/SKILL_MAP.md
+      - A .claude/skills/background-port-state-recovery/SKILL.md
+      - A .claude/skills/background-port-state-recovery/references/BACKGROUND_PORT_RECOVERY.md
+      - A .claude/skills/canonical-clause-ordering/SKILL.md
+      - A .claude/skills/canonical-clause-ordering/references/CANONICAL_ORDER_MAP.md
+      - A .claude/skills/clause-state-management/SKILL.md
+      - A .claude/skills/clause-state-management/references/STATE_MACHINE_NOTES.md
+      - A .claude/skills/content-script-instrumentation/SKILL.md
+      - A .claude/skills/content-script-instrumentation/references/INSTRUMENTATION_FLOW.md
+      - A .claude/skills/detailed-chat-output/SKILL.md
+      - A .claude/skills/documentation-cohesion/SKILL.md
+      - A .claude/skills/dom-memory-management/SKILL.md
+      - A .claude/skills/extension-popup-ux/SKILL.md
+      - A .claude/skills/handoff-prompt/SKILL.md
+      - A .claude/skills/hotkey-bind-commit-ux/SKILL.md
+      - A .claude/skills/hotkey-bind-commit-ux/references/HOTKEY_GUARD_MATRIX.md
+      - A .claude/skills/llm-router-and-model-selection/SKILL.md
+      - A .claude/skills/llm-router-and-model-selection/references/ROUTING_MATRIX.md
+      - A .claude/skills/manual-testing-guides/SKILL.md
+      - A .claude/skills/mv3-extension-boundaries/SKILL.md
+      - A .claude/skills/mv3-extension-boundaries/references/MV3_BOUNDARY_MATRIX.md
+      - A .claude/skills/rate-limiting-tier-enforcement/SKILL.md
+      - A .claude/skills/rate-limiting-tier-enforcement/references/RATE_LIMIT_MATRIX.md
+      - A .claude/skills/remote-commit-logging/SKILL.md
+      - A .claude/skills/repo-workflow/SKILL.md
+      - A .claude/skills/scope-creep-guard/SKILL.md
+      - A .claude/skills/self-improvement-loop/SKILL.md
+      - A .claude/skills/skill-improvement-loop/SKILL.md
+      - A .claude/skills/skill-map-governance/SKILL.md
+      - A .claude/skills/sse-streaming-bridge/SKILL.md
+      - A .claude/skills/sse-streaming-bridge/references/SSE_BRIDGE_FLOW.md
+      - A .claude/skills/system-prompt-assembly/SKILL.md
+      - A .claude/skills/system-prompt-assembly/references/PROMPT_ASSEMBLY_CHECKLIST.md
+      - A .claude/skills/target-site-compat/SKILL.md
+      - A .claude/skills/typescript-safety/SKILL.md
+      - A .claude/skills/ui-design-system/SKILL.md
+      - A .claude/skills/underline-preview-rendering/SKILL.md
+      - A .claude/skills/underline-preview-rendering/references/RENDERING_STATE_MAP.md
+      - A .claude/skills/verification-gate/SKILL.md
+      - A .claude/skills/workflow-logging/SKILL.md
+      - D .github/skills/SKILL_MAP.md
+      - D .github/skills/background-port-state-recovery/SKILL.md
+      - D .github/skills/background-port-state-recovery/references/BACKGROUND_PORT_RECOVERY.md
+      - D .github/skills/canonical-clause-ordering/SKILL.md
+      - D .github/skills/canonical-clause-ordering/references/CANONICAL_ORDER_MAP.md
+      - D .github/skills/clause-state-management/SKILL.md
+      - D .github/skills/clause-state-management/references/STATE_MACHINE_NOTES.md
+      - D .github/skills/content-script-instrumentation/SKILL.md
+      - D .github/skills/content-script-instrumentation/references/INSTRUMENTATION_FLOW.md
+      - D .github/skills/detailed-chat-output
+      - D .github/skills/documentation-cohesion
+      - D .github/skills/dom-memory-management/SKILL.md
+      - D .github/skills/extension-popup-ux/SKILL.md
+      - D .github/skills/handoff-prompt/SKILL.md
+      - D .github/skills/hotkey-bind-commit-ux/SKILL.md
+      - D .github/skills/hotkey-bind-commit-ux/references/HOTKEY_GUARD_MATRIX.md
+      - D .github/skills/llm-router-and-model-selection/SKILL.md
+      - D .github/skills/llm-router-and-model-selection/references/ROUTING_MATRIX.md
+      - D .github/skills/manual-testing-guides
+      - D .github/skills/mv3-extension-boundaries/SKILL.md
+      - D .github/skills/mv3-extension-boundaries/references/MV3_BOUNDARY_MATRIX.md
+      - D .github/skills/rate-limiting-tier-enforcement/SKILL.md
+      - D .github/skills/rate-limiting-tier-enforcement/references/RATE_LIMIT_MATRIX.md
+      - D .github/skills/remote-commit-logging
+      - D .github/skills/repo-workflow
+      - D .github/skills/scope-creep-guard
+      - D .github/skills/self-improvement-loop
+      - D .github/skills/skill-improvement-loop
+      - D .github/skills/skill-map-governance
+      - D .github/skills/sse-streaming-bridge/SKILL.md
+      - D .github/skills/sse-streaming-bridge/references/SSE_BRIDGE_FLOW.md
+      - D .github/skills/system-prompt-assembly/SKILL.md
+      - D .github/skills/system-prompt-assembly/references/PROMPT_ASSEMBLY_CHECKLIST.md
+      - D .github/skills/target-site-compat/SKILL.md
+      - D .github/skills/typescript-safety/SKILL.md
+      - D .github/skills/ui-design-system/SKILL.md
+      - D .github/skills/underline-preview-rendering/SKILL.md
+      - D .github/skills/underline-preview-rendering/references/RENDERING_STATE_MAP.md
+      - D .github/skills/verification-gate
+      - D .github/skills/workflow-logging
+      - M .gitignore
+      - M CLAUDE.md
+      - M docs/NONSPECIFIC_SKILLS.md
+      - M docs/VISUAL_LEGEND.md
+      - M docs/agent_plans/v2/v2_uiux_megaplan.md
+      - M logging/commit_log.md
+  - 063431b test(extension): add Playwright e2e harness with authenticated bind cycle
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-08-01T00:50:14-05:00
+    - Purpose: Loads the built unpacked extension into a real persistent Chromium context
+    - Files:
+      - M .gitignore
+      - M extension/package-lock.json
+      - M extension/package.json
+      - A extension/playwright.config.ts
+      - A extension/tests/e2e/auth-helpers.ts
+      - A extension/tests/e2e/authenticated.spec.ts
+      - A extension/tests/e2e/extension-fixtures.ts
+      - A extension/tests/e2e/fixtures/plain-textarea.html
+      - A extension/tests/e2e/fixtures/serve.mjs
+      - A extension/tests/e2e/invariants.spec.ts
+
+### 2026-08-01 08:01:16Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/pr/v2-tooling-infra
+- Range: 063431b1e7bfa0a0b59e47c6b2e9d17bcdf0205c..63ea2349fc2813c0d09acb727b9a47751ec7e53b
+- Commits:
+  - 63ea234 docs(v3): record deferred multi-surface + write-mode roadmap
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-08-01T03:01:11-05:00
+    - Purpose: Phases 1-5 of the v1 redirect (PAT auth, write-mode taxonomy, CLI, Claude
+    - Files:
+      - M .claude/notification_log.txt
+      - A docs/agent_plans/v3/v3_multi_surface_plan.md
+      - M logging/commit_log.md
+
+### 2026-08-01 08:01:27Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/pr/v2-tooling-infra
+- Range: 63ea2349fc2813c0d09acb727b9a47751ec7e53b..981f86305aea120b06509ae313fe5dacb5b8c4dc
+- Commits:
+  - 981f863 chore: commit pre-push log for previous push
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-08-01T03:01:27-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+    - Files:
+      - M logging/commit_log.md
+
+### 2026-08-01 08:01:39Z - Push to origin
+- Remote URL: https://github.com/Daniel-Wu-Github/insta_prompt.git
+- Remote ref: refs/heads/pr/v2-tooling-infra
+- Range: 981f86305aea120b06509ae313fe5dacb5b8c4dc..3dcc7564854c85b1754ea52f6f93a8d3fd31d267
+- Commits:
+  - 3dcc756 chore: commit pre-push log for previous push
+    - Author: Daniel-Wu-Github <danielwu1510@tamu.edu>
+    - Commit date: 2026-08-01T03:01:34-05:00
+    - Purpose: Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+    - Files:
+      - M logging/commit_log.md
