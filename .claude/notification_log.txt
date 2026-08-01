@@ -726,3 +726,42 @@
 [18:34:39Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'
 [18:45:18Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'
 [18:45:36Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'
+[05:55:24Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — Agent: Assess mode-toggle architecture for writing mode
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[05:55:24Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — Agent: Assess mode-toggle '
+[05:59:39Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'
+[06:00:39Z] Notification
+  type:    idle_prompt
+  message: Idle — waiting for your input
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[06:00:39Z] Push SENT  HTTP:200  title='💬 Claude is Waiting'  msg='Idle — waiting for your input'
+[06:45:54Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'
+[06:46:55Z] Notification
+  type:    idle_prompt
+  message: Idle — waiting for your input
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[06:46:55Z] Push SENT  HTTP:200  title='💬 Claude is Waiting'  msg='Idle — waiting for your input'
+[07:52:29Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — Bash: cd /Users/danielwu/projects/insta_prompt
+echo "=== auth middleware on origin/mai
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[07:52:29Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — Bash: cd /Users/danielwu/p'
+[07:55:27Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — ToolSearch: select:ExitPlanMode
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[07:55:27Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — ToolSearch: select:ExitPla'
+[07:57:47Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — Write: /Users/danielwu/.claude/plans/unified-bubbling-flame.md
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[07:57:47Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — Write: /Users/danielwu/.cl'
