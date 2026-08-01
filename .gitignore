@@ -11,6 +11,10 @@ build/
 .wxt/
 *.tsbuildinfo
 
+test-results/
+playwright-report/
+playwright/.cache/
+
 .DS_Store
 Thumbs.db
 *.log
