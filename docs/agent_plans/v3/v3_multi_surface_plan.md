@@ -15,8 +15,7 @@ proxy-only, client-agnostic per `docs/ARCHITECTURE.md`) as the reusable asset, a
 several thin clients on top of it — the existing browser extension, a CLI, a Claude Code
 skill, and an MCP server. All four surfaces support two workflows: **code mode** (existing
 taxonomy/pipeline, unchanged) and **write mode** (new — day-to-day writing/email/message
-enhancement, Grammarly-style; staged before a later essay/academic taxonomy, the old
-DEC-3 draft in `docs/agent_plans/v2/v2_uiux_megaplan.md`).
+enhancement, differentiated against Grammarly/Wordtune, not a clone — see Phase 1).
 
 Reasoning worth preserving: even a perfect VS Code extension only wins back one surface,
 and coding-mode's core value prop (structuring a prompt before sending it to a "dumb"
@@ -26,17 +25,40 @@ heavier client for coding — it's cheap multi-surface reach plus a genuinely di
 write-mode, where the browser-extension form factor is actually the right tool (Gmail/
 Slack/Notion have no agentic assistant already doing this job inline, unlike an IDE).
 
-**Status: Phase 0 executed 2026-08-01 (see `logging/commit_log.md` / PR history for
-specifics). Phases 1-5 below are not started.**
+**Status (2026-08-02): Phase 0 executed and merged (PR #3, see `logging/commit_log.md` for
+specifics). Phase 1 has been re-planned in depth (see below, supersedes the original
+"write-mode taxonomy" draft) — still not started/implemented. Phases 2-5 not started.**
 
-## Phase 1 — Shared infra: PAT auth + write-mode taxonomy v0
+## Phase 1 — Shared infra: PAT auth + write-mode style-control architecture
 
 Everything in Phases 2-4 depends on this landing first.
 
-**Auth**: add a long-lived Personal Access Token path alongside (not replacing) Supabase
-JWT auth — standard pattern (`gh`/`vercel`/`stripe` CLIs). Decided over reusing Supabase
-email/password login in the CLI or a device-code OAuth flow, specifically to avoid
-duplicating Supabase's refresh-token dance across three new non-browser clients.
+### Why write-mode is not a parallel goal-type taxonomy
+
+The user explicitly rejected a simplified "classify into categories, accept/reject like
+code-mode's clauses" design — north star is a product genuinely better than Grammarly/
+Wordtune, not a clone. Competitive research (2026): Grammarly's tone-rewrite/formality/
+audience "Tone Map" and Wordtune's per-sentence tone/shorten/expand + "Spices" both treat
+correctness (grammar/spelling) as objective auto-fixes and tone/style as a **separate,
+user-controlled axis** — never a third "classify then accept/reject" taxonomy. Nothing in
+the competitive set treats **mood, figurative-language density, or voice as a generative
+dial** — those exist only as passive diagnostic scores or standalone novelty tools
+(metaphor generators). That gap is the differentiation target.
+
+This replaces the original "parallel `GOAL_TYPE_VALUES`-style enum with per-category
+prompt factories" idea entirely with a **two-layer model**:
+- **Correctness layer** (grammar, clarity, conciseness) — objective, auto-applied in the
+  same rewrite call, no per-span review UI in v1 (explicit user decision: ship this simply
+  first, revisit once the style layer is proven).
+- **Style layer** — a `StyleProfile` the user actively *sets* (dials and/or freeform
+  instruction), not something the AI unilaterally suggests. This is the real product bet.
+
+### Auth
+
+Add a long-lived Personal Access Token path alongside (not replacing) Supabase JWT auth —
+standard pattern (`gh`/`vercel`/`stripe` CLIs). Decided over reusing Supabase email/password
+login in the CLI or a device-code OAuth flow, specifically to avoid duplicating Supabase's
+refresh-token dance across three new non-browser clients.
 - New table (Supabase Postgres) storing a hashed PAT + `userId` + tier reference.
 - `backend/src/services/supabase.ts`: new `mintPersonalAccessToken(userId)` /
   `verifyPersonalAccessToken(token)`; `verifyBearerToken` tries a PAT-prefix check (e.g.
@@ -46,33 +68,94 @@ duplicating Supabase's refresh-token dance across three new non-browser clients.
   account section) — since the user already has a working browser session, the popup is
   the simplest place to generate one and display it once.
 
-**Write-mode taxonomy**: ship the simple day-to-day set first (e.g. `clarity`, `tone`,
-`grammar`, `conciseness` — exact naming TBD at implementation), kept as a **separate enum
-from `GOAL_TYPE_VALUES`**, not overloaded onto it. `GOAL_TYPE_VALUES` is deeply hardcoded
-into canonical ordering (`extension/src/content/index.ts` `CANONICAL_ORDER_BY_GOAL_TYPE`),
-the color palette (`GOAL_TYPE_PALETTE`), and 6 backend prompt-factory files
-(`backend/src/services/prompts/{action,constraint,context,edge_case,output_format,
-tech_stack}.ts`) — a parallel taxonomy + parallel prompt factory set (same
-`buildGoalPrompt`-style factory pattern from `backend/src/services/prompts/base.ts`) is
-cleaner than trying to make one enum serve both.
-- `shared/contracts/domain.ts`: add `Workflow = "code" | "write"` and the new write-mode
-  goal-type enum.
-- `backend/src/services/segment.ts`: a write-mode classification prompt variant, selected
-  by `workflow`.
-- `backend/src/services/prompts/`: new factory files per write-mode goal type, wired into
-  a `workflow`-keyed factory map (mirrors the existing `goalPromptFactories`).
-- Recommend piloting on just 1-2 categories (clarity + tone) against real Slack/email
-  drafts before building out all four — cheap to validate, expensive to discover the
-  taxonomy is wrong after all four are built.
+### `StyleProfile` data model
+
+New file `shared/contracts/write.ts`, zod-validated per this repo's `typescript-safety`
+skill conventions (no `any`, schemas at every boundary):
+- Six scalar dials, each `0-100`: `formality`, `warmth`, `assertiveness`,
+  `figurativeLanguage`, `humor`, `conciseness`. (Vocabulary sophistication deliberately
+  folded into `formality` rather than a 7th dial — highly correlated, a 7th slider adds
+  confusion without much added control.)
+- Named presets as static `StyleProfile` objects: Professional Email, Warm Personal Note,
+  Punchy/Marketing, Casual Chat, Academic, Balanced/Default. Extension surfaces these as
+  one-click buttons; CLI as `--preset <name>`.
+- No `voice`/named-author field — abstract dimensions only (explicit user decision, avoids
+  the style-mimicry gray area; also more useful day-to-day — nobody wants a Slack message
+  to "sound like Hemingway").
+
+### Three new backend routes
+
+One call each, composable identically across all 4 surfaces — this is what makes the
+"freeform NL primary, dials as extension-only precision layer" decision work, since every
+surface hits the same endpoints:
+
+1. `POST /write/analyze` — `{ text }` → `{ detectedProfile: StyleProfile }`. Reads the
+   *current* style of input text (à la Grammarly's Tone Map) so the extension can
+   initialize sliders to reality instead of a generic default. No rewrite. Routes like
+   `segment` (fast/cheap classifier tier, free-tier safe).
+2. `POST /write/profile/parse` — `{ instruction: string, baseProfile?: StyleProfile }` →
+   `{ profile: StyleProfile }`. Parses a freeform instruction ("make this warmer and
+   punchier, add a metaphor") into concrete dial values/deltas. **The one mechanism every
+   surface shares** — CLI, MCP, Claude Code skill, and the extension's freeform box all
+   call this; explicit sliders in the extension just set the same `StyleProfile` object
+   directly, skipping this call. Routes like `segment` too.
+3. `POST /write/rewrite` — `{ text, profile: StyleProfile }` → `{ rewritten: string }`.
+   **One LLM call** that both auto-fixes correctness issues (grammar/clarity/conciseness —
+   no separate detection pass, no per-span suggestions in v1) and applies the style
+   profile. Routes like `enhance`/`bind` (mode+tier sensitive generation path).
+
+### Backend prompt architecture
+
+New directory `backend/src/services/write/`, mirrors the existing `services/prompts/`
+factory-pattern conventions (`system-prompt-assembly` skill — deterministic pure functions,
+explicit role/task/constraints/output-shape hierarchy):
+- `directives.ts` — `styleProfileToDirectives(profile): string` — the real
+  prompt-engineering core: translates each dial value into natural-language style
+  instructions (e.g. `figurativeLanguage: 70` → "incorporate vivid metaphors, similes, and
+  sensory imagery where it reads naturally, without forcing it into every sentence").
+  Deterministic and independently testable (golden-output snapshot tests).
+- `analyze.ts` — prompt factory + response parser for the style-detection call.
+- `profileParser.ts` — prompt factory + response parser for NL-instruction-to-profile.
+- `rewrite.ts` — assembles `directives.ts` output + a fixed correctness-fix instruction
+  block + the original text into the final rewrite prompt.
+
+### Router
+
+`backend/src/services/llm.ts` (`llm-router-and-model-selection` skill conventions): add
+`write_analyze`, `write_profile_parse` (→ fast-classifier route key, same tier rules as
+`segment`), and `write_rewrite` (→ mode+tier-sensitive route key, same rules as
+`enhance`/`bind`). Update `docs/LLM_ROUTING.md`'s matrix to match.
+
+### Non-destructive principle carried over
+
+This project's core invariant (`docs/UX_FLOW.md` / Option E precedent): `/write/rewrite`
+never auto-applies anywhere. Extension shows a before/after diff with an explicit "Apply"
+action; CLI/MCP/skill just return the rewritten text for the caller to use — no surface
+silently overwrites source text.
+
+### Explicitly deferred, flagged as real follow-on work, not blocking
+
+- The exact directive-compiler wording per dial (and dial *combinations* — e.g. high
+  figurative-language + high formality can read as purple prose if not balanced) needs real
+  iteration against a small golden set of actual Slack/email drafts before it's "done" —
+  a prompt-quality problem, not fully solvable by writing code in the abstract. Recommend a
+  short validation pass (5-10 real messages × 3-4 preset profiles, read the output, iterate
+  `directives.ts`) before considering Phase 1 complete.
+- Correctness-layer interactive review (per-span accept/reject) is intentionally out of v1
+  scope per user decision — revisit once the style layer is proven.
 
 ## Phase 2 — CLI (foundational; other new surfaces build on this)
 
 New `cli/` package (reuses `shared/contracts` types directly).
 - `pc auth <token>`: stores the PAT from Phase 1 in `~/.config/promptcompiler/config.json`.
-- `pc write` / `pc code`: reads stdin or `--text`, calls `/segment` then auto-runs
-  `/enhance` on every resulting clause (skip the interactive Tab-to-accept review loop —
-  a terminal isn't well suited to that UX; this is a deliberate v1 scope-down, not full
-  parity with the extension), prints the compiled/paraphrased result.
+- `pc code`: reads stdin or `--text`, calls `/segment` then auto-runs `/enhance` on every
+  resulting clause (skip the interactive Tab-to-accept review loop — a terminal isn't well
+  suited to that UX; deliberate v1 scope-down, not full parity with the extension), prints
+  the compiled/paraphrased result.
+- `pc write`: reads stdin or `--text`; `--preset <name>` or `--style "<freeform
+  instruction>"` (calls `/write/profile/parse` if freeform, else uses the named preset
+  directly) then `/write/rewrite`; prints the rewritten text. `--analyze` alone prints the
+  detected `StyleProfile` without rewriting, for iterative refinement.
 - This is the piece that makes "helps my workflow immediately" literally true — usable
   from Termius, plain terminal, or VS Code's integrated terminal the moment it exists.
 
@@ -85,23 +168,34 @@ Termius/terminal/VS Code.
 
 ## Phase 4 — MCP server
 
-New `mcp-server/` package exposing `segment_and_enhance_write` / `segment_and_enhance_code`
+New `mcp-server/` package exposing `compile_code_prompt` (existing pipeline) and
+`rewrite_text` (write mode: `text`, optional `style` freeform string or `preset` name)
 tools. Extract the CLI's HTTP-calling/auth logic into a small shared `client/` module so
 CLI and MCP server don't duplicate it. Registers with Claude Desktop's MCP config; mobile
 app MCP support is unconfirmed — verify rather than assume before promising that surface.
 
-## Phase 5 — Browser extension write-mode toggle
+## Phase 5 — Browser extension write mode
 
-Additive: new `workflow` field in `useSettings.ts`, a `WorkflowToggle.tsx` next to the
-existing `ModeToggle.tsx` in the popup (`extension/src/popup/App.tsx`), threaded through
-background/content script to select which goal-type palette/legend/backend routing is
-active. No new DOM instrumentation needed — content script already runs on `<all_urls>`
-generically.
+New surface, not just a toggle, given the depth decided in Phase 1: a style panel (preset
+buttons + the 6 dials, initialized from `/write/analyze`'s detected profile, plus a
+freeform instruction box that calls `/write/profile/parse` and updates the same sliders)
+and a "Rewrite" action showing a before/after diff with an explicit Apply step
+(non-destructive, per Phase 1). New `workflow` field in `useSettings.ts` to switch the
+popup between code-mode (`ModeToggle.tsx`) and write-mode views; threaded through
+background/content script for routing. No new DOM instrumentation needed for the
+write-mode target text itself — content script already runs on `<all_urls>` generically;
+the style panel is new popup/in-page UI, not a new instrumentation surface.
 
 ## Verification (per phase, for whoever picks this up)
 
-- **Phase 1**: backend test for PAT verification; manual `curl` against `/segment` with a
-  minted PAT and `workflow=write`.
+- **Phase 1**: `styleProfileToDirectives` unit/snapshot tests across representative dial
+  combinations; router matrix tests covering the 3 new `callType`s including free-tier
+  safety for `write_analyze`/`write_profile_parse`; zod round-trip tests for `StyleProfile`
+  and all 3 new request/response shapes. **The real bar**: run 5-10 actual Slack/email
+  drafts through `/write/rewrite` at each preset and a few custom dial combinations;
+  confirm output distinctly and correctly shifts along the intended dimensions (a
+  product-quality check, not a pass/fail unit test — budget real iteration time on
+  `directives.ts` here before calling Phase 1 done).
 - **Phase 2**: pipe a real Slack/email draft through `pc write` from an actual Termius SSH
   session and from a local terminal; confirm real enhanced output both times.
 - **Phase 3**: invoke the skill in a live Claude Code session, confirm correct CLI shell-out.

@@ -765,3 +765,21 @@ echo "=== auth middleware on origin/mai
   session: 2ca42bfd-4626-4239-899d-0027090ee8bf
 
 [07:57:47Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — Write: /Users/danielwu/.cl'
+[08:38:59Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — Agent: Ground write-mode UX decision in current pipeline
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[08:38:59Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — Agent: Ground write-mode U'
+[08:44:38Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — WebSearch: AI writing tool figurative language mood style control sliders differentiation
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[08:44:38Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — WebSearch: AI writing tool'
+[19:54:21Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — ExitPlanMode
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[19:54:21Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — ExitPlanMode'
