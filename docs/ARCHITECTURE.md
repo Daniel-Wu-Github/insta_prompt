@@ -7,7 +7,16 @@ Implementation status (main branch):
 - Step 1 and Step 2 backend foundations are active: Supabase auth context, protected-route middleware order (`auth -> ratelimit -> tier`), and `/auth/token` IP abuse protection.
 - Step 4-6 backend route behavior is active: `/segment` classification normalization, `/enhance` streaming orchestration, and `/bind` canonicalization plus history persistence.
 - Step 7 background bridge behavior is active: Port verb dispatch (`SEGMENT` / `ENHANCE` / `BIND` / `CANCEL`), SSE forwarding, keepalive alarm self-heal, and per-tab `chrome.storage.session` recovery state.
-- Content script UX pipeline remains bootstrap-level pending Step 8+ instrumentation/rendering work.
+- Content script UX pipeline is fully instrumented (updated 2026-08-02 — this was
+  previously staged/bootstrap-level; see `human/06_FABLE_PASS_REPORT.md`).
+- `packages/core` exists as an extracted, pure-TS portable package (canonical clause
+  ordering, `InputSource`/`RenderTarget` adapter contracts, `TransportClient` contract) —
+  a boundary spike, not yet the full state-machine extraction (still inline in the
+  extension per `docs/agent_plans/v2/c1_core_boundary_spike.md`).
+- v1 direction has shifted: a VS Code extension (shown as a client below) was explicitly
+  rejected. The current plan is a CLI + Claude Code skill + MCP server as additional thin
+  clients on this same backend, alongside the existing browser extension — see
+  `docs/agent_plans/v3/v3_multi_surface_plan.md`.
 
 ---
 
@@ -15,8 +24,9 @@ Implementation status (main branch):
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  CLIENT LAYER                                            │
-│  Chrome Extension  │  VS Code Extension  │  Web Dashboard│
+│  CLIENT LAYER (v1 direction — see docs/agent_plans/v3/)  │
+│  Chrome Extension │ CLI │ Claude Code Skill │ MCP Server │
+│  (VS Code extension explicitly rejected — see v3 plan)   │
 └────────────────────┬────────────────────────────────────┘
                      │ HTTPS + SSE streaming
 ┌────────────────────▼────────────────────────────────────┐

@@ -42,6 +42,7 @@ Current implementation snapshot (main, Step 0-7):
 | POST | `/bind` | Step 6 | Production bind orchestration and history persistence are active |
 | GET | `/projects` | v2-ready | Schema and contracts may exist before full v2 behavior |
 | POST | `/projects/:id/context` | v2-ready | Schema and contracts may exist before full v2 behavior |
+| GET | `/account/status` | Active | Auth-gated, read-only — returns tier, free-tier usage count, and next quota reset |
 
 BYOK does not introduce alternate request or response shapes for `/segment`, `/enhance`, or `/bind`. The same endpoint contracts apply across free, pro, and BYOK; only the backend provider/model source selected after auth, rate-limit, and tier checks changes.
 
@@ -113,14 +114,22 @@ Backend normalization responsibilities: emit only `context`, `tech_stack`, `cons
 ---
 
 ### POST `/bind`
-Assemble all accepted expanded sections into one coherent prompt. Returns SSE stream.
+Assemble expanded sections into one coherent prompt. Returns SSE stream.
+
+**Option E (non-destructive bind, "BIND-DESIGN-1"):** each section carries an optional
+`accepted` boolean. Omitted ⇒ `true` (backward compatible with pre-Option-E clients).
+Sections marked `accepted: true` are rewritten/merged/polished freely; sections marked
+`accepted: false` are kept as close to verbatim as grammar allows — the model is
+instructed not to expand, embellish, or merge them away. This is what lets a user commit
+without losing text from clauses they never explicitly accepted in the extension's review
+UI.
 
 **Request**
 ```json
 {
   "sections": [
-    { "canonical_order": 2, "goal_type": "tech_stack", "expansion": "React 18 with TypeScript..." },
-    { "canonical_order": 4, "goal_type": "action", "expansion": "Implement a dark/light mode toggle..." }
+    { "canonical_order": 2, "goal_type": "tech_stack", "expansion": "React 18 with TypeScript...", "accepted": true },
+    { "canonical_order": 4, "goal_type": "action", "expansion": "Implement a dark/light mode toggle...", "accepted": false }
   ],
   "mode": "balanced"
 }
@@ -176,6 +185,23 @@ Return the authenticated user's project list. Used by popup project selector. (v
 
 ### POST `/projects/:id/context`
 Accept chunked file content + embedding for a project's repo context. (v2)
+
+---
+
+### GET `/account/status`
+Return the authenticated user's tier, free-tier usage count, and next quota reset.
+Auth-gated (same middleware as protected routes) but not rate-limited itself (cheap,
+no LLM cost). Backs the popup's account/usage display.
+
+**Response**
+```json
+{
+  "tier": "free",
+  "enhanceCount": 4,
+  "dailyLimit": 30,
+  "dailyReset": 1785600000
+}
+```
 
 ---
 
@@ -255,7 +281,8 @@ backend/
 │   │   ├── segment.ts        # POST /segment
 │   │   ├── bind.ts           # POST /bind
 │   │   ├── auth.ts           # POST /auth/token
-│   │   └── projects.ts       # GET/POST /projects (v2)
+│   │   ├── projects.ts       # GET/POST /projects (v2)
+│   │   └── account.ts        # GET /account/status
 │   ├── services/
 │   │   ├── context.ts        # Project context lookup helper (`project_id` nullable)
 │   │   ├── history.ts        # Enhancement history helpers (v2-ready)

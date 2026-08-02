@@ -2,8 +2,11 @@
 
 Persistent record of implementation errors, skill gaps, and debugging patterns captured across Claude Code sessions.
 
-Each session boundary is written automatically by `scripts/session-end.sh` (Stop hook).
-Inline entries are written manually using `scripts/capture-debug-error.sh` or directly.
+Historical note (2026-08-02): entries below through mid-2026 were written automatically
+by `scripts/session-end.sh` (Stop hook). That script was removed and the Stop hook
+simplified to a plain notification (commit `f11b617`) — session boundaries are no longer
+auto-appended here. Inline entries are still written manually using
+`scripts/capture-debug-error.sh` or directly.
 
 ---
 
@@ -37,7 +40,7 @@ Inline entries are written manually using `scripts/capture-debug-error.sh` or di
 When the same skill gap appears **2 or more times** in this log, run `skill-improvement-loop`:
 1. Score the failing skill using the 0-2 rubric (trigger quality, scope fit, outcome support, noise control)
 2. If total < 7/8: rewrite the description and tighten the "When to Use" section
-3. Update `.github/skills/SKILL_MAP.md` if scope changed
+3. Update `.claude/skills/SKILL_MAP.md` if scope changed
 4. Update `CLAUDE.md` task-triggered table if the triggering domain changed
 5. Re-run `scripts/implicit-skill-smoke-test.sh` to verify the fix
 
@@ -72,7 +75,7 @@ When the same skill gap appears **2 or more times** in this log, run `skill-impr
 **Resolution:** Documented in handoff.md. BUG-REACT fix: swap `isInstrumented` from attribute check to WeakSet. BUG-GEOM fix: walk ancestor chain to find clip ancestor, intersect rects. BUG-ZINDEX fix: aria-modal observer to hide overlay when modal is open.
 **Lesson:** (1) In React SPAs, NEVER use HTML attributes as idempotency markers for extension instrumentation. Use WeakSet keyed on the element object. (2) `clientHeight` ≠ visible clip height when parent provides the clip. Always walk ancestors when instrumenting dynamic editors in SPAs.
 
-<!-- Session entries are appended below by session-end.sh -->
+<!-- Historical: session entries below through mid-2026 were appended by session-end.sh, since removed (see note at top of file). -->
 
 ---
 ## Session End — 2026-05-11 08:41:56Z

@@ -46,7 +46,7 @@ When unsure, align changes to these docs or explicitly call out the mismatch.
 ## Agent Operating Requirements (Non-Project-Specific)
 
 - Research and plan before implementation.
-- Load `.github/skills/scope-creep-guard/SKILL.md` for every task before planning or edits and enforce its boundary checks.
+- Load `.claude/skills/scope-creep-guard/SKILL.md` for every task before planning or edits and enforce its boundary checks. (Path updated 2026-08-02 — skills migrated from `.github/skills/` to `.claude/skills/`, since only that path is discoverable by the Claude Code Skill tool; `.github/skills/` no longer exists.)
 - Execute in small verifiable steps and iterate until the task is fully complete.
 - Use additional sessions when necessary; do not stop at partial completion.
 - Compact conversation context whenever context usage exceeds about 65 percent during long-running iteration.
@@ -66,6 +66,6 @@ When unsure, align changes to these docs or explicitly call out the mismatch.
 
 ## Customization Hygiene
 
-- If changing any skill files, update `.github/skills/SKILL_MAP.md` in the same change.
+- If changing any skill files, update `.claude/skills/SKILL_MAP.md` in the same change.
 - Keep skill/instruction guidance narrow and avoid duplicating the same rule in multiple places without reason.
 - If these instructions become stale after architecture changes, update this file first, then dependent skills/prompts.

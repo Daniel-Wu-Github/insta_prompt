@@ -86,11 +86,11 @@ Reading a skill is not enough — enforce its rules. If a skill defines a proced
 
 ## Mistake Log
 
-When you make a real mistake (wrong logic, missed edge case, silent data loss, TypeScript error introduced by a change), write a **Debug Entry** in `.claude/debugging_log.md` using the template already in that file. This is the entire self-improvement loop. The Stop hook (`scripts/session-end.sh`) processes new entries at session end, updates `memory/skill_effectiveness.md` and `memory/debugging_patterns.md`, and sends a push notification if a skill gap escalates.
+When you make a real mistake (wrong logic, missed edge case, silent data loss, TypeScript error introduced by a change), write a **Debug Entry** in `.claude/debugging_log.md` using the template already in that file.
 
-### Hooks
+### Hooks (updated 2026-08-02 — `scripts/session-end.sh` was removed and the Stop hook simplified; see commit `f11b617`)
 - **PostToolUse** (after `.ts` edits): `scripts/post-edit-check.sh` runs `tsc --noEmit --skipLibCheck`, sends ntfy push if errors found
-- **Stop** (session end): `scripts/session-end.sh` checks tsc on modified packages, appends session boundary to `debugging_log.md`, runs `update-skill-memory.sh`
+- **Stop** (session end): `scripts/notify.sh` sends a plain "Claude finished" push notification — the tsc/skill-memory pipeline previously described here (`scripts/session-end.sh`) no longer exists; debugging-log entries are not currently auto-processed at session end
 - **Notification** (approval needed): ntfy push to `ntfy.sh/claude-termius-daniel`
 
 ---

@@ -1,5 +1,12 @@
 # Run Summary — V2 Mega-Plan Pass
 
+> **⚠️ SUPERSEDED (2026-08-02).** This is a point-in-time snapshot of the 2026-06-15
+> mega-plan pass — kept as-written, not updated to match later reality. Track D finished,
+> non-destructive bind (Option E) shipped, and a real 47/47 test harness landed in the
+> later "fable pass" (see `human/06_FABLE_PASS_REPORT.md`). Everything described here is
+> merged to `main`. For current status, read `06_FABLE_PASS_REPORT.md` and
+> `docs/agent_plans/v3/v3_multi_surface_plan.md`, not this file.
+
 **Date:** 2026-06-15 · **Scope agreed at launch:** Track A + B, then attempt C and stop
 for review · **Mode:** document-&-escalate (no faked verification).
 

@@ -5,12 +5,9 @@ proceeds until the relevant ones are answered.
 
 ## A. Immediate (unblock this pass's output)
 
-### OD-1 — Push the branches & open PRs?
-3 local branches (`v2/track-a-stabilize` → `-b-tokens` → `-c-core`) are committed but
-**not pushed**. I hold outward actions for your go-ahead.
-**Options:** (a) push all 3 + open a PR per track; (b) squash A+B into one M1 PR, keep C
-separate for review; (c) hold, you review locally first.
-**My rec:** (b) — A+B is a clean shippable milestone; C should be its own review.
+### OD-1 — Push the branches & open PRs? — **RESOLVED (2026-08-01)**
+Everything from Tracks A-D plus the later fable pass is merged to `main`. The original
+`v2/track-*` branches were confirmed redundant and deleted (local + remote).
 
 ### OD-2 — Run the manual verification guide
 G-2 (±1px parity) and G-3 (zero retained nodes) can only be signed off in a real browser.
@@ -42,20 +39,21 @@ before Track G — relative imports won't scale to separately-built adapters.
 
 ## C. Product direction (DEC-1, 3, 4, 5 from mega-plan §8)
 
-### OD-7 — DEC-1 Highlight technology (Track D2)
-CSS Custom Highlights API (cleanest, best pixel parity, newer) **vs** the current overlay
-mirror (universal, works everywhere). Sets the parity ceiling. **Rec:** Custom Highlights
-with overlay fallback — but this is a real spike, not a snap call.
+### OD-7 — DEC-1 Highlight technology (Track D2) — **RESOLVED**
+Shipped as a hybrid: CSS Custom Highlights (`::highlight()`) paints unaccepted-clause
+underlines on real text nodes where supported; the shadow-wrapped overlay mirror is
+retained as the fallback and still owns accepted/stale/focus visuals and hover hit-testing.
 
 ### OD-8 — DEC-3 Prose/writing taxonomy (Track E)
 The 7-type working set (`thesis · evidence · argument · audience · tone · structure ·
 transition`) needs validation against a real essay corpus before committing. Wrong taxonomy
 = poor classification. **Rec:** treat E1 as a research spike; I will NOT guess this.
 
-### OD-9 — DEC-5 Bind contract change / "Option E" (Track E4)
-Non-destructive bind requires adding `accepted: boolean` pass-through to the `/bind`
-payload — a versioned public-contract change touching backend + every adapter. **Rec:**
-version the contract; coordinate as one cross-cutting PR. Needs your sign-off (guardrail).
+### OD-9 — DEC-5 Bind contract change / "Option E" (Track E4) — **RESOLVED**
+Shipped (commit `7de2d85`, "BIND-DESIGN-1 Option E"). `accepted?: boolean` was added as an
+additive, optional field to `/bind` sections (omitted ⇒ `true`, so old payloads still
+work). Unaccepted clauses now ride the bind payload near-verbatim instead of being
+dropped — the "commit replaces your whole input" limitation is fixed.
 
 ### OD-10 — DEC-4 Mobile reality (Track G3, later)
 OS keyboards heavily constrain inline overlays; mobile may become a share-sheet "compile
@@ -64,9 +62,13 @@ the core.
 
 ## D. Productization & ops (need accounts/secrets — I can't do these)
 
-### OD-11 — Sentry (AUD-12 / observability)
-Client error reporting is unwired; host-DOM breakage is currently silent. Needs a Sentry
-project + DSN. **Decision:** provision, or accept silent breakage for now?
+### OD-11 — Sentry (AUD-12 / observability) — **PARTIALLY RESOLVED**
+Client-side capture now exists (`window` `error`/`unhandledrejection` listeners, filtered
+to extension-attributable stacks, buffered last 20) — but `deliverErrorReport` is a stub
+seam only, no Sentry SDK, no DSN, no network transport. So the real state is a third
+option this entry didn't originally offer: capture works, delivery doesn't yet.
+**Decision:** provision a Sentry DSN and wire the transport (via the background worker,
+proxy-only rule), or leave captured errors client-local for now?
 
 ### OD-12 — Stripe billing (Track F1) & deploys/CI (F2)
 Need a Stripe account + keys and deploy credentials. Out of reach for an autonomous run.
@@ -83,5 +85,7 @@ missing: a real `ANTHROPIC_API_KEY` (currently the `.env.example` placeholder) �
 routing is broken until this is set.
 
 ---
-**Fastest path to "keep going":** answer **OD-1, OD-3, OD-4** and I can continue the core
-extraction (C3 harness → state machine) on the existing branch.
+**Fastest path to "keep going" (updated 2026-08-02):** OD-1/OD-7/OD-9 are resolved. Answer
+**OD-3, OD-4** to continue the core extraction (state machine); note the direction has
+since broadened beyond Track C — see `docs/agent_plans/v3/v3_multi_surface_plan.md` for
+the current v1 plan (multi-surface: CLI/Claude Code skill/MCP server + a new write mode).

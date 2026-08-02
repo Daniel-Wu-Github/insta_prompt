@@ -783,3 +783,16 @@ echo "=== auth middleware on origin/mai
   session: 2ca42bfd-4626-4239-899d-0027090ee8bf
 
 [19:54:21Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — ExitPlanMode'
+[19:59:26Z] Push SENT  HTTP:200  title='insta_prompt'  msg='Claude finished'
+[20:00:26Z] Notification
+  type:    idle_prompt
+  message: Idle — waiting for your input
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[20:00:26Z] Push SENT  HTTP:200  title='💬 Claude is Waiting'  msg='Idle — waiting for your input'
+[21:05:58Z] Notification
+  type:    permission_prompt
+  message: Claude wants to run a command — check your terminal — Agent: Audit meta/process docs for stale refs
+  session: 2ca42bfd-4626-4239-899d-0027090ee8bf
+
+[21:05:58Z] Push SENT  HTTP:200  title='⚠️ Approval Required'  msg='Claude wants to run a command — check your terminal — Agent: Audit meta/process '

@@ -147,6 +147,53 @@ Step 1 RLS intent:
 
 ---
 
+## TypeScript Contract Shapes (`shared/contracts/`)
+
+Source of truth: `shared/contracts/domain.ts` and `shared/contracts/api.ts`. These were
+previously undocumented here — added 2026-08-02.
+
+```typescript
+// domain.ts
+type GoalType = "context" | "tech_stack" | "constraint" | "action" | "output_format" | "edge_case";
+
+interface Section {
+  id: string;
+  text: string;
+  goal_type: GoalType;
+  canonical_order: number;   // slot 1-6, derived from goal_type
+  depends_on: string[];      // sanitized DAG of other section ids
+  expansion?: string;
+  status?: string;
+}
+```
+
+```typescript
+// api.ts
+interface SegmentRequest { segments: string[]; mode: Mode; }
+interface SegmentResponse { sections: Section[]; }
+
+interface EnhanceRequest {
+  section: Pick<Section, "id" | "text" | "goal_type">;
+  siblings: Array<Pick<Section, "id" | "text" | "goal_type">>;
+  mode: Mode;
+  project_id: string | null;
+}
+// EnhanceResponse streams as SSE — see docs/BACKEND_API.md
+
+interface BindRequestSection extends Pick<Section, "canonical_order" | "goal_type"> {
+  expansion: string;
+  accepted?: boolean;   // Option E / BIND-DESIGN-1 — omitted defaults to true
+}
+interface BindRequest { sections: BindRequestSection[]; mode: Mode; }
+// BindResponse streams as SSE — see docs/BACKEND_API.md
+```
+
+No offsets/character spans travel over the wire — client-side splitting into clause spans
+(`splitTextIntoDraftSegments` in the content script) happens before the backend ever sees
+text; the backend only classifies/expands/binds already-split segments.
+
+---
+
 ## Redis Key Layout
 
 Redis client resolution in backend:
@@ -189,6 +236,8 @@ promptcompiler.tabState.{tab_id}
 | Enhancement history | Supabase Postgres | Queryable, user-owned |
 | Rate limit counters | Redis (local via `REDIS_URL` or hosted Upstash) | Atomic INCR, sub-ms, TTL-native |
 | Burst guard counters | Redis (local via `REDIS_URL` or hosted Upstash) | Short-window protection for protected LLM routes |
-| Extension settings (mode, project) | chrome.storage.local | Current popup setting persistence surface |
-| Per-tab clause state | chrome.storage.session (active in Step 7 background bridge) | Runtime state surface that survives SW restarts and clears on browser close |
-| JWT (extension) | chrome.storage.session (planned) | Planned extension session surface; avoid localStorage |
+| Extension settings (mode, project) | chrome.storage.local (`promptcompiler.settings`) | Current popup setting persistence surface |
+| Per-tab clause state | chrome.storage.session (`promptcompiler.tabState.{tab_id}`, active background bridge) | Runtime state surface that survives SW restarts and clears on browser close |
+| Auth session (extension) | chrome.storage.local + chrome.storage.session (`promptcompiler.auth`) | Both areas written on login; background/content read local, avoid localStorage |
+| Prompt history + templates | chrome.storage.local (`promptcompiler.history`) | Client-only, no backend — search/copy/delete/pin, rolling cap (50 unpinned / 20 pinned) |
+| Onboarding coach-mark seen flag | chrome.storage.local (`promptcompiler.onboarding.seen`) | Gates the one-time first-run coach mark |

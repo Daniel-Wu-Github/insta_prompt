@@ -1,11 +1,22 @@
-# Handoff — v2/track-d-polish
+# Handoff — `main`
 
-**Date:** 2026-07-07
-**Branch:** `v2/track-d-polish` (clean tree, 11 commits this pass)
-**Author:** Claude Fable 5
-**Status:** Track D, the Playwright verification tier, the Phase-3 feature slate, and a backend output-quality pass are **complete and verified**. The branch is code-complete; what remains is infrastructure (Supabase re-provisioning, fly.dev deploy) and optional hardening.
+**Date:** 2026-08-02
+**Branch:** `main` (all work merged; the old `v2/track-*` branches and
+`v2/track-d-polish` were confirmed redundant and deleted)
+**Status:** Track D, the Playwright verification tier, the Phase-3 feature slate, and a
+backend output-quality pass are complete and verified (the 2026-07-07 "fable pass"). Since
+then: Supabase has been re-provisioned (same project URL, was dead/NXDOMAIN, now live),
+Fly.dev has been redeployed with this pass's backend code, a Playwright e2e harness for
+the real live backend was added (`extension/tests/e2e/`, separate from the hermetic
+`e2e/` mock-backend suite), and a new v1 direction has been planned (not yet implemented):
+multi-surface (CLI + Claude Code skill + MCP server, alongside the existing extension) and
+a new "write mode" (day-to-day writing enhancement via a style-control system, distinct
+from the existing code-mode pipeline). See `docs/agent_plans/v3/v3_multi_surface_plan.md`
+for that plan — Phase 0 (this consolidation + the Fly redeploy) is done; Phase 1 (the
+write-mode backend + PAT auth) has not been started.
 
-Full narrative: `human/06_FABLE_PASS_REPORT.md`. This file is the resume-here card.
+Full fable-pass narrative: `human/06_FABLE_PASS_REPORT.md` (written 2026-07-07, predates
+the Supabase/Fly fixes below — read this file for current status, not that one).
 
 ---
 
@@ -15,47 +26,57 @@ Full narrative: `human/06_FABLE_PASS_REPORT.md`. This file is the resume-here ca
 |---|---|---|
 | Extension types | `cd extension && npx tsc --noEmit --skipLibCheck` | 0 errors |
 | Extension unit | `cd extension && npx vitest run` | **47/47 pass** |
-| Backend | `cd backend && bun test` | **79 pass / 3 fail** — the 3 (auth ×2, ratelimit) hit the dead Supabase host and will fail until re-provisioning; every other failure is a regression |
-| E2E | `cd e2e && npm test` | **19/19 pass** (builds the extension against the mock backend, runs headed under xvfb; first run after a rebuild may flake 2–3 tests — rerun before investigating) |
+| Backend | `cd backend && bun test` | **79 pass / 3 fail** — the 3 (auth ×2, ratelimit) hit Supabase's real "email rate limit exceeded" on repeated signups in integration tests; this is an external rate limit, not a regression |
+| E2E (hermetic) | `cd e2e && npm test` | **19/19 pass** (builds the extension against a mock backend, runs headed under xvfb) |
+| E2E (real backend) | `cd extension && npx playwright test` | **6/6 pass** — real Supabase session (admin-API minted, no signup email) driving a real `/segment` call against the live Fly.dev deploy |
 
 ---
 
 ## What is DONE (verify, don't rebuild)
 
 - **Track D**: overlay mirror shadow-wrapped (D1); Inter Variable bundled; Custom Highlights hybrid renderer (D2, resolves OD-7/DEC-1); keymap HUD + one-time coach mark (D3, key `promptcompiler.onboarding.seen`).
-- **Old Phase-1 bug list**: BUG-REACT (module-scope WeakSet), BUG-GEOM (clip-ancestor walk), BUG-ZINDEX (modalObserver), BUG-ALIGN diagnostics, BIND-UX-1 — all shipped and covered by vitest/e2e. The 300-line bug dossier this file used to carry is obsolete; git history has it if ever needed.
 - **C3**: shared chrome mock at `extension/src/test/chrome-mock.ts` — extend it, never hand-roll `vi.stubGlobal("chrome", ...)` in a test again.
-- **E2E tier** (`e2e/`): 8-site fixture matrix + mock backend, covering A1/A2/A3 + G-1/G-2/G-3/G-4/G-5 + the full accept→bind→commit cycle. Mock SSE frames must match the SW's `isStreamEvent` contract (`{type:"token",data}` / `{type:"done"}`).
-- **Feature slate**: BIND-UX-2 (Backspace un-accept); **Option E** non-destructive commit (`accepted?: boolean` additive on BindRequest sections — omitted ⇒ accepted; unaccepted clauses ship raw text, preserved near-verbatim by bind); OD-11 error-observability slice (Sentry-ready seam, no DSN yet); **prompt history + template library** (`promptcompiler.history`, popup History & Templates panel).
-- **BE-QUAL-1** (backend output quality — this was the "backend not really working" complaint): classifier disambiguation rules (answer-FORM → `output_format`, missing/failing-state → `edge_case`); enhance rewritten to sharpen-not-pad (imperative, no headers, no invention); bind rewritten to compile-not-concatenate (no slot echo, no verbatim stitching, no invention). Empirically verified against live Groq: 3/3 stable runs, 6/6 correct labels, merged single-voice bind output. Regression pins in `prompt.factories.test.ts` / `segment.service.test.ts`.
+- **E2E tier** (`e2e/`): 8-site fixture matrix + mock backend, covering A1/A2/A3 + G-1/G-2/G-3/G-4/G-5 + the full accept→bind→commit cycle.
+- **Feature slate**: BIND-UX-2 (Backspace un-accept); **Option E** non-destructive commit (`accepted?: boolean` additive on BindRequest sections); OD-11 error-observability slice (capture works, no Sentry DSN/transport wired yet); **prompt history + template library** (`promptcompiler.history`, popup History & Templates panel).
+- **BE-QUAL-1** (backend output quality): classifier disambiguation, enhance sharpens instead of padding, bind compiles instead of concatenating. Regression pins in `prompt.factories.test.ts` / `segment.service.test.ts`.
+- **Supabase**: re-provisioned under the same project URL (`yrilkwidkpqjzpsbldcr.supabase.co`), confirmed live via real integration-test traffic this session.
+- **Fly.dev**: redeployed with the fable-pass backend code; `fly.toml` confirmed at `256mb`/1 shared CPU/`auto_stop_machines=stop`/`min_machines_running=0` for near-zero idle cost; secrets updated from current `backend/.env`.
+- **Skill system**: migrated `.github/skills/` → `.claude/skills/` (the harness's Skill tool only discovers skills there).
 
 ---
 
 ## What is NOT done — resume here, in this order
 
-### 1. 🔴 Supabase project is dead (production blocker)
-`yrilkwidkpqjzpsbldcr.supabase.co` is NXDOMAIN from public resolvers — the project no longer exists. Sign-in, token refresh, RLS history, and the 3 backend integration tests are all down. Provision a new project, run the migrations in `supabase/`, update:
-- `backend/.env` → `SUPABASE_URL`, service/anon keys
-- `extension/.env*` → `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- fly.dev secrets
+### 1. 🔴 Rotate secrets (OD-13, `human/02_OPEN_DECISIONS.md`)
+`backend/.env` was transferred over Gmail during a machine migration — treat
+`SUPABASE_SERVICE_KEY`, `GROQ_API_KEY`, `JWT_SECRET`, `UPSTASH_REDIS_TOKEN` as potentially
+exposed. Rotate all four before any production/public deploy.
 
-### 2. 🔴 Deploy the backend
-fly.dev predates everything in this pass — users still get the old nondeterministic classifier and stitching bind until `fly deploy`. (Auth-dependent routes need #1 first.)
+### 2. `ANTHROPIC_API_KEY` is still the `.env.example` placeholder
+Pro-tier LLM routing is broken until a real key is set, locally and as a Fly secret.
 
-### 3. Manual live-site pass
-One real ChatGPT/Claude session before store submission (the `@live` e2e tier is deliberately unwritten — needs human login, must not gate merges; see `e2e/README.md`).
+### 3. Phase 1 of the v3 plan — write-mode architecture + PAT auth
+Not started. See `docs/agent_plans/v3/v3_multi_surface_plan.md` — a Personal Access
+Token auth path (for the CLI/skill/MCP surfaces) and a `StyleProfile` dial system (three
+new backend routes: `/write/analyze`, `/write/profile/parse`, `/write/rewrite`), designed
+to be a real differentiator against Grammarly/Wordtune, not a simplified taxonomy clone.
 
-### 4. Optional hardening
-- Mini eval harness for pipeline quality (string pins protect prompt text, not model behavior): 5–10 canonical inputs, assert label accuracy / no slot-echo / no invented tech, run on demand against live Groq.
-- If misclassifications persist post-deploy: bump `SEGMENT_CLASSIFIER_MODEL` (backend `src/services/llm.ts`) from `llama-3.1-8b-instant` to `llama-3.3-70b-versatile` and re-measure the debounce hot path.
-- E2E cold-first-run flake: warmup fixture or `retries: 1` in `playwright.config.ts`.
+### 4. Manual live-site pass
+One real ChatGPT/Claude session before store submission (the `@live` e2e tier is
+deliberately unwritten — needs human login, must not gate merges; see `e2e/README.md`).
+
+### 5. Optional hardening
+- Mini eval harness for pipeline quality (string pins protect prompt text, not model behavior).
 - Sentry DSN decision (OD-11) — the delivery seam is `deliverErrorReport` in `extension/src/content/index.ts`.
+- E2E cold-first-run flake: warmup fixture or `retries: 1` in `playwright.config.ts`.
 
 ---
 
 ## Working agreements that saved this pass (keep them)
 
-- **Read source before trusting handoff docs** — this file previously listed four already-fixed bugs as open; source inspection prevented rebuilding them.
+- **Read source before trusting handoff docs** — a past version of this file listed
+  already-fixed bugs as open; source inspection prevented rebuilding them. `human/00-05`
+  are now marked superseded for the same reason — read `06` and this file, not those.
 - Instrumentation idempotency lives in a **module-scope WeakSet** (content-script-instrumentation rule 8), never attributes, never main()-scope.
-- E2E must stay hermetic: any request leaving 127.0.0.1 in the fixture tier is a bug (live-network auth was the original flake source).
+- E2E must stay hermetic: any request leaving 127.0.0.1 in the `e2e/` fixture tier is a bug (live-network auth was the original flake source). The separate `extension/tests/e2e/` tier is deliberately NOT hermetic — it exists specifically to catch real Supabase/backend integration regressions the mock tier can't.
 - Every listener/observer registers a disposer; `ctx.onInvalidated` tears down everything (AUD-10/G-3).

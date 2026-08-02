@@ -40,22 +40,33 @@ promptcompiler/
 │   ├── src/
 │   │   ├── background/ # Service worker — API proxy, auth, state
 │   │   ├── content/    # Content scripts — DOM, ghost text, hotkeys
-│   │   └── popup/      # Popup UI — React + Vite
+│   │   ├── popup/      # Popup UI — React + Vite (mode, account, history/templates)
+│   │   └── lib/        # Client-only helpers (e.g. prompt-history.ts)
+│   ├── tests/e2e/      # Playwright suite against the REAL live backend
 │   ├── wxt.config.ts
 │   └── manifest.json
 │
 ├── backend/            # API server (Bun + Hono + TypeScript)
 │   └── src/
-│       ├── routes/     # /enhance  /segment  /bind  /auth  /projects
-│       ├── services/   # llm.ts  context.ts  supabase.ts  rateLimit.ts
+│       ├── routes/     # /enhance  /segment  /bind  /auth  /projects  /account
+│       ├── services/   # llm.ts  context.ts  supabase.ts  rateLimit.ts  prompts/
 │       └── middleware/ # auth.ts  ratelimit.ts  tier.ts
+│
+├── packages/core/      # Extracted pure-TS canonical-ordering + adapter/transport contracts
+│
+├── e2e/                # Playwright suite against a hermetic MOCK backend (CI-safe)
 │
 ├── web/                # Account dashboard (React + Vite)
 │   └── src/
 │       ├── pages/      # Login, Dashboard, Projects, Billing
 │       └── components/
 │
-└── docs/               # Architecture + planning docs
+├── human/              # Dated review/orientation docs — check for a "SUPERSEDED" banner
+│                        # before trusting any file here; see human/06_FABLE_PASS_REPORT.md
+│                        # and handoff.md for current status
+│
+└── docs/               # Architecture + planning docs, including docs/agent_plans/v3/
+                         # for the current v1 direction (multi-surface + write mode)
 ```
 
 ---
@@ -72,35 +83,44 @@ promptcompiler/
 | LLM — free tier | Groq (Llama 3.3 70B) |
 | LLM — pro tier | Anthropic Claude (Haiku / Sonnet) |
 | Dashboard | React 19 + Vite |
-| Deploy | Fly.io (backend) + Vercel (web dashboard) |
+| Deploy | Fly.io (backend, scale-to-zero: 256mb/1 shared CPU, `auto_stop_machines`/`min_machines_running=0` for near-zero idle cost) + Vercel (web dashboard) |
 
 ---
 
 ## Roadmap
 
+*(Updated 2026-08-02 — most of v1.0 shipped in the 2026-07-07 "fable pass"; see
+`human/06_FABLE_PASS_REPORT.md` and `docs/agent_plans/v3/v3_multi_surface_plan.md` for the
+current v1 direction, which supersedes v2.0's VS Code line below.)*
+
 ### v1.0 — Core Extension
-- [ ] Content script: textarea + contenteditable detection
-- [ ] Mirror overlay: clause underline rendering
-- [ ] Syntactic segmentation (regex, instant)
-- [ ] Background SW: streaming proxy to backend
-- [ ] Ghost text renderer at caret position
-- [ ] Hotkey state machine (Tab / Cmd+Enter / Esc)
-- [ ] Backend: `/segment`, `/enhance`, `/bind` endpoints
-- [ ] Groq integration (free tier)
-- [ ] Supabase auth + user accounts
-- [ ] Mode toggle: Efficiency / Balanced / Detailed
-- [ ] Chrome Web Store submission
+- [x] Content script: textarea + contenteditable detection
+- [x] Mirror overlay: clause underline rendering (+ CSS Custom Highlights hybrid)
+- [x] Syntactic segmentation (regex, instant)
+- [x] Background SW: streaming proxy to backend
+- [x] Ghost text renderer at caret position
+- [x] Hotkey state machine (Tab / Enter / Backspace / Cmd+Enter / Esc)
+- [x] Backend: `/segment`, `/enhance`, `/bind` endpoints
+- [x] Groq integration (free tier)
+- [x] Supabase auth + user accounts
+- [x] Mode toggle: Efficiency / Balanced / Detailed
+- [ ] Chrome Web Store submission (still unpacked-load only)
 
 ### v2.0 — Context Awareness
 - [ ] GitHub OAuth + repo connection
 - [ ] Project profiles (tech stack, system context)
 - [ ] pgvector context retrieval (semantic file chunking)
-- [ ] VS Code extension (InlineCompletionProvider)
+- [ ] ~~VS Code extension (InlineCompletionProvider)~~ — **explicitly rejected**, see
+      `docs/agent_plans/v3/v3_multi_surface_plan.md` (high cost, narrow win; replaced by a
+      CLI + Claude Code skill + MCP server as additional thin clients instead)
 - [ ] BYOK (bring your own API key)
 
-### v3.0 — Growth
+### v3.0 — Growth (current direction — see `docs/agent_plans/v3/v3_multi_surface_plan.md`)
+- [ ] CLI (`pc` — Termius/terminal reach)
+- [ ] Claude Code skill (thin wrapper over the CLI)
+- [ ] MCP server (Claude Desktop reach)
+- [ ] Write mode (day-to-day writing enhancement, style-control system, distinct from the existing code-mode pipeline)
 - [ ] Team accounts
-- [ ] Custom mode definitions
 - [ ] Analytics dashboard
 - [ ] Firefox extension port
 
@@ -159,9 +179,11 @@ cd ../web && npm run typecheck && npm run build
 
 The strict integration gate requires local Supabase/Redis env exports (for example `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ANON_KEY`, `JWT_SECRET`, and `REDIS_URL`).
 
-### Step 0 Behavior Note
+### Step 0 Behavior Note — superseded
 
-Step 0 routes and services intentionally use deterministic placeholders. Production-grade segmentation, LLM routing/orchestration, and persistence are deferred to later implementation steps.
+This described the earliest bootstrap state (deterministic placeholders). No longer
+accurate: segmentation, LLM routing/orchestration, and persistence are all production
+behavior now — see `docs/BACKEND_API.md` and `handoff.md` for current status.
 
 ---
 
@@ -169,7 +191,15 @@ Step 0 routes and services intentionally use deterministic placeholders. Product
 
 MIT
 
-## External Auditor Workflow Prompt: 
+## External Auditor Workflow Prompt
+
+> **Note (2026-08-02):** the "Current Progress" section below describes a Step 1-4
+> snapshot that is now far out of date — the project has since shipped the full pipeline,
+> a non-destructive bind design, prompt history, a real test/e2e harness, and is now
+> planning a multi-surface v1 (see `docs/agent_plans/v3/v3_multi_surface_plan.md`). Kept
+> as-written since it's a reusable prompt template for onboarding an external auditor, not
+> a status report — update its "Current Progress" section with real current state before
+> actually using it with a new auditor.
 
 # Context Transfer: "insta_prompt" Project
 Please adopt the persona of a strict, highly disciplined Staff Engineer helping me "vibe code" an application called `insta_prompt`. 

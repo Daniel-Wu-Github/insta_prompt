@@ -1,5 +1,11 @@
 # Return Briefing — 2026-06-29
 
+> **⚠️ SUPERSEDED (2026-08-02).** Track D finished, non-destructive bind (Option E)
+> shipped, a real 47/47 test harness landed, and everything is merged to `main` — all
+> since this was written. See `human/06_FABLE_PASS_REPORT.md` and
+> `docs/agent_plans/v3/v3_multi_surface_plan.md` for current status; this file is kept
+> as-written for historical record.
+
 Orientation guide for anyone returning to the project after a break. Covers
 what was done, how to verify it in a real browser, and the critical path to revenue.
 

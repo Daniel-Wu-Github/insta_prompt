@@ -151,6 +151,13 @@ Cleans up the classified sections before expansion.
 
 **Underline encoding:** The clause-type color is constant per section; the underline treatment reflects the section's lifecycle state (ready/accepted/stale/streaming), not confidence — confidence was removed (DECISION-1).
 
+**Rendering technology (resolves OD-7/DEC-1):** hybrid, not overlay-only. Where the host
+editor supports `CSS.highlights`, unaccepted-clause underlines paint directly on real text
+nodes via a registered `Highlight` per goal type and `::highlight()` rules (Track D2) — no
+mirrored DOM copy needed for that part. The shadow-wrapped overlay mirror is retained as
+the universal fallback and still owns accepted/stale/focus visuals and hover hit-testing
+regardless of `CSS.highlights` support, since those states have no `::highlight()` analog.
+
 ---
 
 ## Step 5 — Parallel Expansion (POST /enhance × N)
@@ -209,7 +216,14 @@ section.element.style.textDecoration = 'underline dotted'; // change underline s
 ## Step 7 — Binding Pass (POST /bind)
 **Location:** Backend → Claude Sonnet or Groq | **Latency:** ~500ms–2s streaming
 
-Triggered by `Cmd+Enter`. All accepted expansions are sent in **canonical order** (by `canonical_order` field, not the order the user accepted them) to a single LLM call.
+Triggered by `Cmd+Enter`. **All** sections — accepted and unaccepted — are sent in
+**canonical order** (by `canonical_order` field, not the order the user accepted them) to
+a single LLM call. This is the non-destructive bind design ("Option E" / BIND-DESIGN-1):
+each section carries an `accepted` boolean (client-cached enhanced text for accepted
+clauses, raw `segment.text` for unaccepted ones). Sections marked `accepted: true` are
+rewritten/merged/polished freely; sections marked `accepted: false` are kept as close to
+verbatim as grammar allows — committing never silently drops clauses the user didn't
+explicitly review.
 
 Current runtime behavior: canonicalized server-side ordering, provider-streamed bind output, and successful history persistence before terminal completion.
 
@@ -217,18 +231,19 @@ Current runtime behavior: canonicalized server-side ordering, provider-streamed 
 ```json
 {
   "sections": [
-    { "canonical_order": 2, "goal_type": "tech_stack", "expansion": "React 18 with TypeScript..." },
-    { "canonical_order": 4, "goal_type": "action", "expansion": "Implement a dark/light mode toggle..." },
-    { "canonical_order": 5, "goal_type": "output_format", "expansion": "Deploy configuration for Vercel..." }
+    { "canonical_order": 2, "goal_type": "tech_stack", "expansion": "React 18 with TypeScript...", "accepted": true },
+    { "canonical_order": 4, "goal_type": "action", "expansion": "Implement a dark/light mode toggle...", "accepted": true },
+    { "canonical_order": 5, "goal_type": "output_format", "expansion": "deploy to vercel", "accepted": false }
   ],
   "mode": "balanced"
 }
 ```
 
 ### What the binding pass does
-- Removes redundancy between expanded sections
-- Ensures tonal and structural consistency
+- Removes redundancy between **accepted** expanded sections
+- Ensures tonal and structural consistency across accepted sections
 - Adds transitions and logical flow
+- Preserves unaccepted sections near-verbatim, in canonical position
 - Returns a single coherent prompt as a streaming response
 
 The bound prompt streams back as ghost text. User reviews, then presses `Enter` to commit.

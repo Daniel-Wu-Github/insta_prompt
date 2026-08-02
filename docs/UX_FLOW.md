@@ -2,10 +2,9 @@
 
 > The complete interaction model for PromptCompiler's clause-segmentation UX.
 
-Status note:
-
-- Current runtime is mixed: Step 7 background bridge is active, while full content-script UX instrumentation remains staged after Step 7.
-- The interaction sequence below is the target Step 5+ UX flow.
+Status note (updated 2026-08-02): the "Step" staging language below is historical — full
+content-script UX instrumentation is shipped, not staged. See `human/06_FABLE_PASS_REPORT.md`
+for what was finished in the pass that closed this gap.
 
 ---
 
@@ -35,18 +34,22 @@ The key design principle: **nothing is replaced in the text box until you explic
         ↓
 6. User hovers any underlined clause → popover shows expanded preview
         ↓
-7. User presses Tab to accept the oldest unaccepted / selected clause
+7. User presses Tab to enter review mode / cycle focus to the next clause
+   (Shift+Tab cycles backward) — Tab itself does NOT accept anything
+        ↓
+8. User presses Enter while a clause is focused → that clause is accepted
    → Section text greys out in place (NOT replaced yet)
-   → Next unaccepted clause is auto-focused
+   → Backspace/Delete while an accepted clause is focused un-accepts it
         ↓
-8. User repeats Tab for remaining sections (or skips with Shift+Tab)
+9. User repeats Tab/Enter for remaining sections
         ↓
-9. User presses Cmd+Enter → binding pass fires (POST /bind)
-   → All accepted expansions sent in canonical order
-   → Final assembled prompt streams back
+10. User presses Cmd+Enter → binding pass fires (POST /bind)
+    → ALL sections sent in canonical order — accepted ones rewritten/merged/
+      polished, unaccepted ones kept near-verbatim (Option E, non-destructive)
+    → Final assembled prompt streams back as ghost text
         ↓
-10. User presses Enter → original text replaced with compiled prompt
-    → Ghost text cleared, state reset
+11. User presses Enter (ghost stream complete) → original text replaced with
+    compiled prompt → ghost text cleared, state reset
 ```
 
 ---
@@ -55,11 +58,26 @@ The key design principle: **nothing is replaced in the text box until you explic
 
 | Key | Action |
 |---|---|
-| `Tab` | Accept oldest unaccepted section (grey it out) |
-| `Shift+Tab` | Skip / deselect current section |
-| `Cmd+Enter` | Trigger binding pass (assemble all accepted sections) |
-| `Esc` | Dismiss ghost text / cancel pending enhancement |
+| `Tab` / `Shift+Tab` | Enter review mode / cycle focus forward or backward through clauses (does not accept) |
+| `Enter` (clause focused, no bind ready) | Accept the focused clause |
+| `Backspace` / `Delete` (accepted clause focused) | Un-accept the focused clause |
+| `Cmd+Enter` / `Ctrl+Enter` | Trigger binding pass (assembles ALL clauses — accepted ones rewritten, unaccepted ones near-verbatim) |
+| `Enter` (bind stream complete) | Commit the bound ghost text into the input |
+| `Esc` | Cancel active bind stream / exit review focus / dismiss ghost text |
 | Hover | Show expansion preview popover for any underlined clause |
+
+The content script's own on-screen keymap HUD states this identically:
+`"Tab to review · Enter to accept · ⌫ to un-accept · ⌘/Ctrl+Enter to bind · Esc to exit"`.
+
+---
+
+## Keymap HUD and First-Run Coach Mark
+
+While any underlines exist, a small persistent shadow-isolated HUD docks bottom-right
+showing the current keymap (`"Tab to review · Enter to accept · ⌫ to un-accept ·
+⌘/Ctrl+Enter to bind · Esc to exit"`) — created when segment rendering starts, removed on
+`clearDraftRendering`. A one-time coach mark shows on first use, gated on
+`chrome.storage.local` key `promptcompiler.onboarding.seen`.
 
 ---
 
@@ -106,7 +124,8 @@ Each clause section moves through these states independently:
 
 ```
 idle → streaming → ready → accepted → stale
-                              ↑
+                     ↑         ↓ (Backspace/Delete while focused)
+                     └─────────┘
                     user edits upstream text → downstream sections marked stale
                     stale sections show dashed underline + warning icon
                     must re-expand before binding pass can run
@@ -122,13 +141,11 @@ If the user edits the raw text of section A, all sections that `depends_on` sect
 ### Primary: Ghost Text
 Rendered as a `position: fixed` overlay div positioned at the caret using the mirror-clone technique. Streams tokens in real time. Styled to match the target element's font exactly. `pointer-events: none` so clicks pass through.
 
-### Fallback: Floating Panel
-Triggered when:
-- Ghost text positioning fails (e.g. CSP blocks inline style injection)
-- Target element is inside a Shadow DOM we can't measure
-- User explicitly switches to panel mode in popup settings
-
-The panel appears as a 320px card anchored to the bottom-right of the target input, showing all sections with their expansion previews in a scrollable list.
+### Fallback: Floating Panel — **not implemented**
+This fallback mode (triggered by CSP/positioning failure, unmeasurable Shadow DOM, or a
+popup toggle) does not exist in the current content script — no code path matches this
+description as of 2026-08-02. Kept here as a design note in case it's revisited; do not
+assume it's built.
 
 ---
 
@@ -146,11 +163,14 @@ The underlines show **where text sits in the original input**. The binding pass 
 
 ## Binding Pass
 
-When the user presses `Cmd+Enter`, a single LLM call receives all accepted expansions **in canonical order** and produces one coherent prompt:
+When the user presses `Cmd+Enter`, a single LLM call receives **all** sections — accepted
+and unaccepted — **in canonical order** (Option E, non-destructive bind) and produces one
+coherent prompt:
 
-- Removes redundancy between sections
-- Ensures tonal consistency
+- Removes redundancy between accepted sections
+- Ensures tonal consistency across accepted sections
 - Adds transitions between sections
+- Preserves unaccepted sections near-verbatim, in canonical position
 - Returns a single structured markdown/XML block
 
 The binding pass output streams in as ghost text. The user reviews it, then presses `Enter` to commit.

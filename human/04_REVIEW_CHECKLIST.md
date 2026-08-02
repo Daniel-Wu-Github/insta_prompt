@@ -1,5 +1,10 @@
 # Review Checklist — Your To-Do, In Priority Order
 
+> **⚠️ SUPERSEDED (2026-08-02).** Written against the 2026-06-15 pass (branches
+> `v2/track-*`, expecting 13 fail/18 pass). Those branches are deleted — everything they
+> contained is merged to `main`, and the suite is now 47/47. Kept as-written for
+> historical record; see `human/06_FABLE_PASS_REPORT.md` for current status.
+
 ## 1. Sanity-check the work (15 min)
 - [ ] `git log --oneline main..v2/track-c-core` — the 7 commits read cleanly
 - [ ] Skim `logging/progress_log.md` Entries 031–037 (per-step verification records)

@@ -1,5 +1,12 @@
 # V2 Track A — Manual Verification Guide
 
+> **⚠️ SUPERSEDED (2026-08-02).** Written against the 2026-06-15 pass's known-stale
+> 13-fail/4-pass test baseline — that harness was fixed (a missing `chrome.storage` mock,
+> not a deeper issue) and the suite is now 47/47. A real Playwright e2e suite (`e2e/`,
+> 19/19 green) also automates most of what this guide asks a human to check manually
+> (G-1/G-2/G-4/G-5). Kept as-written for historical record; do not treat the test-count
+> expectations below as current.
+
 > Copy for the human review hub. Canonical source: `docs/testing-notes/v2-track-a-manual-verification.md` (keep edits there).
 
 **Plan ref:** `docs/agent_plans/v2/v2_uiux_megaplan.md` §7 Track A, §2.4 quality gates.

@@ -1,5 +1,11 @@
 # Gap Analysis — Where We Stand vs the State-of-the-Art Bar
 
+> **⚠️ SUPERSEDED (2026-08-02).** Point-in-time snapshot from the 2026-06-15 mega-plan
+> pass. AUD-7/AUD-9 and G-1/G-2/G-4/G-5 marked OPEN below are now closed — non-destructive
+> bind (Option E) shipped and the Playwright e2e suite (`e2e/`) automates G-1/G-2/G-4/G-5,
+> 19/19 green. See `human/06_FABLE_PASS_REPORT.md` for the current picture; this file is
+> kept as-written for historical record, not updated.
+
 Derived from the mega-plan's §3 audit (AUD-1…12) and §2.4 quality gates (G-1…5),
 updated with what this pass changed. **CLOSED** = done & verified by tsc/tests;
 **PARTIAL** = started/usable but incomplete; **OPEN** = not started.

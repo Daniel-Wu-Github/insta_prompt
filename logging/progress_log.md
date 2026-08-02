@@ -772,3 +772,109 @@
 	- Fulfillment: the three chrome surfaces are now token-consistent, motion-correct, and reduced-motion-aware — verifiable here.
 	- Deviation / honest limit: PIXEL parity (G-2 ±1px) and a11y (G-1 axe) certification, the underline-overlay shadow isolation, onboarding (D3), and bundling Inter Variable as a web-accessible @font-face are either browser-gated (need rendering to verify) or larger follow-ups. Font currently falls back to system-ui (professional-acceptable). These are NOT claimed done.
 	- Residual: Visual sign-off requires running the dev build; offered to iterate with screenshots. Track D2/D3 + font bundling sequenced for a browser-in-the-loop pass.
+
+## Entry 039 - 2026-07-06/07 - Fable pass: Track D finish + real test harness + Option E + prompt history + BE-QUAL-1 (retroactive backfill)
+
+- **Note**: this entry was not logged at the time it happened — backfilled 2026-08-02
+  during a repo-wide documentation audit, after discovering this work already existed on
+  `origin/main` with no trace in this log. Summarized from commit messages and
+  `human/06_FABLE_PASS_REPORT.md`; treat as lower-fidelity than a live-written entry.
+- Task: continue Track D to completion and close the C3 test-harness gap; ship the
+  non-destructive bind design (Option E); ship prompt history; fix backend output quality.
+- What happened (12 commits, `900dcb3`..`bba8869`):
+	- **D1+C3**: overlay mirror shadow-wrapped; Inter Variable bundled; root-caused the
+	  "13 known stale test failures" to a missing `chrome.storage` mock (12 of 13) plus one
+	  inverted assertion — not a deeper suite problem. New `extension/src/test/chrome-mock.ts`.
+	  Vitest went from 20/33 to 33/33, later 47/47.
+	- **D2**: CSS Custom Highlights (`::highlight()`) hybrid renderer — paints unaccepted-clause
+	  underlines on real text nodes where supported; shadow-wrapped overlay retained as
+	  fallback and still owns accepted/stale/focus visuals + hover hit-testing (resolves OD-7).
+	- **D3**: persistent keymap HUD + one-time coach mark (`promptcompiler.onboarding.seen`).
+	- **e2e/ package**: new self-contained Playwright suite, hermetic mock backend
+	  (`e2e/mock-backend.mjs`), 8 site fixtures, covering A1/A2/A3 + G-1/G-2/G-3/G-4/G-5.
+	  19/19 green.
+	- **BIND-UX-2**: Backspace/Delete un-accepts a focused accepted clause.
+	- **BIND-DESIGN-1 Option E** (resolves OD-9): `accepted?: boolean` additive field on
+	  `/bind` sections; unaccepted clauses now ride the bind payload near-verbatim instead
+	  of being dropped on commit.
+	- **OD-11 slice**: client-side error capture (window error/unhandledrejection listeners,
+	  extension-attributable filtering) — `deliverErrorReport` is a stub seam only, no
+	  Sentry DSN/transport wired.
+	- **Prompt history + template library**: new popup surface
+	  (`extension/src/popup/components/HistoryPanel.tsx`, `usePromptHistory.ts`), backed by
+	  `chrome.storage.local` (`promptcompiler.history`), search/copy/delete/pin.
+	- **BE-QUAL-1**: classifier disambiguation, enhance sharpens instead of padding, bind
+	  compiles instead of concatenating (`backend/src/services/prompts/{base,bind,mode,
+	  tech_stack}.ts`, `backend/src/services/segment.ts`).
+- Flagged as NOT done at the time (see Entry 040/041 for what happened to these since):
+  Supabase project dead (NXDOMAIN), Fly.dev never redeployed with this pass's code.
+- Task alignment: fulfillment — Track D fully closed, C3 unblocked, Option E + prompt
+  history shipped as scoped. Residual at the time: production blockers (Supabase, Fly)
+  and the `@live` e2e tier deliberately left unwritten.
+
+## Entry 040 - 2026-08-01 - Phase 0: git consolidation + Fly.io redeploy
+
+- Task: discovered `origin/main` already had Entry 039's work (this session's branches
+  never fetched it) — Tracks A-D were redundant with two in-flight PR branches. Consolidate
+  onto `main`, then get the fable-pass backend actually live (Supabase was NXDOMAIN, Fly
+  was stale).
+- What happened:
+	- Deleted `pr/v2-track-ab-stabilize-design` and `pr/v2-track-c-core-extraction`
+	  (confirmed byte-identical redundant with `main`).
+	- Rebased the remaining `pr/v2-tooling-infra` branch (skill migration
+	  `.github/skills/` → `.claude/skills/`, Fly.io scale-to-zero `fly.toml`, a new
+	  Playwright e2e harness at `extension/tests/e2e/` driving the real live backend with a
+	  real Supabase session minted via the admin API) onto current `main`; fixed 2 tests
+	  broken by the D2 CSS Custom Highlights rewrite (scoped down to what `e2e/`'s hermetic
+	  suite can't cover); merged as PR #3.
+	- Deleted the now-fully-redundant `v2/track-a-stabilize`, `-b-tokens`, `-c-core`,
+	  `-d-polish` branches (local + remote).
+	- User re-provisioned the Supabase project (same URL, `yrilkwidkpqjzpsbldcr.supabase.co`)
+	  independently; confirmed live via real integration-test traffic this session.
+	- `fly deploy` — both machines updated to the fable-pass backend code (version 27);
+	  confirmed `fly.toml` at 256mb/1 shared CPU/scale-to-zero for near-zero idle cost;
+	  `fly secrets set` from current `backend/.env`.
+	- Logged OD-13 (secret-rotation reminder — `backend/.env` was transferred over Gmail).
+- Files edited: `.gitignore`, `extension/package.json`, `extension/tests/e2e/*` (new),
+  `human/02_OPEN_DECISIONS.md`, `docs/agent_plans/v3/v3_multi_surface_plan.md` (new),
+  `fly.toml` (via merge), `logging/commit_log.md`.
+- Verification: extension tsc 0; backend tsc 0; backend bun test 79/3 (documented external
+  Supabase rate-limit baseline); extension playwright 6/6 (including a real `/segment` call
+  against the freshly-deployed live backend, confirming the deploy actually works
+  end-to-end, not just that the process boots).
+- Task alignment: fulfillment — branches consolidated, backend genuinely live. Residual:
+  ANTHROPIC_API_KEY still a placeholder; secret rotation (OD-13) not yet done, only
+  confirmed current.
+
+## Entry 041 - 2026-08-02 - v3 plan: multi-surface + write-mode style-control architecture (planning only, no code)
+
+- Task: decide v1 direction. User's daily coding tools (Termius, Claude Desktop/mobile,
+  terminal, VS Code) are unreachable by a Chrome content script; separately, wants a
+  Grammarly-style day-to-day writing mode alongside the existing coding pipeline.
+- Decisions made (all user calls, not assumed):
+	- VS Code extension explicitly rejected (high cost, narrow win).
+	- v1 surfaces: existing browser extension + new CLI + new Claude Code skill + new MCP
+	  server, all as thin clients on the existing proxy-only backend.
+	- Write mode redesigned from a first draft ("parallel goal-type taxonomy, classify then
+	  accept/reject like code-mode") into a two-layer model after competitive research
+	  (Grammarly/Wordtune 2026 feature sets): auto-applied correctness fixes (grammar/
+	  clarity/conciseness) + a user-controlled `StyleProfile` (6 dials: formality, warmth,
+	  assertiveness, figurativeLanguage, humor, conciseness) — the differentiation bet is
+	  treating mood/figurative-language/voice as a *generative* control, which no
+	  competitor currently does.
+	- Auth for non-browser surfaces: a long-lived Personal Access Token (`gh`/`vercel`/
+	  `stripe`-CLI pattern), not reused Supabase login or device-code OAuth.
+	- Style input: freeform natural-language instruction (parsed server-side into dial
+	  values) as the universal mechanism across all 4 surfaces; explicit sliders as an
+	  extension-only precision layer on the same underlying object.
+	- Correctness layer ships single-pass/auto-applied in v1 (no per-span review UI);
+	  revisit once the style layer is proven. No named-author/persona voice presets
+	  (abstract dimensions only).
+- Full plan: `docs/agent_plans/v3/v3_multi_surface_plan.md`. Nothing in this entry has
+  been implemented — Phase 1 (PAT auth + the 3 new `/write/*` routes + `StyleProfile`
+  contracts + backend prompt factories) is next.
+- Task alignment: fulfillment — architecture decided with the user, documented. Deviation:
+  none from what was asked (explicitly a planning-only session). Residual: the directive-
+  compiler (`styleProfileToDirectives`) wording needs real iteration against actual
+  Slack/email drafts before Phase 1 can be considered done — flagged in the plan as a
+  prompt-quality problem, not something finish-able by writing code in the abstract.
