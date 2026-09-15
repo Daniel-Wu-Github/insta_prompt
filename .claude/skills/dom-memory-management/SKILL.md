@@ -16,7 +16,7 @@ Use this skill whenever the content script:
 - implements a teardown, reset, or cleanup path
 - handles content script unload, element removal, or extension disable
 
-This skill is mandatory for any code path that creates or removes DOM state. The pending-improvements log shows `index.ts` as the highest-frequency error location — the majority of those errors trace to incomplete cleanup paths.
+This skill is mandatory for any code path that creates or removes DOM state. `index.ts` is the highest-frequency error location — the majority of those errors trace to incomplete cleanup paths.
 
 ## When Not to Use
 

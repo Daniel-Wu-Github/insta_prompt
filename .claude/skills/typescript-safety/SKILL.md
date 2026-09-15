@@ -16,7 +16,7 @@ Use this skill when:
 - any code uses `as`, `any`, or untyped `JSON.parse`
 - TypeScript errors are flagged by the post-edit verification hook
 
-This skill is triggered by the `index.ts` error hotspot pattern. The 14+ recurring errors in `pending-improvements.md` trace largely to unguarded message shapes and implicit `any` in I/O paths.
+This skill is triggered by the `index.ts` error hotspot pattern. Recurring errors here trace largely to unguarded message shapes and implicit `any` in I/O paths.
 
 ## When Not to Use
 

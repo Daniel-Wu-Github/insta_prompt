@@ -1,1 +1,0 @@
-../../ai-workflow/scripts/update-skill-memory.sh

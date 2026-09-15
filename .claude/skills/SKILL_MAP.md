@@ -32,8 +32,7 @@ All agents must do these steps before using or editing skills:
   3. `Skill(workflow-logging)`
   4. `Skill(remote-commit-logging)`
   5. `Skill(detailed-chat-output)`
-  6. `Skill(self-improvement-loop)`
-  7. `Skill(skill-improvement-loop)`
+  6. `Skill(tdd-testing-structure)`
 
 ## Skill Registry
 
@@ -64,8 +63,7 @@ All agents must do these steps before using or editing skills:
 | workflow-logging | [workflow-logging/SKILL.md](workflow-logging/SKILL.md) | Capture decisions, progress, and change records | Material process or instruction updates |
 | remote-commit-logging | [remote-commit-logging/SKILL.md](remote-commit-logging/SKILL.md) | Automatically log pushed commits by branch as detailed commit history | Tasks that add or maintain commit history automation |
 | detailed-chat-output | [detailed-chat-output/SKILL.md](detailed-chat-output/SKILL.md) | Keep output structure clear and complete | Multi-step or high-risk tasks that need clear traceability |
-| self-improvement-loop | [self-improvement-loop/SKILL.md](self-improvement-loop/SKILL.md) | Improve instructions after mistakes or drift | Repeated errors, stale docs, or avoidable rework |
-| skill-improvement-loop | [skill-improvement-loop/SKILL.md](skill-improvement-loop/SKILL.md) | Summarize mistakes, evaluate skill effectiveness, and improve skills | Skill quality issues or missed auto-loading behavior |
+| tdd-testing-structure | [tdd-testing-structure/SKILL.md](tdd-testing-structure/SKILL.md) | Enforce /tests/{unit,integration,performance} + TDD | Scaffolding, feature work, or milestone docs needing test coverage |
 | handoff-prompt | [handoff-prompt/SKILL.md](handoff-prompt/SKILL.md) | Produce a self-contained handoff prompt in chat to continue the session in a new conversation | Only when the user explicitly requests a handoff prompt |
 
 ## Maintenance Rules
@@ -74,7 +72,7 @@ All agents must do these steps before using or editing skills:
 - Keep each skill narrow with explicit use and non-use guidance.
 - Prefer updating existing skills over creating near-duplicates.
 - Keep paths and links in this map valid.
-- Shared skills (repo-workflow, scope-creep-guard, documentation-cohesion, manual-testing-guides, skill-map-governance, verification-gate, workflow-logging, remote-commit-logging, detailed-chat-output, self-improvement-loop, skill-improvement-loop) are synced copies from `ai-workflow/skills/<name>` — edit them there, not here, and re-run `bash ../ai-workflow/setup.sh --apply` to pick the change up.
+- Shared skills (repo-workflow, scope-creep-guard, documentation-cohesion, manual-testing-guides, skill-map-governance, verification-gate, workflow-logging, remote-commit-logging, detailed-chat-output) are synced copies from `ai-workflow/skills/<name>` — edit them there, not here, and re-run `bash ../ai-workflow/setup.sh --apply` to pick the change up.
 
 ## Change Log Requirement
 
@@ -118,8 +116,7 @@ skillMap:
     - workflow-logging
     - remote-commit-logging
     - detailed-chat-output
-    - self-improvement-loop
-    - skill-improvement-loop
+    - tdd-testing-structure
   registry:
     - name: repo-workflow
       path: .claude/skills/repo-workflow/SKILL.md
@@ -196,10 +193,7 @@ skillMap:
     - name: detailed-chat-output
       path: .claude/skills/detailed-chat-output/SKILL.md
       type: communication
-    - name: self-improvement-loop
-      path: .claude/skills/self-improvement-loop/SKILL.md
-      type: maintenance
-    - name: skill-improvement-loop
-      path: .claude/skills/skill-improvement-loop/SKILL.md
-      type: evaluation
+    - name: tdd-testing-structure
+      path: .claude/skills/tdd-testing-structure/SKILL.md
+      type: testing
 ```

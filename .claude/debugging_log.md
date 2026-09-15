@@ -37,12 +37,13 @@ auto-appended here. Inline entries are still written manually using
 
 ## Skill Gap Trigger Rule
 
-When the same skill gap appears **2 or more times** in this log, run `skill-improvement-loop`:
-1. Score the failing skill using the 0-2 rubric (trigger quality, scope fit, outcome support, noise control)
-2. If total < 7/8: rewrite the description and tighten the "When to Use" section
-3. Update `.claude/skills/SKILL_MAP.md` if scope changed
-4. Update `CLAUDE.md` task-triggered table if the triggering domain changed
-5. Re-run `scripts/implicit-skill-smoke-test.sh` to verify the fix
+(Resolved 2026-09-14: the automated `skill-improvement-loop` scoring pipeline and
+`scripts/implicit-skill-smoke-test.sh` were removed repo-wide — confirmed dead,
+never fired in any project. Writing a Debug Entry above is the entire
+improvement loop now.) If the same skill gap appears repeatedly in this log,
+manually rewrite that skill's description/"When to Use" section and update
+`.claude/skills/SKILL_MAP.md` and `CLAUDE.md`'s task-triggered table if scope
+changed.
 
 ---
 

@@ -26,8 +26,6 @@ The following skills are intentionally non-project-specific and transferable.
 | `workflow-logging` | Record material workflow decisions and verification outcomes | Workflow-impacting edits (skills, prompts, instructions, process docs) | Structured progress-log entry with verification |
 | `remote-commit-logging` | Maintain automated push-triggered commit logging with file-level details | Tasks that implement/maintain pre-push commit logging automation | Working hook behavior and branch-grouped commit log entries |
 | `detailed-chat-output` | Keep complex responses traceable and reviewer-friendly | Multi-step, high-risk, or process-heavy tasks | Outcome-first report with changes, verification, and risk |
-| `self-improvement-loop` | Correct recurring process mistakes and stale guidance | Repeated avoidable failures or workflow drift | Root-cause fix to instructions and reusable lesson capture |
-| `skill-improvement-loop` | Evaluate skill effectiveness and improve auto-loading quality | Skill misfire, weak trigger wording, noisy overlaps | Scored skill effectiveness and targeted skill refinements |
 
 ## 3) Skill Selection and Composition Model
 
@@ -43,8 +41,6 @@ Use this ordering model in any repository that adopts this workflow:
 	 - `workflow-logging` for material workflow changes.
 	 - `remote-commit-logging` for push-log automation work.
 	 - `detailed-chat-output` for complex communication.
-	 - `self-improvement-loop` for repeated process failures.
-	 - `skill-improvement-loop` for skill-quality tuning.
 
 Design goal: load the smallest sufficient skill set, then execute in narrow verifiable increments.
 
@@ -128,8 +124,6 @@ Create this baseline structure in target repositories:
 		workflow-logging/SKILL.md
 		remote-commit-logging/SKILL.md
 		detailed-chat-output/SKILL.md
-		self-improvement-loop/SKILL.md
-		skill-improvement-loop/SKILL.md
 ```
 
 Notes:

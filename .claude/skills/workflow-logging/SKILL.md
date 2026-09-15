@@ -22,6 +22,7 @@ Do not use this skill for trivial edits with no workflow impact and no meaningfu
 - README.md
 - logging/progress_log.md
 - logging/commit_log.md
+- .githooks/post-commit
 - .githooks/pre-push
 
 ## Deliverables
@@ -44,8 +45,9 @@ Do not use this skill for trivial edits with no workflow impact and no meaningfu
 
 - For commit-history automation, invoke `Skill(remote-commit-logging)`.
 - Keep `logging/commit_log.md` as append-only history grouped by branch sections.
-- `pre-push` automation should extend commit messages with file-level change detail, not replace commit messages.
+- `post-commit` is the primary trigger — it logs every commit as it's made, not just on push. `pre-push` logs the push event and back-fills any commit `post-commit` missed. Together they extend commit messages with file-level change detail, not replace commit messages.
 - If hook behavior changes, update both the automation script and the corresponding skill docs.
+- `logging/commit_log.md` (commit-level, hook-driven, automatic) and `logging/progress_log.md` (task-level, agent-written, manual) are separate logs with separate triggers — a populated `commit_log.md` is not a substitute for `progress_log.md` entries on workflow-impacting tasks.
 
 ## Required Entry Format
 

@@ -45,7 +45,6 @@ When this skill is used, produce the smallest workable set of outputs:
 
 - Read `.claude/skills/SKILL_MAP.md` first for skill selection and ordering.
 - Invoke `Skill(skill-map-governance)` whenever any skill file is added, removed, renamed, or scope-changed.
-- Invoke `Skill(skill-improvement-loop)` when effectiveness or auto-loading behavior is in question.
 - Inspect the repo’s current instruction surface before making changes.
 - Prefer existing workflow docs over inventing new conventions.
 - Keep new skill files narrow and specific.
@@ -61,7 +60,6 @@ When this skill is used, produce the smallest workable set of outputs:
 - Frontmatter parses cleanly and the `description` is meaningful.
 - The file scope matches the task and does not pull in unrelated behavior.
 - `.claude/skills/SKILL_MAP.md` is current if skills were modified.
-- If skill behavior was tuned, effectiveness notes exist and changes are traceable.
 - No duplicate or conflicting instruction surfaces were introduced.
 - Any repo-specific workflow reference still points to the current canonical docs.
 
